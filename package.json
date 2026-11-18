@@ -1,0 +1,30 @@
+{
+  "name": "open-shopping-agent",
+  "version": "0.1.0",
+  "description": "Open-source AI shopping agent: search Amazon, Walmart, eBay, Best Buy, Target and Shopify stores at once, compare, fill the carts and check out only with your approval. Runs on Phantom cloud browsers by Browsa.",
+  "license": "MIT",
+  "author": "Browsa <support@browsa.io>",
+  "homepage": "https://github.com/browsa-io/open-shopping-agent",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "bin": { "open-shopping-agent": "dist/cli/index.js", "osa": "dist/cli/index.js" },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "web", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test $(find test -name '*.test.ts' -not -path '*/fixtures/*' | sort)",
+    "dev:web": "tsx src/web/server.ts",
+    "bench": "tsx bench/run.ts"
+  },
+  "dependencies": {
+    "browsa": "^0.3.1",
+    "playwright-core": "^1.65.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.2"
+  },
+  "keywords": ["ai-agent", "shopping", "price-comparison", "browser-automation", "amazon", "walmart", "ebay", "bestbuy", "target", "shopify", "mcp", "phantom", "browsa"]
+}

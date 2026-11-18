@@ -1,0 +1,120 @@
+{
+ "resources": {
+  "results": {
+   "products": [
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "mens-wool-runners",
+     "id": 1878193471557,
+     "image": "https://cdn.shopify.com/s/files/1/1104/4168/files/Allbirds_WL_RN_SF_PDP_Natural_Grey_LAT.png?v=1751143404",
+     "price": "110.00",
+     "price_max": "110.00",
+     "price_min": "110.00",
+     "tags": [
+      "allbirds::carbon-score => 7.07",
+      "allbirds::cfId => color-mens-wool-runners"
+     ],
+     "title": "Men's Wool Runner - Natural Grey (Light Grey Sole)",
+     "type": "Shoes",
+     "url": "/products/mens-wool-runners?_pos=1&_psq=wool+runner&_psid=19348a156&_ss=e",
+     "variants": [],
+     "vendor": "Allbirds",
+     "featured_image": {
+      "alt": "Men's Wool Runner - Natural Grey (Light Grey Sole)",
+      "aspect_ratio": 1.0,
+      "height": 1600,
+      "url": "https://cdn.shopify.com/s/files/1/1104/4168/files/Allbirds_WL_RN_SF_PDP_Natural_Grey_LAT.png?v=1751143404",
+      "width": 1600
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "mens-wool-runner-nz",
+     "id": 7199639601232,
+     "image": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12012_25Q3_Wool-Runner-NZ-Dark-Grey-Light-Grey-Sole_PDP_LEFT__1.png?v=1754512329",
+     "price": "110.00",
+     "price_max": "110.00",
+     "price_min": "110.00",
+     "tags": [
+      "allbirds::carbon-score => undefined",
+      "allbirds::cfId => color-c456ef05144d3c332268781d17eef8b8"
+     ],
+     "title": "Men's Wool Runner NZ - Dark Grey (Light Grey Sole)",
+     "type": "Shoes",
+     "url": "/products/mens-wool-runner-nz?_pos=2&_psq=wool+runner&_psid=19348a156&_ss=e",
+     "variants": [],
+     "vendor": "Allbirds",
+     "featured_image": {
+      "alt": "Men's Wool Runner NZ - Dark Grey (Light Grey Sole)",
+      "aspect_ratio": 1.0,
+      "height": 4000,
+      "url": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12012_25Q3_Wool-Runner-NZ-Dark-Grey-Light-Grey-Sole_PDP_LEFT__1.png?v=1754512329",
+      "width": 4000
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "110.00",
+     "compare_at_price_min": "110.00",
+     "handle": "mens-wool-runner-nz-medium-grey",
+     "id": 7199645630544,
+     "image": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12017_25Q3_Wool_Runner_NZ_Medium_Grey_Blizzard_Sole_PDP_LEFT.png?v=1753733610",
+     "price": "77.00",
+     "price_max": "77.00",
+     "price_min": "77.00",
+     "tags": [
+      "allbirds::carbon-score => undefined",
+      "allbirds::cfId => color-52cd9144c1ba1e5e25d390173779944c"
+     ],
+     "title": "Men's Wool Runner NZ - Medium Grey (Blizzard Sole)",
+     "type": "Shoes",
+     "url": "/products/mens-wool-runner-nz-medium-grey?_pos=3&_psq=wool+runner&_psid=19348a156&_ss=e",
+     "variants": [],
+     "vendor": "Allbirds",
+     "featured_image": {
+      "alt": "Men's Wool Runner NZ - Medium Grey (Blizzard Sole)",
+      "aspect_ratio": 1.0,
+      "height": 4000,
+      "url": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12017_25Q3_Wool_Runner_NZ_Medium_Grey_Blizzard_Sole_PDP_LEFT.png?v=1753733610",
+      "width": 4000
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "mens-wool-runner-nz-natural-black",
+     "id": 7199648743504,
+     "image": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12009_25Q3_Wool_Runner_NZ_Natural_Black_Natural_Black_Sole_PDP_LEFT.png?v=1753733893",
+     "price": "110.00",
+     "price_max": "110.00",
+     "price_min": "110.00",
+     "tags": [
+      "allbirds::carbon-score => undefined",
+      "allbirds::cfId => color-19f9c6c0791536b4b33574a8931cd974"
+     ],
+     "title": "Men's Wool Runner NZ - Natural Black (Natural Black Sole)",
+     "type": "Shoes",
+     "url": "/products/mens-wool-runner-nz-natural-black?_pos=4&_psq=wool+runner&_psid=19348a156&_ss=e",
+     "variants": [],
+     "vendor": "Allbirds",
+     "featured_image": {
+      "alt": "Men's Wool Runner NZ - Natural Black (Natural Black Sole)",
+      "aspect_ratio": 1.0,
+      "height": 4000,
+      "url": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12009_25Q3_Wool_Runner_NZ_Natural_Black_Natural_Black_Sole_PDP_LEFT.png?v=1753733893",
+      "width": 4000
+     }
+    }
+   ]
+  }
+ }
+}

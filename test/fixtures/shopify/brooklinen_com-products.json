@@ -1,0 +1,219 @@
+{
+ "products": [
+  {
+   "id": 15520230703194,
+   "title": "BFCM Phase 3 Cyber Monday",
+   "handle": "bfcm-phase-3-cyber-monday",
+   "body_html": "",
+   "published_at": "2026-11-17T16:58:46-05:00",
+   "created_at": "2026-11-17T16:57:36-05:00",
+   "updated_at": "2026-11-18T00:13:43-05:00",
+   "vendor": "Brooklinen",
+   "product_type": "Content",
+   "tags": [],
+   "variants": [
+    {
+     "id": 68120814518362,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": null,
+     "requires_shipping": false,
+     "taxable": false,
+     "featured_image": null,
+     "available": true,
+     "price": "0.00",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15520230703194,
+     "created_at": "2026-11-17T16:57:36-05:00",
+     "updated_at": "2026-11-18T00:13:43-05:00"
+    }
+   ],
+   "images": [],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15520226050138,
+   "title": "Content: BFCM (Phase 3- Super Fluff) v2 % off",
+   "handle": "content-bfcm-phase-3-super-fluff-v2-off",
+   "body_html": "",
+   "published_at": "2026-11-17T16:57:05-05:00",
+   "created_at": "2026-11-17T16:55:33-05:00",
+   "updated_at": "2026-11-18T00:13:43-05:00",
+   "vendor": "Brooklinen",
+   "product_type": "Content",
+   "tags": [],
+   "variants": [
+    {
+     "id": 68120806359130,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": null,
+     "requires_shipping": false,
+     "taxable": false,
+     "featured_image": null,
+     "available": true,
+     "price": "0.00",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15520226050138,
+     "created_at": "2026-11-17T16:55:34-05:00",
+     "updated_at": "2026-11-18T00:13:43-05:00"
+    }
+   ],
+   "images": [],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15520221921370,
+   "title": "Content: BFCM (Phase 3- Super Fluff) v1",
+   "handle": "content-bfcm-phase-3-super-fluff-v1",
+   "body_html": "",
+   "published_at": "2026-11-17T16:55:22-05:00",
+   "created_at": "2026-11-17T16:53:58-05:00",
+   "updated_at": "2026-11-18T00:13:43-05:00",
+   "vendor": "Brooklinen",
+   "product_type": "Content",
+   "tags": [],
+   "variants": [
+    {
+     "id": 68120800198746,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": null,
+     "requires_shipping": false,
+     "taxable": false,
+     "featured_image": null,
+     "available": true,
+     "price": "0.00",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15520221921370,
+     "created_at": "2026-11-17T16:53:58-05:00",
+     "updated_at": "2026-11-18T00:13:43-05:00"
+    }
+   ],
+   "images": [],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15519988514906,
+   "title": "Content: BFCM (Phase 2- Bundles)",
+   "handle": "content-bfcm-bundles-1",
+   "body_html": "",
+   "published_at": "2026-11-17T16:01:05-05:00",
+   "created_at": "2026-11-17T15:34:49-05:00",
+   "updated_at": "2026-11-18T00:13:43-05:00",
+   "vendor": "Brooklinen",
+   "product_type": "Content",
+   "tags": [],
+   "variants": [
+    {
+     "id": 68119133290586,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": null,
+     "requires_shipping": false,
+     "taxable": false,
+     "featured_image": null,
+     "available": true,
+     "price": "0.00",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15519988514906,
+     "created_at": "2026-11-17T15:34:49-05:00",
+     "updated_at": "2026-11-18T00:13:43-05:00"
+    }
+   ],
+   "images": [],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15519982682202,
+   "title": "Content: BFCM (Phase 2 - Lifestyle)",
+   "handle": "content-bfcm-phase-2-copy",
+   "body_html": "",
+   "published_at": "2026-11-17T15:34:34-05:00",
+   "created_at": "2026-11-17T15:33:03-05:00",
+   "updated_at": "2026-11-18T00:13:43-05:00",
+   "vendor": "Brooklinen",
+   "product_type": "Content",
+   "tags": [],
+   "variants": [
+    {
+     "id": 68119097966682,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": null,
+     "requires_shipping": false,
+     "taxable": false,
+     "featured_image": null,
+     "available": true,
+     "price": "0.00",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15519982682202,
+     "created_at": "2026-11-17T15:33:03-05:00",
+     "updated_at": "2026-11-18T00:13:43-05:00"
+    }
+   ],
+   "images": [],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  }
+ ]
+}

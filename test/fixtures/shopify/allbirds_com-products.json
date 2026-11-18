@@ -1,0 +1,529 @@
+{
+ "products": [
+  {
+   "id": 7292464824400,
+   "title": "Women's Wool Cruiser - Port (Port Sole)",
+   "handle": "womens-wool-cruiser-port-port-sole",
+   "body_html": "",
+   "published_at": "2026-11-04T15:48:27-08:00",
+   "created_at": "2026-02-04T17:37:18-08:00",
+   "updated_at": "2026-11-17T21:12:39-08:00",
+   "vendor": "Allbirds",
+   "product_type": "",
+   "tags": [],
+   "variants": [
+    {
+     "id": 41990816137296,
+     "title": "5",
+     "option1": "5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12858W050",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 7292464824400,
+     "created_at": "2026-02-04T17:37:18-08:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41990816170064,
+     "title": "5.5",
+     "option1": "5.5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12858W055",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 7292464824400,
+     "created_at": "2026-02-04T17:37:18-08:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41990816202832,
+     "title": "6",
+     "option1": "6",
+     "option2": null,
+     "option3": null,
+     "sku": "A12858W060",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 3,
+     "product_id": 7292464824400,
+     "created_at": "2026-02-04T17:37:18-08:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 38092255035472,
+     "created_at": "2026-11-04T15:47:53-08:00",
+     "position": 1,
+     "updated_at": "2026-11-04T15:47:56-08:00",
+     "product_id": 7292464824400,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12858W090-PORT_SIDE_TRANSPARENT.png?v=1793836076",
+     "width": 2000,
+     "height": 2000
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "5",
+      "5.5",
+      "6",
+      "6.5",
+      "7",
+      "7.5",
+      "8",
+      "8.5",
+      "9",
+      "9.5",
+      "10",
+      "10.5",
+      "11"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 7215082405968,
+   "title": "Women's Wool Runner NZ - Shadow Blue (Natural White Sole)",
+   "handle": "womens-wool-runner-nz-shadow-blue-natural-white-sole",
+   "body_html": "",
+   "published_at": "2026-11-04T15:32:48-08:00",
+   "created_at": "2025-08-27T09:16:36-07:00",
+   "updated_at": "2026-11-17T21:12:39-08:00",
+   "vendor": "Allbirds",
+   "product_type": "",
+   "tags": [],
+   "variants": [
+    {
+     "id": 41314103427152,
+     "title": "5",
+     "option1": "5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12799W050",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 7215082405968,
+     "created_at": "2025-08-27T09:16:36-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41314103459920,
+     "title": "5.5",
+     "option1": "5.5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12799W055",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 7215082405968,
+     "created_at": "2025-08-27T09:16:36-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41314103492688,
+     "title": "6",
+     "option1": "6",
+     "option2": null,
+     "option3": null,
+     "sku": "A12799W060",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 3,
+     "product_id": 7215082405968,
+     "created_at": "2025-08-27T09:16:36-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 38092107055184,
+     "created_at": "2026-11-04T15:31:04-08:00",
+     "position": 1,
+     "updated_at": "2026-11-04T15:31:06-08:00",
+     "product_id": 7215082405968,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12799W-SHADOWBLUE_SIDE_TRANSPARENT.png?v=1793835066",
+     "width": 2000,
+     "height": 2000
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "5",
+      "5.5",
+      "6",
+      "6.5",
+      "7",
+      "7.5",
+      "8",
+      "8.5",
+      "9",
+      "9.5",
+      "10",
+      "10.5",
+      "11"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 7215083716688,
+   "title": "Men's Wool Runner NZ - Shadow Blue (Natural White Sole)",
+   "handle": "mens-wool-runner-nz-shadow-blue-natural-white-sole",
+   "body_html": "",
+   "published_at": "2026-11-04T15:21:13-08:00",
+   "created_at": "2025-08-27T09:21:24-07:00",
+   "updated_at": "2026-11-17T21:12:39-08:00",
+   "vendor": "Allbirds",
+   "product_type": "",
+   "tags": [],
+   "variants": [
+    {
+     "id": 41314107555920,
+     "title": "8",
+     "option1": "8",
+     "option2": null,
+     "option3": null,
+     "sku": "A12789M080",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 7215083716688,
+     "created_at": "2025-08-27T09:21:24-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41314107588688,
+     "title": "8.5",
+     "option1": "8.5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12789M085",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 7215083716688,
+     "created_at": "2025-08-27T09:21:24-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41314107621456,
+     "title": "9",
+     "option1": "9",
+     "option2": null,
+     "option3": null,
+     "sku": "A12789M090",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "120.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 3,
+     "product_id": 7215083716688,
+     "created_at": "2025-08-27T09:21:24-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 38092096503888,
+     "created_at": "2026-11-04T15:16:23-08:00",
+     "position": 1,
+     "updated_at": "2026-11-04T15:16:25-08:00",
+     "product_id": 7215083716688,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12789M080-SHADOWBLUE_SIDE_TRANSPARENT.png?v=1793834185",
+     "width": 2000,
+     "height": 2000
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "8",
+      "8.5",
+      "9",
+      "9.5",
+      "10",
+      "10.5",
+      "11",
+      "11.5",
+      "12",
+      "12.5",
+      "13",
+      "14",
+      "15"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 7215620587600,
+   "title": "Women's Cruiser Canvas - Natural White, Washed Camel (Natural White Sole)",
+   "handle": "womens-cruiser-canvas-natural-white-washed-camel-natural-white-sole",
+   "body_html": "",
+   "published_at": "2026-11-04T14:50:01-08:00",
+   "created_at": "2025-08-29T11:04:05-07:00",
+   "updated_at": "2026-11-17T21:12:39-08:00",
+   "vendor": "Allbirds",
+   "product_type": "",
+   "tags": [],
+   "variants": [
+    {
+     "id": 41315559604304,
+     "title": "5",
+     "option1": "5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12842W050",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "80.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 7215620587600,
+     "created_at": "2025-08-29T11:04:05-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41315559637072,
+     "title": "5.5",
+     "option1": "5.5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12842W055",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "80.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 7215620587600,
+     "created_at": "2025-08-29T11:04:05-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41315559669840,
+     "title": "6",
+     "option1": "6",
+     "option2": null,
+     "option3": null,
+     "sku": "A12842W060",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "80.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 3,
+     "product_id": 7215620587600,
+     "created_at": "2025-08-29T11:04:05-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 38092074451024,
+     "created_at": "2026-11-04T14:48:22-08:00",
+     "position": 1,
+     "updated_at": "2026-11-04T14:48:24-08:00",
+     "product_id": 7215620587600,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12842W-NATURALWHITE_WASHEDCAMEL_SIDE_TRANSPARENT.png?v=1793832504",
+     "width": 2000,
+     "height": 2000
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "5",
+      "5.5",
+      "6",
+      "6.5",
+      "7",
+      "7.5",
+      "8",
+      "8.5",
+      "9",
+      "9.5",
+      "10",
+      "10.5",
+      "11"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 7215609905232,
+   "title": "Men's Cruiser Canvas - Natural White, Washed Camel (Natural White Sole)",
+   "handle": "mens-cruiser-canvas-natural-white-washed-camel-natural-white-sole",
+   "body_html": "",
+   "published_at": "2026-11-04T14:45:53-08:00",
+   "created_at": "2025-08-29T10:42:21-07:00",
+   "updated_at": "2026-11-17T21:12:39-08:00",
+   "vendor": "Allbirds",
+   "product_type": "",
+   "tags": [],
+   "variants": [
+    {
+     "id": 41315545350224,
+     "title": "8",
+     "option1": "8",
+     "option2": null,
+     "option3": null,
+     "sku": "A12841M080",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "85.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 7215609905232,
+     "created_at": "2025-08-29T10:42:21-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41315545382992,
+     "title": "8.5",
+     "option1": "8.5",
+     "option2": null,
+     "option3": null,
+     "sku": "A12841M085",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "85.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 7215609905232,
+     "created_at": "2025-08-29T10:42:21-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    },
+    {
+     "id": 41315545415760,
+     "title": "9",
+     "option1": "9",
+     "option2": null,
+     "option3": null,
+     "sku": "A12841M090",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "85.00",
+     "grams": 1000,
+     "compare_at_price": null,
+     "position": 3,
+     "product_id": 7215609905232,
+     "created_at": "2025-08-29T10:42:21-07:00",
+     "updated_at": "2026-11-17T21:12:39-08:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 38092046467152,
+     "created_at": "2026-11-04T14:32:27-08:00",
+     "position": 1,
+     "updated_at": "2026-11-04T14:32:30-08:00",
+     "product_id": 7215609905232,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/1104/4168/files/A12841M090-NATURALWHITE_WASHEDCAMEL_SIDE_TRANSPARENT.png?v=1793831550",
+     "width": 2000,
+     "height": 2000
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "8",
+      "8.5",
+      "9",
+      "9.5",
+      "10",
+      "10.5",
+      "11",
+      "11.5",
+      "12",
+      "12.5",
+      "13",
+      "14",
+      "15"
+     ]
+    }
+   ]
+  }
+ ]
+}

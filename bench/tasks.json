@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "zip": "10001",
+  "searchLimit": 10,
+  "stores": [
+    { "store": "amazon", "domain": "amazon.com", "tasks": [
+      {"id": "amazon-01", "query": "AA batteries 24 pack", "stages": ["search", "details", "cart", "checkout"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["batter"], "minRelevant": 3}},
+      {"id": "amazon-02", "query": "USB-C hub 7 in 1", "stages": ["search", "details", "cart"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["hub"], "minRelevant": 3}},
+      {"id": "amazon-03", "query": "stainless steel water bottle 32 oz", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["bottle"], "minRelevant": 3}},
+      {"id": "amazon-04", "query": "wireless mouse", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["mouse"], "minRelevant": 3}},
+      {"id": "amazon-05", "query": "HDMI cable 6 ft", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["hdmi"], "minRelevant": 3}},
+      {"id": "amazon-06", "query": "USB-C phone charger 20W", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["charger"], "minRelevant": 3}},
+      {"id": "amazon-07", "query": "yoga mat", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["mat"], "minRelevant": 3}},
+      {"id": "amazon-08", "query": "LED desk lamp", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["lamp"], "minRelevant": 3}},
+      {"id": "amazon-09", "query": "college ruled notebook", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["notebook"], "minRelevant": 3}},
+      {"id": "amazon-10", "query": "digital kitchen scale", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["scale"], "minRelevant": 3}}
+    ] },
+    { "store": "walmart", "domain": "walmart.com", "tasks": [
+      {"id": "walmart-01", "query": "AA batteries", "stages": ["search", "details", "cart", "checkout"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["batter"], "minRelevant": 3}},
+      {"id": "walmart-02", "query": "dish soap", "stages": ["search", "details", "cart"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["soap", "dish"], "minRelevant": 3}},
+      {"id": "walmart-03", "query": "air fryer", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["fryer"], "minRelevant": 3}},
+      {"id": "walmart-04", "query": "bath towel set", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["towel"], "minRelevant": 3}},
+      {"id": "walmart-05", "query": "laundry detergent", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["detergent"], "minRelevant": 3}},
+      {"id": "walmart-06", "query": "wireless earbuds", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["earbud", "buds"], "minRelevant": 3}},
+      {"id": "walmart-07", "query": "coffee maker", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["coffee"], "minRelevant": 3}},
+      {"id": "walmart-08", "query": "LEGO Classic", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["lego"], "minRelevant": 3}},
+      {"id": "walmart-09", "query": "printer paper", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["paper"], "minRelevant": 3}},
+      {"id": "walmart-10", "query": "kids backpack", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["backpack"], "minRelevant": 3}}
+    ] },
+    { "store": "ebay", "domain": "ebay.com", "tasks": [
+      {"id": "ebay-01", "query": "USB flash drive 64GB", "stages": ["search", "details", "cart", "checkout"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["usb", "flash"], "minRelevant": 3}},
+      {"id": "ebay-02", "query": "iPhone 13 case", "stages": ["search", "details", "cart"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["case"], "minRelevant": 3}},
+      {"id": "ebay-03", "query": "mechanical keyboard", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["keyboard"], "minRelevant": 3}},
+      {"id": "ebay-04", "query": "Nintendo Switch Pro controller", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["controller"], "minRelevant": 3}},
+      {"id": "ebay-05", "query": "Canon EF 50mm lens", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["lens", "50mm"], "minRelevant": 3}},
+      {"id": "ebay-06", "query": "Pokemon cards booster", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["pokemon"], "minRelevant": 3}},
+      {"id": "ebay-07", "query": "22mm watch band", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["band", "strap"], "minRelevant": 3}},
+      {"id": "ebay-08", "query": "car phone mount", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["mount"], "minRelevant": 3}},
+      {"id": "ebay-09", "query": "LEGO minifigures", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["lego", "minifig"], "minRelevant": 3}},
+      {"id": "ebay-10", "query": "Levis 501 jeans", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 0, "titleAny": ["501", "levi"], "minRelevant": 3}}
+    ] },
+    { "store": "bestbuy", "domain": "bestbuy.com", "tasks": [
+      {"id": "bestbuy-01", "query": "HDMI cable", "stages": ["search", "details", "cart", "checkout"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["hdmi"], "minRelevant": 3}},
+      {"id": "bestbuy-02", "query": "wireless mouse", "stages": ["search", "details", "cart"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["mouse"], "minRelevant": 3}},
+      {"id": "bestbuy-03", "query": "USB-C charger", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["charger"], "minRelevant": 3}},
+      {"id": "bestbuy-04", "query": "1TB SSD", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["ssd", "solid state"], "minRelevant": 3}},
+      {"id": "bestbuy-05", "query": "27 inch monitor", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["monitor"], "minRelevant": 3}},
+      {"id": "bestbuy-06", "query": "microSD card 128GB", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["microsd", "micro sd", "card"], "minRelevant": 3}},
+      {"id": "bestbuy-07", "query": "laptop stand", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["stand"], "minRelevant": 3}},
+      {"id": "bestbuy-08", "query": "Bluetooth speaker", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["speaker"], "minRelevant": 3}},
+      {"id": "bestbuy-09", "query": "webcam", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["webcam", "camera"], "minRelevant": 3}},
+      {"id": "bestbuy-10", "query": "wireless earbuds", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["earbud", "buds", "headphones"], "minRelevant": 3}}
+    ] },
+    { "store": "target", "domain": "target.com", "tasks": [
+      {"id": "target-01", "query": "toothpaste", "stages": ["search", "details", "cart", "checkout"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["toothpaste"], "minRelevant": 3}},
+      {"id": "target-02", "query": "paper towels", "stages": ["search", "details", "cart"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["paper towel"], "minRelevant": 3}},
+      {"id": "target-03", "query": "storage bins", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["bin", "storage"], "minRelevant": 3}},
+      {"id": "target-04", "query": "throw pillow", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["pillow"], "minRelevant": 3}},
+      {"id": "target-05", "query": "LEGO", "stages": ["search", "details"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["lego"], "minRelevant": 3}},
+      {"id": "target-06", "query": "coffee pods", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["coffee", "pod"], "minRelevant": 3}},
+      {"id": "target-07", "query": "kids socks", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["sock"], "minRelevant": 3}},
+      {"id": "target-08", "query": "dish towels", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["towel"], "minRelevant": 3}},
+      {"id": "target-09", "query": "phone charger", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["charger", "charging"], "minRelevant": 3}},
+      {"id": "target-10", "query": "scented candle", "stages": ["search"], "expect": {"minOffers": 5, "minPriced": 5, "minRated": 3, "titleAny": ["candle"], "minRelevant": 3}}
+    ] },
+    { "store": "shopify", "domain": "*", "tasks": [
+      {"id": "shopify-01", "query": "wool runners", "domain": "allbirds.com", "stages": ["search", "details", "cart", "checkout"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["runner"], "minRelevant": 2}},
+      {"id": "shopify-02", "query": "leggings", "domain": "gymshark.com", "stages": ["search", "details", "cart"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["legging"], "minRelevant": 2}},
+      {"id": "shopify-03", "query": "sheet set", "domain": "brooklinen.com", "stages": ["search", "details"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["sheet"], "minRelevant": 2}},
+      {"id": "shopify-04", "query": "ankle socks", "domain": "bombas.com", "stages": ["search", "details"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["sock"], "minRelevant": 2}},
+      {"id": "shopify-05", "query": "hoodie", "domain": "kith.com", "stages": ["search", "details"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["hoodie"], "minRelevant": 2}},
+      {"id": "shopify-06", "query": "lipstick", "domain": "colourpop.com", "stages": ["search"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["lip"], "minRelevant": 2}},
+      {"id": "shopify-07", "query": "shorts", "domain": "chubbiesshorts.com", "stages": ["search"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["short"], "minRelevant": 2}},
+      {"id": "shopify-08", "query": "jeans", "domain": "fashionnova.com", "stages": ["search"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["jean"], "minRelevant": 2}},
+      {"id": "shopify-09", "query": "ground coffee", "domain": "deathwishcoffee.com", "stages": ["search"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["coffee"], "minRelevant": 2}},
+      {"id": "shopify-10", "query": "flats", "domain": "rothys.com", "stages": ["search"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["flat"], "minRelevant": 2}}
+    ] }
+  ]
+}

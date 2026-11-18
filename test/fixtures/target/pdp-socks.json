@@ -1,0 +1,109 @@
+{
+ "data": {
+  "product": {
+   "tcin": "53098091",
+   "item": {
+    "product_description": {
+     "title": "Men's Odor Resistant Socks 6pk - Goodfellow & Co\u2122 - 6-12"
+    },
+    "enrichment": {
+     "buy_url": "https://www.target.com/p/men-s-odor-resistant-socks-6pk-goodfellow-co-6-12/-/A-53098091"
+    },
+    "relationship_type_code": "VAP"
+   },
+   "price": {
+    "formatted_current_price": "$10.00",
+    "formatted_current_price_type": "reg",
+    "location_id": 3991,
+    "current_retail_min": 10.0,
+    "reg_retail_max": 10.0
+   },
+   "ratings_and_reviews": {
+    "statistics": {
+     "rating": {
+      "average": 4.54,
+      "count": 1182
+     }
+    }
+   },
+   "variation_hierarchy": [
+    {
+     "name": "Color",
+     "value": "White",
+     "tcin": "53059527",
+     "buy_url": "https://www.target.com/p/men-39-s-odor-resistant-crew-socks-6pk-goodfellow-38-co-8482-white-6-12-arch-support-reinforced-heel-38-toe/-/A-53059527",
+     "availability": {
+      "is_shipping_available": true,
+      "is_shipping_loyalty_available": true,
+      "is_scheduled_delivery_available": false,
+      "is_primary_store_available": true,
+      "is_backup_store_available": false,
+      "is_digital_options_available": false,
+      "is_sold_out": false
+     }
+    },
+    {
+     "name": "Color",
+     "value": "Black",
+     "tcin": "53059893",
+     "buy_url": "https://www.target.com/p/men-39-s-odor-resistant-crew-socks-6pk-goodfellow-38-co-8482-black-6-12/-/A-53059893",
+     "availability": {
+      "is_shipping_available": true,
+      "is_shipping_loyalty_available": true,
+      "is_scheduled_delivery_available": false,
+      "is_primary_store_available": true,
+      "is_backup_store_available": false,
+      "is_digital_options_available": false,
+      "is_sold_out": false
+     }
+    }
+   ],
+   "children": [
+    {
+     "tcin": "53059527",
+     "price": {
+      "current_retail": 10.0,
+      "display_was_now": false,
+      "formatted_current_price": "$10.00",
+      "formatted_current_price_type": "reg",
+      "formatted_unit_price": "$1.67",
+      "formatted_unit_price_suffix": "/count",
+      "reg_retail": 10.0,
+      "location_id": 3991,
+      "external_system_id": "53059527-3991-10.00-2026111609"
+     },
+     "item": {
+      "product_description": {
+       "title": "Men&#39;s Odor Resistant Crew Socks 6pk - Goodfellow &#38; Co&#8482; White 6-12: Arch Support, Reinforced Heel &#38; Toe"
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/men-39-s-odor-resistant-crew-socks-6pk-goodfellow-38-co-8482-white-6-12-arch-support-reinforced-heel-38-toe/-/A-53059527"
+      }
+     }
+    },
+    {
+     "tcin": "53059893",
+     "price": {
+      "current_retail": 10.0,
+      "display_was_now": false,
+      "formatted_current_price": "$10.00",
+      "formatted_current_price_type": "reg",
+      "formatted_unit_price": "$1.67",
+      "formatted_unit_price_suffix": "/count",
+      "reg_retail": 10.0,
+      "location_id": 3991,
+      "external_system_id": "53059893-3991-10.00-2026111609"
+     },
+     "item": {
+      "product_description": {
+       "title": "Men&#39;s Odor Resistant Crew Socks 6pk - Goodfellow &#38; Co&#8482; Black 6-12: Arch Support, Reinforced Heel &#38; Toe"
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/men-39-s-odor-resistant-crew-socks-6pk-goodfellow-38-co-8482-black-6-12/-/A-53059893"
+      }
+     }
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,120 @@
+{
+ "resources": {
+  "results": {
+   "products": [
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "waffle-bath-sheets",
+     "id": 6884438704218,
+     "image": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathSheet_White_1x_WOgrey.jpg?v=1775836559",
+     "price": "119.00",
+     "price_max": "119.00",
+     "price_min": "119.00",
+     "tags": [
+      "Active Waffle",
+      "backtocampus"
+     ],
+     "title": "Dreamweave Waffle Bath Sheets Set of 2",
+     "type": "Towels",
+     "url": "/products/waffle-bath-sheets?_pos=1&_psq=sheets&_psid=2aa469474&_ss=e",
+     "variants": [],
+     "vendor": "Brooklinen",
+     "featured_image": {
+      "alt": "PDP2 Option[White] MAIN",
+      "aspect_ratio": 1.0,
+      "height": 2048,
+      "url": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathSheet_White_1x_WOgrey.jpg?v=1775836559",
+      "width": 2048
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "waffle-bath-sheet-bundle",
+     "id": 6884435656794,
+     "image": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BSB_Vanilla_White_1x_WOgrey.jpg?v=1762284668",
+     "price": "168.00",
+     "price_max": "168.00",
+     "price_min": "168.00",
+     "tags": [
+      "Active Waffle",
+      "Auto-Bundle"
+     ],
+     "title": "Dreamweave Waffle Bath Sheet Bundle",
+     "type": "Towels",
+     "url": "/products/waffle-bath-sheet-bundle?_pos=2&_psq=sheets&_psid=2aa469474&_ss=e",
+     "variants": [],
+     "vendor": "Brooklinen",
+     "featured_image": {
+      "alt": "PDP3 Option[White] MAIN",
+      "aspect_ratio": 1.0,
+      "height": 2048,
+      "url": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BSB_Vanilla_White_1x_WOgrey.jpg?v=1762284668",
+      "width": 2048
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "waffle-bath-towels",
+     "id": 6884447813722,
+     "image": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathTowel_White_1x_WOgrey.jpg?v=1775836611",
+     "price": "89.00",
+     "price_max": "99.00",
+     "price_min": "89.00",
+     "tags": [
+      "Active Waffle",
+      "backtocampus"
+     ],
+     "title": "Dreamweave Waffle Bath Towels Set of 2",
+     "type": "Towels",
+     "url": "/products/waffle-bath-towels?_pos=3&_psq=sheets&_psid=2aa469474&_ss=e",
+     "variants": [],
+     "vendor": "Brooklinen",
+     "featured_image": {
+      "alt": "PDP2 Option[White] MAIN",
+      "aspect_ratio": 1.0,
+      "height": 2048,
+      "url": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathTowel_White_1x_WOgrey.jpg?v=1775836611",
+      "width": 2048
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "waffle-hand-towels",
+     "id": 6884465836122,
+     "image": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_HandTowel_White_1x_WOgrey.jpg?v=1775836642",
+     "price": "49.00",
+     "price_max": "55.00",
+     "price_min": "49.00",
+     "tags": [
+      "Active Waffle",
+      "Compare Module Slider"
+     ],
+     "title": "Dreamweave Waffle Hand Towels Set of 2",
+     "type": "Towels",
+     "url": "/products/waffle-hand-towels?_pos=4&_psq=sheets&_psid=2aa469474&_ss=e",
+     "variants": [],
+     "vendor": "Brooklinen",
+     "featured_image": {
+      "alt": "PDP2 Option[White] MAIN",
+      "aspect_ratio": 1.0,
+      "height": 2048,
+      "url": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_HandTowel_White_1x_WOgrey.jpg?v=1775836642",
+      "width": 2048
+     }
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,7 @@
+node_modules
+dist
+.osa
+.env
+test
+bench/results
+docs/screens

@@ -1,0 +1,262 @@
+{
+ "id": 1878193471557,
+ "title": "Men's Wool Runner - Natural Grey (Light Grey Sole)",
+ "handle": "mens-wool-runners",
+ "description": "",
+ "published_at": "2026-09-25T16:06:01-07:00",
+ "created_at": "2018-11-12T14:25:43-08:00",
+ "vendor": "Allbirds",
+ "type": "Shoes",
+ "tags": [],
+ "price": 11000,
+ "price_min": 11000,
+ "price_max": 11000,
+ "available": true,
+ "price_varies": false,
+ "compare_at_price": null,
+ "compare_at_price_min": 0,
+ "compare_at_price_max": 0,
+ "compare_at_price_varies": false,
+ "variants": [
+  {
+   "id": 31338073981072,
+   "title": "8",
+   "option1": "8",
+   "option2": null,
+   "option3": null,
+   "sku": "WR3MNCW080",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": false,
+   "name": "Men's Wool Runner - Natural Grey (Light Grey Sole) - 8",
+   "public_title": "8",
+   "options": [
+    "8"
+   ],
+   "price": 11000,
+   "weight": 849,
+   "compare_at_price": null,
+   "inventory_quantity": 0,
+   "inventory_management": "shopify",
+   "inventory_policy": "deny",
+   "barcode": "843416126274",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 31330825109584,
+   "title": "9",
+   "option1": "9",
+   "option2": null,
+   "option3": null,
+   "sku": "WR3MNCW090",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Men's Wool Runner - Natural Grey (Light Grey Sole) - 9",
+   "public_title": "9",
+   "options": [
+    "9"
+   ],
+   "price": 11000,
+   "weight": 946,
+   "compare_at_price": null,
+   "inventory_quantity": 21,
+   "inventory_management": "shopify",
+   "inventory_policy": "deny",
+   "barcode": "843416126281",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 30674260033616,
+   "title": "10",
+   "option1": "10",
+   "option2": null,
+   "option3": null,
+   "sku": "WR3MNCW100",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Men's Wool Runner - Natural Grey (Light Grey Sole) - 10",
+   "public_title": "10",
+   "options": [
+    "10"
+   ],
+   "price": 11000,
+   "weight": 961,
+   "compare_at_price": null,
+   "inventory_quantity": 150,
+   "inventory_management": "shopify",
+   "inventory_policy": "deny",
+   "barcode": "843416126298",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 30674264817744,
+   "title": "11",
+   "option1": "11",
+   "option2": null,
+   "option3": null,
+   "sku": "WR3MNCW110",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": false,
+   "name": "Men's Wool Runner - Natural Grey (Light Grey Sole) - 11",
+   "public_title": "11",
+   "options": [
+    "11"
+   ],
+   "price": 11000,
+   "weight": 988,
+   "compare_at_price": null,
+   "inventory_quantity": 0,
+   "inventory_management": "shopify",
+   "inventory_policy": "deny",
+   "barcode": "843416126304",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 30750381375568,
+   "title": "12",
+   "option1": "12",
+   "option2": null,
+   "option3": null,
+   "sku": "WR3MNCW120",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": false,
+   "name": "Men's Wool Runner - Natural Grey (Light Grey Sole) - 12",
+   "public_title": "12",
+   "options": [
+    "12"
+   ],
+   "price": 11000,
+   "weight": 1040,
+   "compare_at_price": null,
+   "inventory_quantity": 0,
+   "inventory_management": "shopify",
+   "inventory_policy": "deny",
+   "barcode": "843416126311",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 31223893393488,
+   "title": "13",
+   "option1": "13",
+   "option2": null,
+   "option3": null,
+   "sku": "WR3MNCW130",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": false,
+   "name": "Men's Wool Runner - Natural Grey (Light Grey Sole) - 13",
+   "public_title": "13",
+   "options": [
+    "13"
+   ],
+   "price": 11000,
+   "weight": 1070,
+   "compare_at_price": null,
+   "inventory_quantity": 0,
+   "inventory_management": "shopify",
+   "inventory_policy": "deny",
+   "barcode": "843416126328",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 31243626741840,
+   "title": "14",
+   "option1": "14",
+   "option2": null,
+   "option3": null,
+   "sku": "WR3MNCW140",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": false,
+   "name": "Men's Wool Runner - Natural Grey (Light Grey Sole) - 14",
+   "public_title": "14",
+   "options": [
+    "14"
+   ],
+   "price": 11000,
+   "weight": 1165,
+   "compare_at_price": null,
+   "inventory_quantity": 0,
+   "inventory_management": "shopify",
+   "inventory_policy": "deny",
+   "barcode": "843416126335",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  }
+ ],
+ "images": [
+  "//cdn.shopify.com/s/files/1/1104/4168/files/Allbirds_WL_RN_SF_PDP_Natural_Grey_LAT.png?v=1751143404"
+ ],
+ "featured_image": "//cdn.shopify.com/s/files/1/1104/4168/files/Allbirds_WL_RN_SF_PDP_Natural_Grey_LAT.png?v=1751143404",
+ "options": [
+  {
+   "name": "Size",
+   "position": 1,
+   "values": [
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14"
+   ]
+  }
+ ],
+ "url": "/products/mens-wool-runners",
+ "media": [],
+ "requires_selling_plan": false,
+ "selling_plan_groups": []
+}

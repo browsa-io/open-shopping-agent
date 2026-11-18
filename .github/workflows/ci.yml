@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Type-check bench and tests
+        run: npx tsc -p bench/tsconfig.json
+      - name: Test
+        # Node 20 has no glob support in `node --test`, so list the files there.
+        run: |
+          if node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 21 ? 0 : 1)'; then
+            npm test
+          else
+            node --test --import tsx $(find test -name '*.test.ts' | sort)
+          fi
+      - name: Bench task file and adapters (no browser)
+        run: npm run bench -- --dry-run

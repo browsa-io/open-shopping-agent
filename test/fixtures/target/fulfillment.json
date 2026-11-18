@@ -1,0 +1,272 @@
+{
+ "data": {
+  "product_summaries": [
+   {
+    "__typename": "ProductSummary",
+    "tcin": "95007765",
+    "item": {
+     "relationship_type_code": "SA",
+     "product_classification": {
+      "item_type": {
+       "name": "USB Hubs",
+       "type": "1240096198"
+      }
+     },
+     "product_description": {
+      "title": "Anker 8-in-1 USB-C Hub with 1 USB-C and 2 USB-A Ports"
+     },
+     "enrichment": {
+      "buy_url": "https://www.target.com/p/anker-7-in-1-usb-c-hub-1-usb-c-2-usb-a-2-hd/-/A-95007765"
+     },
+     "fulfillment": {},
+     "merchandise_classification": {
+      "class_id": 0,
+      "department_id": 56
+     },
+     "eligibility_rules": {}
+    },
+    "free_shipping": {
+     "enabled": false
+    },
+    "price": {
+     "current_retail": 25.99,
+     "display_was_now": false,
+     "formatted_current_price": "$25.99",
+     "formatted_current_price_type": "reg",
+     "reg_retail": 25.99,
+     "location_id": 3991,
+     "price_handle": "When purchased online"
+    },
+    "promotions": [],
+    "store_positions": [
+     {
+      "block": "F",
+      "aisle": 1,
+      "floor": "01"
+     }
+    ],
+    "fulfillment": {
+     "product_id": "95007765",
+     "is_out_of_stock_in_all_store_locations": false,
+     "sold_out": false,
+     "shipping_options": {
+      "availability_status": "IN_STOCK",
+      "loyalty_availability_status": "IN_STOCK",
+      "services": [
+       {
+        "cutoff": "2026-11-18T20:00:00Z",
+        "shipping_method_id": "STANDARD",
+        "min_delivery_date": "2026-11-19",
+        "max_delivery_date": "2026-11-19",
+        "is_two_day_shipping": true,
+        "is_base_shipping_method": true
+       }
+      ]
+     },
+     "store_options": [
+      {
+       "search_response_store_type": "PRIMARY",
+       "location_available_to_promise_quantity": 0.0,
+       "pre_order_location_available_to_promise_quantity": 0.0,
+       "location_id": "2764",
+       "store": {
+        "location_name": "Test Store"
+       },
+       "order_pickup": {
+        "availability_status": "OUT_OF_STOCK"
+       },
+       "ship_to_store": {
+        "availability_status": "UNAVAILABLE"
+       },
+       "in_store_only": {
+        "availability_status": "OUT_OF_STOCK"
+       }
+      }
+     ],
+     "scheduled_delivery": {
+      "availability_status": "OUT_OF_STOCK",
+      "location_available_to_promise_quantity": 0.0
+     }
+    }
+   },
+   {
+    "__typename": "ProductSummary",
+    "tcin": "94646266",
+    "item": {
+     "relationship_type_code": "SA",
+     "product_classification": {
+      "item_type": {
+       "name": "Cable Adapters and Couplers",
+       "type": "374400"
+      }
+     },
+     "product_description": {
+      "title": "USB-C 6-in-1 Hub with 1-4K HDMI 3 USB-A Gen3 and SD/TF Reader - dealworthy&#8482;"
+     },
+     "enrichment": {
+      "buy_url": "https://www.target.com/p/usb-c-6-in-1-hub-with-1-4k-hdmi-3-usb-a-gen3-and-sd-tf-reader-dealworthy-8482/-/A-94646266"
+     },
+     "fulfillment": {},
+     "merchandise_classification": {
+      "class_id": 0,
+      "department_id": 56
+     },
+     "eligibility_rules": {}
+    },
+    "free_shipping": {
+     "enabled": false
+    },
+    "price": {
+     "current_retail": 14.99,
+     "display_was_now": false,
+     "formatted_current_price": "$14.99",
+     "formatted_current_price_type": "reg",
+     "reg_retail": 14.99,
+     "location_id": 3991
+    },
+    "promotions": [],
+    "store_positions": [
+     {
+      "block": "F",
+      "aisle": 1,
+      "floor": "01"
+     }
+    ],
+    "fulfillment": {
+     "product_id": "94646266",
+     "is_out_of_stock_in_all_store_locations": false,
+     "sold_out": false,
+     "shipping_options": {
+      "availability_status": "IN_STOCK",
+      "loyalty_availability_status": "IN_STOCK",
+      "services": [
+       {
+        "cutoff": "2026-11-18T20:00:00Z",
+        "shipping_method_id": "STANDARD",
+        "min_delivery_date": "2026-11-19",
+        "max_delivery_date": "2026-11-19",
+        "is_two_day_shipping": true,
+        "is_base_shipping_method": true
+       }
+      ]
+     },
+     "store_options": [
+      {
+       "search_response_store_type": "PRIMARY",
+       "location_available_to_promise_quantity": 0.0,
+       "pre_order_location_available_to_promise_quantity": 0.0,
+       "location_id": "2764",
+       "store": {
+        "location_name": "Test Store"
+       },
+       "order_pickup": {
+        "availability_status": "OUT_OF_STOCK"
+       },
+       "ship_to_store": {
+        "availability_status": "UNAVAILABLE"
+       },
+       "in_store_only": {
+        "availability_status": "OUT_OF_STOCK"
+       }
+      }
+     ],
+     "scheduled_delivery": {
+      "availability_status": "OUT_OF_STOCK",
+      "location_available_to_promise_quantity": 0.0
+     }
+    }
+   },
+   {
+    "__typename": "ProductSummary",
+    "tcin": "95077358",
+    "item": {
+     "relationship_type_code": "SA",
+     "product_classification": {
+      "item_type": {
+       "name": "USB Flash Drives",
+       "type": "121449536"
+      }
+     },
+     "product_description": {
+      "title": "SanDisk 128GB Phone Drive USB"
+     },
+     "enrichment": {
+      "buy_url": "https://www.target.com/p/sandisk-128gb-phone-drive-usb/-/A-95077358"
+     },
+     "fulfillment": {},
+     "merchandise_classification": {
+      "class_id": 12,
+      "department_id": 56
+     },
+     "eligibility_rules": {}
+    },
+    "free_shipping": {
+     "enabled": true
+    },
+    "price": {
+     "current_retail": 73.99,
+     "display_was_now": false,
+     "formatted_comparison_price": "$87.99",
+     "formatted_comparison_price_type": "reg",
+     "formatted_current_price": "$73.99",
+     "formatted_current_price_type": "sale",
+     "reg_retail": 87.99,
+     "save_dollar": 14.0,
+     "save_percent": 16.0,
+     "location_id": 3991
+    },
+    "promotions": [],
+    "store_positions": [
+     {
+      "block": "F",
+      "aisle": 70,
+      "floor": "01"
+     }
+    ],
+    "fulfillment": {
+     "product_id": "95077358",
+     "is_out_of_stock_in_all_store_locations": false,
+     "sold_out": false,
+     "shipping_options": {
+      "availability_status": "IN_STOCK",
+      "loyalty_availability_status": "IN_STOCK",
+      "services": [
+       {
+        "cutoff": "2026-11-18T20:00:00Z",
+        "shipping_method_id": "STANDARD",
+        "min_delivery_date": "2026-11-19",
+        "max_delivery_date": "2026-11-19",
+        "is_two_day_shipping": true,
+        "is_base_shipping_method": true
+       }
+      ]
+     },
+     "store_options": [
+      {
+       "search_response_store_type": "PRIMARY",
+       "location_available_to_promise_quantity": 2.0,
+       "pre_order_location_available_to_promise_quantity": 0.0,
+       "location_id": "2764",
+       "store": {
+        "location_name": "Test Store"
+       },
+       "order_pickup": {
+        "availability_status": "IN_STOCK",
+        "pickup_date": "2026-11-18",
+        "guest_pick_sla": 120,
+        "location_locale": "America/New_York"
+       },
+       "in_store_only": {
+        "availability_status": "IN_STOCK"
+       }
+      }
+     ],
+     "scheduled_delivery": {
+      "availability_status": "IN_STOCK",
+      "location_available_to_promise_quantity": 2.0
+     }
+    }
+   }
+  ]
+ }
+}

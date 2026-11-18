@@ -1,0 +1,33 @@
+{
+ "cart_id": "00000000-test-cart",
+ "cart_type": "REGULAR",
+ "summary": {
+  "total_product_amount": 25.99,
+  "total_shipping_amount": 5.99,
+  "total_tax": 2.35,
+  "grand_total": 34.87,
+  "items_quantity": 1,
+  "total_discounts": 0.0
+ },
+ "cart_items": [
+  {
+   "cart_item_id": "item-95007765",
+   "tcin": "95007765",
+   "quantity": 1,
+   "unit_price": 25.99,
+   "list_price": 25.99,
+   "item_attributes": {
+    "description": "Anker 8-in-1 USB-C Hub with 1 USB-C and 2 USB-A Ports"
+   },
+   "item_summary": {
+    "total_product": 25.99
+   },
+   "fulfillment": {
+    "type": "SHIP",
+    "ship_method": "STANDARD",
+    "estimated_arrival_start_date": "2026-11-19",
+    "ship_method_service_level_description": "2-day shipping"
+   }
+  }
+ ]
+}

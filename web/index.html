@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a0c0b">
+  <title>Open Shopping Agent</title>
+  <meta name="description" content="Search Amazon, Walmart, eBay, Best Buy, Target and Shopify stores at once. Compare, fill carts, buy only with your approval.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <a class="brand" href="#/" aria-label="Open Shopping Agent, new search">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#22c55e"/><path d="M9 12h14l-1.4 9.2a2 2 0 0 1-2 1.8h-7.2a2 2 0 0 1-2-1.8L9 12Z" fill="#05140a"/><path d="M12.5 12V10.5a3.5 3.5 0 0 1 7 0V12" fill="none" stroke="#05140a" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Open Shopping Agent</span>
+    </a>
+    <span id="demo-badge" class="badge demo" hidden title="Made-up products and prices. No store is contacted and nothing is bought.">Demo data</span>
+    <nav class="nav" aria-label="Main">
+      <a href="#/" data-nav="new">New</a>
+      <a href="#/history" data-nav="history">History</a>
+      <a href="#/watches" data-nav="watches">Watches</a>
+      <a href="#/settings" data-nav="settings" aria-label="Settings">Settings</a>
+    </nav>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="confirm" aria-labelledby="confirm-title">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-body"></p>
+      <div class="row end">
+        <button value="no" class="btn ghost">Cancel</button>
+        <button value="yes" class="btn primary" id="confirm-yes">Buy</button>
+      </div>
+    </form>
+  </dialog>
+  <noscript><p class="wrap">Open Shopping Agent needs JavaScript.</p></noscript>
+</body>
+</html>

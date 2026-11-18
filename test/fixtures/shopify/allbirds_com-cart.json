@@ -1,0 +1,74 @@
+{
+ "token": "test-token",
+ "note": "",
+ "attributes": {},
+ "original_total_price": 11000,
+ "total_price": 11000,
+ "total_discount": 0,
+ "total_weight": 946.1937,
+ "item_count": 1,
+ "items": [
+  {
+   "id": 31330825109584,
+   "properties": {},
+   "quantity": 1,
+   "variant_id": 31330825109584,
+   "key": "31330825109584:test",
+   "title": "Men&#39;s Wool Runner - Natural Grey (Light Grey Sole) - 9",
+   "price": 11000,
+   "original_price": 11000,
+   "presentment_price": 110.0,
+   "discounted_price": 11000,
+   "line_price": 11000,
+   "original_line_price": 11000,
+   "total_discount": 0,
+   "discounts": [],
+   "sku": "WR3MNCW090",
+   "grams": 946,
+   "vendor": "Allbirds",
+   "taxable": true,
+   "product_id": 1878193471557,
+   "product_has_only_default_variant": false,
+   "gift_card": false,
+   "final_price": 11000,
+   "final_line_price": 11000,
+   "url": "/products/mens-wool-runners?variant=31330825109584",
+   "featured_image": {
+    "aspect_ratio": 1.0,
+    "alt": "Men's Wool Runner - Natural Grey (Light Grey Sole)",
+    "height": 1600,
+    "url": "https://cdn.shopify.com/s/files/1/1104/4168/files/Allbirds_WL_RN_SF_PDP_Natural_Grey_LAT.png?v=1751143404",
+    "width": 1600
+   },
+   "image": "https://cdn.shopify.com/s/files/1/1104/4168/files/Allbirds_WL_RN_SF_PDP_Natural_Grey_LAT.png?v=1751143404",
+   "handle": "mens-wool-runners",
+   "requires_shipping": true,
+   "product_type": "Shoes",
+   "product_title": "Men's Wool Runner - Natural Grey (Light Grey Sole)",
+   "product_description": "",
+   "variant_title": "9",
+   "variant_options": [
+    "9"
+   ],
+   "options_with_values": [
+    {
+     "name": "Size",
+     "value": "9"
+    }
+   ],
+   "line_level_discount_allocations": [],
+   "line_level_total_discount": 0,
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "has_components": false
+  }
+ ],
+ "requires_shipping": true,
+ "currency": "USD",
+ "items_subtotal_price": 11000,
+ "cart_level_discount_applications": [],
+ "discount_codes": []
+}

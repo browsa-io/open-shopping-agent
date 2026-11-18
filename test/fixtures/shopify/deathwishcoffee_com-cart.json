@@ -1,0 +1,79 @@
+{
+ "token": "test-token",
+ "note": "",
+ "attributes": {},
+ "original_total_price": 1999,
+ "total_price": 1999,
+ "total_discount": 0,
+ "total_weight": 544.3108,
+ "item_count": 1,
+ "items": [
+  {
+   "id": 32485212061751,
+   "properties": {},
+   "quantity": 1,
+   "variant_id": 32485212061751,
+   "key": "32485212061751:test",
+   "title": "Medium Roast Coffee - Ground / 1 lb",
+   "price": 1999,
+   "original_price": 1999,
+   "presentment_price": 19.99,
+   "discounted_price": 1999,
+   "line_price": 1999,
+   "original_line_price": 1999,
+   "total_discount": 0,
+   "discounts": [],
+   "sku": "7583G",
+   "grams": 544,
+   "vendor": "Death Wish Coffee Company",
+   "taxable": true,
+   "product_id": 4657897373751,
+   "product_has_only_default_variant": false,
+   "gift_card": false,
+   "final_price": 1999,
+   "final_line_price": 1999,
+   "url": "/products/medium-roast?variant=32485212061751",
+   "featured_image": {
+    "aspect_ratio": 1.0,
+    "alt": "Death Wish Coffee - Medium Roast 16oz Ground Bag.",
+    "height": 1500,
+    "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Medium_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752632",
+    "width": 1500
+   },
+   "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Medium_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752632",
+   "handle": "medium-roast",
+   "requires_shipping": true,
+   "product_type": "Coffee",
+   "product_title": "Medium Roast Coffee",
+   "product_description": "",
+   "variant_title": "Ground / 1 lb",
+   "variant_options": [
+    "Ground",
+    "1 lb"
+   ],
+   "options_with_values": [
+    {
+     "name": "Type",
+     "value": "Ground"
+    },
+    {
+     "name": "Size",
+     "value": "1 lb"
+    }
+   ],
+   "line_level_discount_allocations": [],
+   "line_level_total_discount": 0,
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "has_components": false
+  }
+ ],
+ "requires_shipping": true,
+ "currency": "USD",
+ "items_subtotal_price": 1999,
+ "cart_level_discount_applications": [],
+ "discount_codes": []
+}

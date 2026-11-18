@@ -1,0 +1,644 @@
+{
+ "data": {
+  "search": {
+   "products": [
+    {
+     "__typename": "ProductSummary",
+     "tcin": "94689075",
+     "original_tcin": "94689075",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 2,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-m/-/A-94689075",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_99a520bd-ae75-4d6a-bcc1-1c4b6becd3b9"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Shirts",
+        "type": "1743507941"
+       }
+      },
+      "dpci": "040-02-0958",
+      "product_description": {
+       "title": "Hanes Men&#39;s Cotton Stretch Crewneck Shirt - White M"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/hanes/-/N-5xl5q",
+       "linking_id": "5xl5q",
+       "name": "Hanes"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "94732708",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 2,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/hanes-men-s-cotton-stretch-crewneck-shirt-white/-/A-94732708",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_99a520bd-ae75-4d6a-bcc1-1c4b6becd3b9"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Hanes Men's Cotton Stretch Crewneck Shirt - White"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Shirts",
+         "type": "1743507941"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/hanes/-/N-5xl5q",
+        "linking_id": "5xl5q",
+        "name": "Hanes"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$12.99",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991,
+       "price_handle": "When purchased online"
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.68,
+         "count": 131,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 4.5
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 1.92
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 4.58
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "S"
+          },
+          {
+           "value": "M"
+          },
+          {
+           "value": "L"
+          },
+          {
+           "value": "XL"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "2k+ bought in last month",
+       "long_description": "This item was bought over 2k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 12.99,
+      "display_was_now": false,
+      "formatted_current_price": "$12.99",
+      "formatted_current_price_type": "reg",
+      "reg_retail": 12.99,
+      "location_id": 3991,
+      "price_handle": "When purchased online"
+     },
+     "is_sponsored_sku": true,
+     "sponsored_ad": {
+      "ad_source": "criteo"
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "81838028",
+     "original_tcin": "81838028",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 2,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-red-label-men-39-s-crewneck-dyed-t-shirt-6pk-black-gray-blue-xl/-/A-81838028",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_e6b7da64-014e-4bfd-8e7a-b706f531b06a"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Shirts",
+        "type": "1743507941"
+       }
+      },
+      "dpci": "040-02-0873",
+      "product_description": {
+       "title": "Hanes Red Label Men&#39;s Crew Neck Dyed T-Shirt 6pk - Black/Gray/Blue XL: Lightweight, Tagless, Moisture Wicking,"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/hanes/-/N-5xl5q",
+       "linking_id": "5xl5q",
+       "name": "Hanes"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "82983369",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 2,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/hanes-red-label-men-s-crewneck-dyed-t-shirt-6pk-black-gray-blue/-/A-82983369",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_e6b7da64-014e-4bfd-8e7a-b706f531b06a"
+         }
+        }
+       },
+       "has_extended_sizing": true,
+       "product_description": {
+        "title": "Hanes Red Label Men's Crewneck Dyed T-Shirt 6pk - Black/Gray/Blue"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Shirts",
+         "type": "1743507941"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/hanes/-/N-5xl5q",
+        "linking_id": "5xl5q",
+        "name": "Hanes"
+       },
+       "ribbons": [
+        "New At Target"
+       ],
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$23.98 - $25.00",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.3,
+         "count": 1060,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 3.61
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 1.82
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 3.57
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "S"
+          },
+          {
+           "value": "M"
+          },
+          {
+           "value": "L"
+          },
+          {
+           "value": "XL"
+          },
+          {
+           "value": "XXL"
+          },
+          {
+           "value": "3XL"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "3k+ bought in last month",
+       "long_description": "This item was bought over 3k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 25.0,
+      "display_was_now": false,
+      "formatted_current_price": "$25.00",
+      "formatted_current_price_type": "reg",
+      "reg_retail": 25.0,
+      "location_id": 3991
+     },
+     "is_sponsored_sku": true,
+     "sponsored_ad": {
+      "ad_source": "criteo"
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "54449234",
+     "original_tcin": "54449234",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "is_limited_time_offer": false,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 2,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-men-39-s-moisture-wicking-crewneck-undershirt-10pk-white-xl/-/A-54449234",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_a20cca2c-df87-4fbb-a494-d74e2c2e380f"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Shirts",
+        "type": "1743507941"
+       }
+      },
+      "dpci": "040-02-1037",
+      "product_description": {
+       "title": "Hanes Men&#39;s Moisture-Wicking Crew Neck Undershirt 10pk - White XL: Cotton, Lightweight, Tagless, Breathable, Short Sleeve"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/hanes/-/N-5xl5q",
+       "linking_id": "5xl5q",
+       "name": "Hanes"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "54478497",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "is_limited_time_offer": false,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 2,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/hanes-men-s-moisture-wicking-crewneck-undershirt-10pk-white/-/A-54478497",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_a20cca2c-df87-4fbb-a494-d74e2c2e380f"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Hanes Men's Moisture-Wicking Crewneck Undershirt 10pk - White"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Shirts",
+         "type": "1743507941"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/hanes/-/N-5xl5q",
+        "linking_id": "5xl5q",
+        "name": "Hanes"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_comparison_price": "$30.00",
+       "formatted_comparison_price_type": "reg",
+       "formatted_current_price": "$24.00",
+       "formatted_current_price_type": "sale",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.3,
+         "count": 1724,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 3.8
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 1.95
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 3.74
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "S"
+          },
+          {
+           "value": "M"
+          },
+          {
+           "value": "L"
+          },
+          {
+           "value": "XL"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "4k+ bought in last month",
+       "long_description": "This item was bought over 4k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 24.0,
+      "display_was_now": false,
+      "formatted_comparison_price": "$30.00",
+      "formatted_comparison_price_type": "reg",
+      "formatted_current_price": "$24.00",
+      "formatted_current_price_type": "sale",
+      "reg_retail": 30.0,
+      "save_dollar": 6.0,
+      "save_percent": 20.0,
+      "location_id": 3991
+     },
+     "is_sponsored_sku": true,
+     "sponsored_ad": {
+      "ad_source": "criteo"
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "81838027",
+     "original_tcin": "81838027",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 2,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-red-label-men-39-s-crewneck-dyed-t-shirt-6pk-black-gray-blue-l/-/A-81838027",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_e6b7da64-014e-4bfd-8e7a-b706f531b06a"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Shirts",
+        "type": "1743507941"
+       }
+      },
+      "dpci": "040-02-0872",
+      "product_description": {
+       "title": "Hanes Red Label Men&#39;s Crew Neck Dyed T-Shirt 6pk - Black/Gray/Blue L: Tagless, Moisture Wicking"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/hanes/-/N-5xl5q",
+       "linking_id": "5xl5q",
+       "name": "Hanes"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "82983369",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 2,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/hanes-red-label-men-s-crewneck-dyed-t-shirt-6pk-black-gray-blue/-/A-82983369",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_e6b7da64-014e-4bfd-8e7a-b706f531b06a"
+         }
+        }
+       },
+       "has_extended_sizing": true,
+       "product_description": {
+        "title": "Hanes Red Label Men's Crewneck Dyed T-Shirt 6pk - Black/Gray/Blue"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Shirts",
+         "type": "1743507941"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/hanes/-/N-5xl5q",
+        "linking_id": "5xl5q",
+        "name": "Hanes"
+       },
+       "ribbons": [
+        "New At Target"
+       ],
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$23.98 - $25.00",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.3,
+         "count": 1060,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 3.61
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 1.82
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 3.57
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "S"
+          },
+          {
+           "value": "M"
+          },
+          {
+           "value": "L"
+          },
+          {
+           "value": "XL"
+          },
+          {
+           "value": "XXL"
+          },
+          {
+           "value": "3XL"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "4k+ bought in last month",
+       "long_description": "This item was bought over 4k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 25.0,
+      "display_was_now": false,
+      "formatted_current_price": "$25.00",
+      "formatted_current_price_type": "reg",
+      "reg_retail": 25.0,
+      "location_id": 3991
+     }
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,279 @@
+{
+ "products": [
+  {
+   "id": 7515227914295,
+   "title": "Valhalla Java Brewed for Battle Bundle",
+   "handle": "whole-bean-valhalla-java-lto-bag-valhalla-java-medallion-mug",
+   "body_html": "",
+   "published_at": "2026-11-17T09:51:47-05:00",
+   "created_at": "2026-08-26T12:55:39-04:00",
+   "updated_at": "2026-11-18T00:13:25-05:00",
+   "vendor": "Death Wish Coffee",
+   "product_type": "Bundle",
+   "tags": [],
+   "variants": [
+    {
+     "id": 42416404824119,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "LKWVJMUG26",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "53.99",
+     "grams": 1134,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 7515227914295,
+     "created_at": "2026-08-26T12:55:39-04:00",
+     "updated_at": "2026-11-18T00:13:25-05:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 35612189753399,
+     "created_at": "2026-09-07T21:23:22-04:00",
+     "position": 1,
+     "updated_at": "2026-09-07T21:23:23-04:00",
+     "product_id": 7515227914295,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0271/7209/files/DeathWishCoffee_September2026_Product_VJ_Coffee_Bagandmug_Front_Web.jpg?v=1788830603",
+     "width": 1500,
+     "height": 1500
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15429425889335,
+   "title": "Valhalla Java Brewed for Battle Klean Kanteen Bundle",
+   "handle": "brewed-for-battle-klean-kanteen-bundle",
+   "body_html": "",
+   "published_at": "2026-11-17T09:50:53-05:00",
+   "created_at": "2026-11-09T17:10:00-05:00",
+   "updated_at": "2026-11-18T00:13:25-05:00",
+   "vendor": "Death Wish Coffee",
+   "product_type": "Bundle",
+   "tags": [],
+   "variants": [
+    {
+     "id": 67734103031863,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "LKVJKVJWB26",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "50.99",
+     "grams": 1134,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15429425889335,
+     "created_at": "2026-11-09T17:10:00-05:00",
+     "updated_at": "2026-11-18T00:13:25-05:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 43284562444343,
+     "created_at": "2026-11-10T14:23:50-05:00",
+     "position": 1,
+     "updated_at": "2026-11-10T14:23:52-05:00",
+     "product_id": 15429425889335,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0271/7209/files/DeathWishCoffee_November2026_Product_ValhallaJava_KanteenandBag_Front_Web.jpg?v=1794338632",
+     "width": 1500,
+     "height": 1500
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 6635123015735,
+   "title": "Valhalla Java Dark Chocolate Bark",
+   "handle": "valhalla-java-dark-chocolate-bark",
+   "body_html": "",
+   "published_at": "2026-11-11T12:53:59-05:00",
+   "created_at": "2022-01-31T13:24:34-05:00",
+   "updated_at": "2026-11-18T00:13:25-05:00",
+   "vendor": "Ethereal Confections",
+   "product_type": "Chocolate",
+   "tags": [],
+   "variants": [
+    {
+     "id": 39660132106295,
+     "title": "1 Pack",
+     "option1": "1 Pack",
+     "option2": null,
+     "option3": null,
+     "sku": "LFVJBK04",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "15.00",
+     "grams": 9,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 6635123015735,
+     "created_at": "2022-02-08T10:25:45-05:00",
+     "updated_at": "2026-11-18T00:13:25-05:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 43289396609079,
+     "created_at": "2026-11-11T12:51:26-05:00",
+     "position": 1,
+     "updated_at": "2026-11-11T12:51:27-05:00",
+     "product_id": 6635123015735,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0271/7209/files/DeathWishCoffee_November2026_Product_Bark_ValhallaJava_WithChocolate_Web.jpg?v=1794419487",
+     "width": 1500,
+     "height": 1500
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "1 Pack"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 7526008324151,
+   "title": "Nine Lives Pet Bandana",
+   "handle": "nine-lives-pet-bandana",
+   "body_html": "",
+   "published_at": "2026-11-10T09:10:25-05:00",
+   "created_at": "2026-09-16T09:26:10-04:00",
+   "updated_at": "2026-11-18T00:13:25-05:00",
+   "vendor": "Planet Apparel",
+   "product_type": "Accessories",
+   "tags": [],
+   "variants": [
+    {
+     "id": 42446587756599,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "UBYULEC26",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "10.00",
+     "grams": 22,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 7526008324151,
+     "created_at": "2026-09-16T09:26:10-04:00",
+     "updated_at": "2026-11-18T00:13:25-05:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 43258246692919,
+     "created_at": "2026-11-06T13:57:29-05:00",
+     "position": 1,
+     "updated_at": "2026-11-06T13:57:31-05:00",
+     "product_id": 7526008324151,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0271/7209/files/DeathWishCoffee_November2026_Product_YulaCat_Bandana_Front_Web.jpg?v=1793991451",
+     "width": 1500,
+     "height": 1500
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15403630854199,
+   "title": "Yule Cat Mug",
+   "handle": "yule-cat-mug",
+   "body_html": "",
+   "published_at": "2026-11-10T09:07:41-05:00",
+   "created_at": "2026-10-07T13:07:08-04:00",
+   "updated_at": "2026-11-18T00:13:25-05:00",
+   "vendor": "Deneen Pottery",
+   "product_type": "Mugs",
+   "tags": [],
+   "variants": [
+    {
+     "id": 67601897914423,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": "UMYULC26K",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "38.00",
+     "grams": 765,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15403630854199,
+     "created_at": "2026-10-07T13:07:08-04:00",
+     "updated_at": "2026-11-18T00:13:25-05:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 43258245742647,
+     "created_at": "2026-11-06T13:56:07-05:00",
+     "position": 1,
+     "updated_at": "2026-11-06T13:56:09-05:00",
+     "product_id": 15403630854199,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0271/7209/files/DeathWishCoffee_November2026_Product_YuleCat_Mug_Front_Web.jpg?v=1793991369",
+     "width": 1500,
+     "height": 1500
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  }
+ ]
+}

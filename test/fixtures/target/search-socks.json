@@ -1,0 +1,1100 @@
+{
+ "data": {
+  "search": {
+   "products": [
+    {
+     "__typename": "ProductSummary",
+     "tcin": "94835117",
+     "original_tcin": "94835117",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 3,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "add_on": {
+        "is_active": true
+       },
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/fruit-of-the-loom-men-39-s-crew-socks-black-6-12/-/A-94835117",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_3b7c5974-85cf-4d66-a256-8971ef1d9e34"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Socks",
+        "type": "1281055072"
+       }
+      },
+      "dpci": "040-03-1215",
+      "product_description": {
+       "title": "Fruit of the Loom Men&#39;s Crew Socks - Black 6-12"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/fruit-of-the-loom/-/N-5twcu",
+       "linking_id": "5twcu",
+       "name": "Fruit of the Loom"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "94929430",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 3,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/fruit-of-the-loom-men-s-crew-socks/-/A-94929430",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_3b7c5974-85cf-4d66-a256-8971ef1d9e34"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Fruit of the Loom Men's Crew Socks"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Socks",
+         "type": "1281055072"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/fruit-of-the-loom/-/N-5twcu",
+        "linking_id": "5twcu",
+        "name": "Fruit of the Loom"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$9.99",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.74,
+         "count": 64,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 5.0
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 2.0
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 4.5
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Color",
+         "swatches": [
+          {
+           "value": "Black"
+          },
+          {
+           "value": "White"
+          }
+         ]
+        },
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "6-12"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "5k+ bought in last month",
+       "long_description": "This item was bought over 5k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 9.99,
+      "display_was_now": false,
+      "formatted_current_price": "$9.99",
+      "formatted_current_price_type": "reg",
+      "formatted_unit_price": "$1.67",
+      "formatted_unit_price_suffix": "/count",
+      "reg_retail": 9.99,
+      "location_id": 3991
+     },
+     "is_sponsored_sku": true,
+     "sponsored_ad": {
+      "ad_source": "criteo"
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "1011210514",
+     "original_tcin": "1011210514",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 10,
+       "department_id": 40
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/dress-socks-6-pairs-argyle-10-13/-/A-1011210514",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_85aebbfc-4166-4e9e-a16a-44bcdc393686"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Socks",
+        "type": "1281055072"
+       }
+      },
+      "product_description": {
+       "title": "Debra Weitzner Men\u2019s Dress Socks \u2013 Argyle Pattern Crew Socks 6 Pairs Size 10-13 Fits Men\u2019s Shoe Size 7-12"
+      },
+      "product_vendors": [
+       {
+        "vendor_name": "ROYAL IMPORTS OF NY",
+        "id": "10036130"
+       }
+      ],
+      "fulfillment": {
+       "is_marketplace": true
+      },
+      "primary_brand": {
+       "canonical_url": "/b/debra-weitzner/-/N-q643leu7d2y",
+       "linking_id": "q643leu7d2y",
+       "name": "Debra Weitzner"
+      },
+      "variation_info": {}
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "1011210509",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 10,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/debra-weitzner-dress-socks-6-pairs/-/A-1011210509",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_85aebbfc-4166-4e9e-a16a-44bcdc393686"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Debra Weitzner Men\u2019s Dress Socks \u2013 Argyle Crew Socks, 6 Pairs"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Socks",
+         "type": "1281055072"
+        }
+       },
+       "product_vendors": [
+        {
+         "vendor_name": "ROYAL IMPORTS OF NY",
+         "id": "10036130"
+        }
+       ],
+       "fulfillment": {
+        "is_marketplace": true
+       },
+       "primary_brand": {
+        "canonical_url": "/b/debra-weitzner/-/N-q643leu7d2y",
+        "linking_id": "q643leu7d2y",
+        "name": "Debra Weitzner"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_comparison_price": "$39.99",
+       "formatted_comparison_price_type": "reg",
+       "formatted_current_price": "$27.99",
+       "formatted_current_price_type": "sale",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.98,
+         "count": 40
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Color",
+         "swatches": [
+          {
+           "value": "Argyle"
+          },
+          {
+           "value": "Bright Argyle"
+          },
+          {
+           "value": "Multistripes"
+          },
+          {
+           "value": "Orange Assorted"
+          },
+          {
+           "value": "Red Assorted"
+          },
+          {
+           "value": "Striped B"
+          }
+         ]
+        },
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "10-13"
+          },
+          {
+           "value": "13-15"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "price": {
+      "current_retail": 27.99,
+      "display_was_now": false,
+      "formatted_comparison_price": "$39.99",
+      "formatted_comparison_price_type": "reg",
+      "formatted_current_price": "$27.99",
+      "formatted_current_price_type": "sale",
+      "reg_retail": 39.99,
+      "save_dollar": 12.0,
+      "save_percent": 30.0,
+      "location_id": 3991
+     },
+     "is_sponsored_sku": true,
+     "sponsored_ad": {
+      "ad_source": "criteo"
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "1011433123",
+     "original_tcin": "1011433123",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 10,
+       "department_id": 40
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/debra-weitzner-thermal-wool-socks-beige-burgundy-black-10-13-3-pairs/-/A-1011433123",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_cf8ab558-e14c-4960-a1ee-703aabbc1a7c"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Socks",
+        "type": "1281055072"
+       }
+      },
+      "product_description": {
+       "title": "Debra Weitzner Men and Women Merino Wool Hiking Crew Socks \u2013 Cushioned Moisture Wicking Beige/Burgundy/Blue 3 Pairs Size 10-13"
+      },
+      "product_vendors": [
+       {
+        "vendor_name": "ROYAL IMPORTS OF NY",
+        "id": "10036130"
+       }
+      ],
+      "fulfillment": {
+       "is_marketplace": true
+      },
+      "primary_brand": {
+       "canonical_url": "/b/debra-weitzner/-/N-q643leu7d2y",
+       "linking_id": "q643leu7d2y",
+       "name": "Debra Weitzner"
+      },
+      "variation_info": {}
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "1011433114",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 10,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/debra-weitzner-thermal-wool-socks-3-pairs-for-women-and-men/-/A-1011433114",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_8738c63f-d729-4c69-9bbe-34d7c8a74fa1"
+         }
+        }
+       },
+       "has_extended_sizing": true,
+       "product_description": {
+        "title": "Debra Weitzner Men and Women Merino Wool Hiking Crew Socks \u2013 Cushioned Moisture Wicking 3 Pairs"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Socks",
+         "type": "1281055072"
+        }
+       },
+       "product_vendors": [
+        {
+         "vendor_name": "ROYAL IMPORTS OF NY",
+         "id": "10036130"
+        }
+       ],
+       "fulfillment": {
+        "is_marketplace": true
+       },
+       "primary_brand": {
+        "canonical_url": "/b/debra-weitzner/-/N-q643leu7d2y",
+        "linking_id": "q643leu7d2y",
+        "name": "Debra Weitzner"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_comparison_price": "$33.20",
+       "formatted_comparison_price_type": "reg",
+       "formatted_current_price": "$23.99",
+       "formatted_current_price_type": "sale",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.82,
+         "count": 55
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Color",
+         "swatches": [
+          {
+           "value": "Beige/Burgundy/Black"
+          },
+          {
+           "value": "Black"
+          },
+          {
+           "value": "Black/Gray"
+          },
+          {
+           "value": "Gray/Navy/Black"
+          },
+          {
+           "value": "Red/Blue/Black"
+          }
+         ]
+        },
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "9-11"
+          },
+          {
+           "value": "10-13"
+          },
+          {
+           "value": "13-15"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "price": {
+      "current_retail": 23.99,
+      "display_was_now": false,
+      "formatted_comparison_price": "$33.20",
+      "formatted_comparison_price_type": "reg",
+      "formatted_current_price": "$23.99",
+      "formatted_current_price_type": "sale",
+      "reg_retail": 33.2,
+      "save_dollar": 9.21,
+      "save_percent": 28.0,
+      "location_id": 3991
+     },
+     "is_sponsored_sku": true,
+     "sponsored_ad": {
+      "ad_source": "criteo"
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "53059893",
+     "original_tcin": "53059893",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 12,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "add_on": {
+        "is_active": true
+       },
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/men-39-s-odor-resistant-crew-socks-6pk-goodfellow-38-co-8482-black-6-12/-/A-53059893",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_a013d418-4a32-41b7-99a1-32a880344859"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Socks",
+        "type": "1281055072"
+       }
+      },
+      "dpci": "040-12-0177",
+      "product_description": {
+       "title": "Men&#39;s Odor Resistant Crew Socks 6pk - Goodfellow &#38; Co&#8482; Black 6-12: Arch Support, Reinforced Heel &#38; Toe"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/goodfellow-co/-/N-rcv2g",
+       "linking_id": "rcv2g",
+       "name": "Goodfellow & Co"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "53098091",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 12,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/men-s-odor-resistant-socks-6pk-goodfellow-co-6-12/-/A-53098091",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_2144ec1e-a190-4a75-9c89-8a51f9e85c9e"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Men's Odor Resistant Socks 6pk - Goodfellow & Co\u2122 - 6-12"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Socks",
+         "type": "1281055072"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/goodfellow-co/-/N-rcv2g",
+        "linking_id": "rcv2g",
+        "name": "Goodfellow & Co"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$10.00",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.54,
+         "count": 1182,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 4.2
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 1.88
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 4.21
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Color",
+         "swatches": [
+          {
+           "value": "White"
+          },
+          {
+           "value": "Black"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "highly_rated",
+       "display": "Highly rated",
+       "long_description": "Based on average star rating, number of ratings and reviews (including incentivized), and verified purchases."
+      }
+     ],
+     "price": {
+      "current_retail": 10.0,
+      "display_was_now": false,
+      "formatted_current_price": "$10.00",
+      "formatted_current_price_type": "reg",
+      "formatted_unit_price": "$1.67",
+      "formatted_unit_price_suffix": "/count",
+      "reg_retail": 10.0,
+      "location_id": 3991
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "90023826",
+     "original_tcin": "90023826",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 19,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "add_on": {
+        "is_active": true
+       },
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/men-39-s-crew-socks-5pk-dealworthy-8482-white-6-12/-/A-90023826",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_11cc2ebc-e0d8-4c92-82aa-e72e26773103"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Socks",
+        "type": "1281055072"
+       }
+      },
+      "dpci": "040-19-1554",
+      "product_description": {
+       "title": "Men&#39;s Crew Socks 5pk - Dealworthy&#8482; White 6-12: Cushioned Sole, Midweight Knit,"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/dealworthy/-/N-q643le5dznw",
+       "linking_id": "q643le5dznw",
+       "name": "Dealworthy"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "90550646",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 19,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/men-s-crew-socks-5pk-dealworthy-6-12/-/A-90550646",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_b5ed0d9a-3504-4484-908e-f552426dda6a"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Men's Crew Socks 5pk - Dealworthy\u2122 6-12"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Socks",
+         "type": "1281055072"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/dealworthy/-/N-q643le5dznw",
+        "linking_id": "q643le5dznw",
+        "name": "Dealworthy"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$5.00",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.42,
+         "count": 206,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 4.4
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 1.97
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 4.19
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Color",
+         "swatches": [
+          {
+           "value": "Black"
+          },
+          {
+           "value": "White"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "14k+ bought in last month",
+       "long_description": "This item was bought over 14k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 5.0,
+      "display_was_now": false,
+      "formatted_current_price": "$5.00",
+      "formatted_current_price_type": "reg",
+      "formatted_unit_price": "$1.00",
+      "formatted_unit_price_suffix": "/count",
+      "reg_retail": 5.0,
+      "location_id": 3991
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "14073525",
+     "original_tcin": "14073525",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "is_limited_time_offer": false,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 11,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-premium-men-39-s-x-temp-ultra-cushion-crew-socks-6pk-black-6-12/-/A-14073525",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_f414b18a-e619-4162-9a00-90e3e9a40f85"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Socks",
+        "type": "1281055072"
+       }
+      },
+      "dpci": "040-11-0078",
+      "product_description": {
+       "title": "Hanes Premium Men&#39;s X-Temp Ultra Cushion Crew Socks 6pk - Black 6-12: Breathable, Cushioned Sole, Reinforced Heel &#38; Toe"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/hanes-premium/-/N-55f3l",
+       "linking_id": "55f3l",
+       "name": "Hanes Premium"
+      },
+      "ribbons": [
+       "Only At Target"
+      ],
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "53448101",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "is_limited_time_offer": false,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 11,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/hanes-premium-men-s-x-temp-ultra-cushion-crew-socks-6pk/-/A-53448101",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_f414b18a-e619-4162-9a00-90e3e9a40f85"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Hanes Premium Men's X-Temp Ultra Cushion Crew Socks 6pk"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Socks",
+         "type": "1281055072"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/hanes-premium/-/N-55f3l",
+        "linking_id": "55f3l",
+        "name": "Hanes Premium"
+       },
+       "ribbons": [
+        "Only At Target"
+       ],
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$16.00",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.51,
+         "count": 678,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 4.44
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 1.91
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 4.04
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Color",
+         "swatches": [
+          {
+           "value": "Black"
+          },
+          {
+           "value": "White"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "5k+ bought in last month",
+       "long_description": "This item was bought over 5k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 16.0,
+      "display_was_now": false,
+      "formatted_current_price": "$16.00",
+      "formatted_current_price_type": "reg",
+      "formatted_unit_price": "$2.67",
+      "formatted_unit_price_suffix": "/count",
+      "reg_retail": 16.0,
+      "location_id": 3991
+     }
+    },
+    {
+     "__typename": "ProductSummary",
+     "tcin": "94835117",
+     "original_tcin": "94835117",
+     "item": {
+      "cart_add_on_threshold": 35.0,
+      "relationship_type": "Variation Child",
+      "relationship_type_code": "VC",
+      "merchandise_classification": {
+       "class_id": 3,
+       "department_id": 40
+      },
+      "eligibility_rules": {
+       "add_on": {
+        "is_active": true
+       },
+       "scheduled_delivery": {
+        "is_active": true
+       }
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/fruit-of-the-loom-men-39-s-crew-socks-black-6-12/-/A-94835117",
+       "image_info": {
+        "primary_image": {
+         "url": "https://target.scene7.com/is/image/Target/GUEST_3b7c5974-85cf-4d66-a256-8971ef1d9e34"
+        }
+       }
+      },
+      "product_classification": {
+       "item_type": {
+        "name": "Socks",
+        "type": "1281055072"
+       }
+      },
+      "dpci": "040-03-1215",
+      "product_description": {
+       "title": "Fruit of the Loom Men&#39;s Crew Socks - Black 6-12"
+      },
+      "fulfillment": {},
+      "primary_brand": {
+       "canonical_url": "/b/fruit-of-the-loom/-/N-5twcu",
+       "linking_id": "5twcu",
+       "name": "Fruit of the Loom"
+      },
+      "variation_info": {
+       "is_expanded_variation": false
+      }
+     },
+     "parent": {
+      "__typename": "ParentProductSummary",
+      "tcin": "94929430",
+      "item": {
+       "cart_add_on_threshold": 35.0,
+       "relationship_type": "Variation Parent",
+       "relationship_type_code": "VAP",
+       "merchandise_classification": {
+        "class_id": 3,
+        "department_id": 40
+       },
+       "enrichment": {
+        "buy_url": "https://www.target.com/p/fruit-of-the-loom-men-s-crew-socks/-/A-94929430",
+        "image_info": {
+         "primary_image": {
+          "url": "https://target.scene7.com/is/image/Target/GUEST_3b7c5974-85cf-4d66-a256-8971ef1d9e34"
+         }
+        }
+       },
+       "has_extended_sizing": false,
+       "product_description": {
+        "title": "Fruit of the Loom Men's Crew Socks"
+       },
+       "product_classification": {
+        "item_type": {
+         "name": "Socks",
+         "type": "1281055072"
+        }
+       },
+       "primary_brand": {
+        "canonical_url": "/b/fruit-of-the-loom/-/N-5twcu",
+        "linking_id": "5twcu",
+        "name": "Fruit of the Loom"
+       },
+       "variation_info": {}
+      },
+      "price": {
+       "formatted_current_price": "$9.99",
+       "formatted_current_price_type": "reg",
+       "location_id": 3991
+      },
+      "ratings_and_reviews": {
+       "statistics": {
+        "rating": {
+         "average": 4.74,
+         "count": 64,
+         "secondary_averages": [
+          {
+           "id": "comfort",
+           "label": "comfort",
+           "value": 5.0
+          },
+          {
+           "id": "sizing",
+           "label": "sizing",
+           "value": 2.0
+          },
+          {
+           "id": "value",
+           "label": "value",
+           "value": 4.5
+          }
+         ]
+        }
+       }
+      },
+      "variation_summary": {
+       "themes": [
+        {
+         "name": "Color",
+         "swatches": [
+          {
+           "value": "Black"
+          },
+          {
+           "value": "White"
+          }
+         ]
+        },
+        {
+         "name": "Size",
+         "swatches": [
+          {
+           "value": "6-12"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "desirability_cues": [
+      {
+       "code": "social_proofing",
+       "display": "5k+ bought in last month",
+       "long_description": "This item was bought over 5k times this month."
+      }
+     ],
+     "price": {
+      "current_retail": 9.99,
+      "display_was_now": false,
+      "formatted_current_price": "$9.99",
+      "formatted_current_price_type": "reg",
+      "formatted_unit_price": "$1.67",
+      "formatted_unit_price_suffix": "/count",
+      "reg_retail": 9.99,
+      "location_id": 3991
+     }
+    }
+   ],
+   "search_response": {
+    "metadata": {
+     "keyword": "mens crew socks"
+    }
+   }
+  }
+ }
+}

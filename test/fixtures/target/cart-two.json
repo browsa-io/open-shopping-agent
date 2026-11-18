@@ -1,0 +1,52 @@
+{
+ "cart_id": "00000000-test-cart",
+ "cart_type": "REGULAR",
+ "summary": {
+  "total_product_amount": 35.99,
+  "total_shipping_amount": 5.99,
+  "total_tax": 0,
+  "grand_total": 35.99,
+  "items_quantity": 2,
+  "total_discounts": 0
+ },
+ "cart_items": [
+  {
+   "cart_item_id": "item-95007765",
+   "tcin": "95007765",
+   "quantity": 1,
+   "unit_price": 25.99,
+   "list_price": 25.99,
+   "item_attributes": {
+    "description": "Anker 8-in-1 USB-C Hub with 1 USB-C and 2 USB-A Ports"
+   },
+   "item_summary": {
+    "total_product": 25.99
+   },
+   "fulfillment": {
+    "type": "SHIP",
+    "ship_method": "STANDARD",
+    "estimated_arrival_start_date": "2026-11-19",
+    "ship_method_service_level_description": "2-day shipping"
+   }
+  },
+  {
+   "cart_item_id": "item-53059893",
+   "tcin": "53059893",
+   "quantity": 1,
+   "unit_price": 10,
+   "list_price": 10,
+   "item_attributes": {
+    "description": "Men&#39;s Odor Resistant Crew Socks 6pk - Goodfellow &#38; Co&#8482; Black 6-12: Arch Support, Reinforced Heel &#38; Toe"
+   },
+   "item_summary": {
+    "total_product": 10
+   },
+   "fulfillment": {
+    "type": "SHIP",
+    "ship_method": "STANDARD",
+    "estimated_arrival_start_date": "2026-11-19",
+    "ship_method_service_level_description": "2-day shipping"
+   }
+  }
+ ]
+}

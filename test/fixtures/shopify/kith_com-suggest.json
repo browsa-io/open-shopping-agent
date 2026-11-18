@@ -1,0 +1,120 @@
+{
+ "resources": {
+  "results": {
+   "products": [
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "khm034166-001",
+     "id": 8285871112320,
+     "image": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-001_P_16145153_Front-thumbnail-2000.jpg?v=1774978762",
+     "price": "205.00",
+     "price_max": "205.00",
+     "price_min": "205.00",
+     "tags": [
+      "020626",
+      "020626kith"
+     ],
+     "title": "Kith Williams III Hoodie - Black",
+     "type": "Hoodies",
+     "url": "/products/khm034166-001?_pos=1&_psq=hoodie&_psid=897941ab6&_ss=e",
+     "variants": [],
+     "vendor": "Kith",
+     "featured_image": {
+      "alt": "Kith Williams III Hoodie in black, front view, pullover hoodie with white Kith script logo",
+      "aspect_ratio": 1.0,
+      "height": 2000,
+      "url": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-001_P_16145153_Front-thumbnail-2000.jpg?v=1774978762",
+      "width": 2000
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "khm032865-001",
+     "id": 8285686235264,
+     "image": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM032865-001-Front_fc1f2465-9dfe-4823-bacb-12fa6693fefa.jpg?v=1757089886",
+     "price": "205.00",
+     "price_max": "205.00",
+     "price_min": "205.00",
+     "tags": [
+      "090525kithivy",
+      "090825"
+     ],
+     "title": "Kith Ivy Williams I Hoodie - Black",
+     "type": "Hoodies",
+     "url": "/products/khm032865-001?_pos=2&_psq=hoodie&_psid=897941ab6&_ss=e",
+     "variants": [],
+     "vendor": "Kith",
+     "featured_image": {
+      "alt": "Black cotton fleece hoodie with a drawstring hood and front kangaroo pocket, featuring white Kith Ivy embroidered figures on the left chest.",
+      "aspect_ratio": 1.0,
+      "height": 2000,
+      "url": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM032865-001-Front_fc1f2465-9dfe-4823-bacb-12fa6693fefa.jpg?v=1757089886",
+      "width": 2000
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "khm034166-002",
+     "id": 8285871014016,
+     "image": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-002-Front.jpg?v=1774978760",
+     "price": "205.00",
+     "price_max": "205.00",
+     "price_min": "205.00",
+     "tags": [
+      "020626",
+      "020626kith"
+     ],
+     "title": "Kith Williams III Hoodie - Light Heather Grey",
+     "type": "Hoodies",
+     "url": "/products/khm034166-002?_pos=3&_psq=hoodie&_psid=897941ab6&_ss=e",
+     "variants": [],
+     "vendor": "Kith",
+     "featured_image": {
+      "alt": "Kith Williams III Hoodie in light heather grey, front view, pullover hoodie with black Kith script logo",
+      "aspect_ratio": 1.0,
+      "height": 2000,
+      "url": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-002-Front.jpg?v=1774978760",
+      "width": 2000
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "khwa030175-001",
+     "id": 8286815846528,
+     "image": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHWA030175-001-Detail.jpg?v=1790092194",
+     "price": "205.00",
+     "price_max": "205.00",
+     "price_min": "205.00",
+     "tags": [
+      "082826kith",
+      "092526"
+     ],
+     "title": "Kith Women Tatum Hoodie - Black",
+     "type": "Hoodies",
+     "url": "/products/khwa030175-001?_pos=4&_psq=hoodie&_psid=897941ab6&_ss=e",
+     "variants": [],
+     "vendor": "Kith Women",
+     "featured_image": {
+      "alt": "Black Kith Women Tatum hoodie laid flat, showing its raglan sleeves, ribbed cuffs and hem, and small white Kith New York script logo on the chest.",
+      "aspect_ratio": 1.0,
+      "height": 2000,
+      "url": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHWA030175-001-Detail.jpg?v=1790092194",
+      "width": 2000
+     }
+    }
+   ]
+  }
+ }
+}

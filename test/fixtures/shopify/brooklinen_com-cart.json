@@ -1,0 +1,74 @@
+{
+ "token": "test-token",
+ "note": "",
+ "attributes": {},
+ "original_total_price": 11900,
+ "total_price": 11900,
+ "total_discount": 0,
+ "total_weight": 1279.1305,
+ "item_count": 1,
+ "items": [
+  {
+   "id": 40331172446298,
+   "properties": {},
+   "quantity": 1,
+   "variant_id": 40331172446298,
+   "key": "40331172446298:test",
+   "title": "Dreamweave Waffle Bath Sheets Set of 2 (Buy More and Save)",
+   "price": 11900,
+   "original_price": 11900,
+   "presentment_price": 119.0,
+   "discounted_price": 11900,
+   "line_price": 11900,
+   "original_line_price": 11900,
+   "total_discount": 0,
+   "discounts": [],
+   "sku": "BS-WFL-1",
+   "grams": 1279,
+   "vendor": "Brooklinen",
+   "taxable": true,
+   "product_id": 6884438704218,
+   "product_has_only_default_variant": false,
+   "gift_card": false,
+   "final_price": 11900,
+   "final_line_price": 11900,
+   "url": "/products/waffle-bath-sheets?variant=40331172446298",
+   "featured_image": {
+    "aspect_ratio": 1.0,
+    "alt": "PDP2 Option[White] MAIN",
+    "height": 2048,
+    "url": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathSheet_White_1x_WOgrey.jpg?v=1775836559",
+    "width": 2048
+   },
+   "image": "https://cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathSheet_White_1x_WOgrey.jpg?v=1775836559",
+   "handle": "waffle-bath-sheets",
+   "requires_shipping": true,
+   "product_type": "Towels",
+   "product_title": "Dreamweave Waffle Bath Sheets Set of 2",
+   "product_description": "",
+   "variant_title": "White",
+   "variant_options": [
+    "White"
+   ],
+   "options_with_values": [
+    {
+     "name": "Color",
+     "value": "White"
+    }
+   ],
+   "line_level_discount_allocations": [],
+   "line_level_total_discount": 0,
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "has_components": false
+  }
+ ],
+ "requires_shipping": true,
+ "currency": "USD",
+ "items_subtotal_price": 11900,
+ "cart_level_discount_applications": [],
+ "discount_codes": []
+}

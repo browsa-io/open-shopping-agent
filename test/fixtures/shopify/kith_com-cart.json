@@ -1,0 +1,74 @@
+{
+ "token": "test-token",
+ "note": "",
+ "attributes": {},
+ "original_total_price": 20500,
+ "total_price": 20500,
+ "total_discount": 0,
+ "total_weight": 952.544,
+ "item_count": 1,
+ "items": [
+  {
+   "id": 45135932948608,
+   "properties": {},
+   "quantity": 1,
+   "variant_id": 45135932948608,
+   "key": "45135932948608:test",
+   "title": "Kith Williams III Hoodie - Black - XS",
+   "price": 20500,
+   "original_price": 20500,
+   "presentment_price": 205.0,
+   "discounted_price": 20500,
+   "line_price": 20500,
+   "original_line_price": 20500,
+   "total_discount": 0,
+   "discounts": [],
+   "sku": "2000227280",
+   "grams": 953,
+   "vendor": "Kith",
+   "taxable": true,
+   "product_id": 8285871112320,
+   "product_has_only_default_variant": false,
+   "gift_card": false,
+   "final_price": 20500,
+   "final_line_price": 20500,
+   "url": "/products/khm034166-001?variant=45135932948608",
+   "featured_image": {
+    "aspect_ratio": 1.0,
+    "alt": "Kith Williams III Hoodie in black, front view, pullover hoodie with white Kith script logo",
+    "height": 2000,
+    "url": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-001_P_16145153_Front-thumbnail-2000.jpg?v=1774978762",
+    "width": 2000
+   },
+   "image": "https://cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-001_P_16145153_Front-thumbnail-2000.jpg?v=1774978762",
+   "handle": "khm034166-001",
+   "requires_shipping": true,
+   "product_type": "Hoodies",
+   "product_title": "Kith Williams III Hoodie - Black",
+   "product_description": "",
+   "variant_title": "XS",
+   "variant_options": [
+    "XS"
+   ],
+   "options_with_values": [
+    {
+     "name": "Size",
+     "value": "XS"
+    }
+   ],
+   "line_level_discount_allocations": [],
+   "line_level_total_discount": 0,
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "has_components": false
+  }
+ ],
+ "requires_shipping": true,
+ "currency": "EUR",
+ "items_subtotal_price": 20500,
+ "cart_level_discount_applications": [],
+ "discount_codes": []
+}

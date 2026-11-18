@@ -1,0 +1,180 @@
+{
+ "data": {
+  "product": {
+   "tcin": "94732708",
+   "item": {
+    "product_description": {
+     "title": "Hanes Men's Cotton Stretch Crewneck Shirt - White"
+    },
+    "enrichment": {
+     "buy_url": "https://www.target.com/p/hanes-men-s-cotton-stretch-crewneck-shirt-white/-/A-94732708"
+    },
+    "relationship_type_code": "VAP"
+   },
+   "price": {
+    "formatted_current_price": "$12.99",
+    "formatted_current_price_type": "reg",
+    "location_id": 3991,
+    "price_handle": "When purchased online",
+    "current_retail_min": 12.99,
+    "reg_retail_max": 12.99
+   },
+   "ratings_and_reviews": {
+    "statistics": {
+     "rating": {
+      "average": 4.68,
+      "count": 131
+     }
+    }
+   },
+   "variation_hierarchy": [
+    {
+     "name": "Size",
+     "value": "S",
+     "tcin": "94689074",
+     "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-s/-/A-94689074",
+     "availability": {
+      "is_shipping_available": true,
+      "is_shipping_loyalty_available": true,
+      "is_scheduled_delivery_available": false,
+      "is_primary_store_available": false,
+      "is_backup_store_available": true,
+      "is_digital_options_available": false,
+      "is_sold_out": false
+     }
+    },
+    {
+     "name": "Size",
+     "value": "M",
+     "tcin": "94689075",
+     "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-m/-/A-94689075",
+     "availability": {
+      "is_shipping_available": true,
+      "is_shipping_loyalty_available": true,
+      "is_scheduled_delivery_available": false,
+      "is_primary_store_available": false,
+      "is_backup_store_available": true,
+      "is_digital_options_available": false,
+      "is_sold_out": false
+     }
+    },
+    {
+     "name": "Size",
+     "value": "L",
+     "tcin": "94689076",
+     "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-l/-/A-94689076",
+     "availability": {
+      "is_shipping_available": true,
+      "is_shipping_loyalty_available": true,
+      "is_scheduled_delivery_available": false,
+      "is_primary_store_available": false,
+      "is_backup_store_available": true,
+      "is_digital_options_available": false,
+      "is_sold_out": false
+     }
+    },
+    {
+     "name": "Size",
+     "value": "XL",
+     "tcin": "94689077",
+     "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-xl/-/A-94689077",
+     "availability": {
+      "is_shipping_available": true,
+      "is_shipping_loyalty_available": true,
+      "is_scheduled_delivery_available": false,
+      "is_primary_store_available": false,
+      "is_backup_store_available": true,
+      "is_digital_options_available": false,
+      "is_sold_out": false
+     }
+    }
+   ],
+   "children": [
+    {
+     "tcin": "94689074",
+     "price": {
+      "current_retail": 12.99,
+      "display_was_now": false,
+      "formatted_current_price": "$12.99",
+      "formatted_current_price_type": "reg",
+      "reg_retail": 12.99,
+      "location_id": 3991,
+      "price_handle": "When purchased online",
+      "external_system_id": "94689074-3991-12.99-2026111611"
+     },
+     "item": {
+      "product_description": {
+       "title": "Hanes Men&#39;s Cotton Stretch Crewneck Shirt - White S"
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-s/-/A-94689074"
+      }
+     }
+    },
+    {
+     "tcin": "94689075",
+     "price": {
+      "current_retail": 12.99,
+      "display_was_now": false,
+      "formatted_current_price": "$12.99",
+      "formatted_current_price_type": "reg",
+      "reg_retail": 12.99,
+      "location_id": 3991,
+      "price_handle": "When purchased online",
+      "external_system_id": "94689075-3991-12.99-2026111611"
+     },
+     "item": {
+      "product_description": {
+       "title": "Hanes Men&#39;s Cotton Stretch Crewneck Shirt - White M"
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-m/-/A-94689075"
+      }
+     }
+    },
+    {
+     "tcin": "94689076",
+     "price": {
+      "current_retail": 12.99,
+      "display_was_now": false,
+      "formatted_current_price": "$12.99",
+      "formatted_current_price_type": "reg",
+      "reg_retail": 12.99,
+      "location_id": 3991,
+      "price_handle": "When purchased online",
+      "external_system_id": "94689076-3991-12.99-2026111611"
+     },
+     "item": {
+      "product_description": {
+       "title": "Hanes Men&#39;s Cotton Stretch Crewneck Shirt - White L"
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-l/-/A-94689076"
+      }
+     }
+    },
+    {
+     "tcin": "94689077",
+     "price": {
+      "current_retail": 12.99,
+      "display_was_now": false,
+      "formatted_current_price": "$12.99",
+      "formatted_current_price_type": "reg",
+      "reg_retail": 12.99,
+      "location_id": 3991,
+      "price_handle": "When purchased online",
+      "external_system_id": "94689077-3991-12.99-2026111611"
+     },
+     "item": {
+      "product_description": {
+       "title": "Hanes Men&#39;s Cotton Stretch Crewneck Shirt - White XL"
+      },
+      "enrichment": {
+       "buy_url": "https://www.target.com/p/hanes-men-39-s-cotton-stretch-crewneck-shirt-white-xl/-/A-94689077"
+      }
+     }
+    }
+   ]
+  }
+ }
+}

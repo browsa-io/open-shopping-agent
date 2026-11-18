@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.osa
+bench/results/*.raw.json
+# the repo root ignores target/ (build output); Target store fixtures are source
+!test/fixtures/target/

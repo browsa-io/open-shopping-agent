@@ -1,0 +1,171 @@
+{
+ "resources": {
+  "results": {
+   "products": [
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "medium-roast",
+     "id": 4657897373751,
+     "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Medium_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752632",
+     "price": "19.99",
+     "price_max": "84.99",
+     "price_min": "19.99",
+     "tags": [
+      "Bagged",
+      "Intro Offer"
+     ],
+     "title": "Medium Roast Coffee",
+     "type": "Coffee",
+     "url": "/products/medium-roast?_pos=1&_psq=ground+coffee&_psid=a8da3e231&_ss=e&variant=32485212061751",
+     "variants": [
+      {
+       "available": true,
+       "compare_at_price": null,
+       "id": 32485212061751,
+       "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Medium_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752632",
+       "price": "19.99",
+       "title": "Ground / 1 lb",
+       "url": "/products/medium-roast?variant=32485212061751&_pos=1&_psq=ground+coffee&_psid=a8da3e231&_ss=e",
+       "featured_image": {
+        "alt": "Death Wish Coffee - Medium Roast 16oz Ground Bag.",
+        "aspect_ratio": 1.0,
+        "height": 1500,
+        "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Medium_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752632",
+        "width": 1500
+       }
+      }
+     ],
+     "vendor": "Death Wish Coffee Company",
+     "featured_image": {
+      "alt": "Death Wish Coffee - Medium Roast 16oz Ground Bag.",
+      "aspect_ratio": 1.0,
+      "height": 1500,
+      "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Medium_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752632",
+      "width": 1500
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "espresso-roast-coffee",
+     "id": 6669374816311,
+     "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Espresso_Roast_14oz_Ground_Angle_DTC_A5_2.jpg?v=1726755281",
+     "price": "19.99",
+     "price_max": "93.99",
+     "price_min": "19.99",
+     "tags": [
+      "Bagged",
+      "Dark"
+     ],
+     "title": "Espresso Roast Coffee",
+     "type": "Coffee",
+     "url": "/products/espresso-roast-coffee?_pos=2&_psq=ground+coffee&_psid=a8da3e231&_ss=e&variant=39781001134135",
+     "variants": [
+      {
+       "available": true,
+       "compare_at_price": null,
+       "id": 39781001134135,
+       "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Espresso_Roast_14oz_Ground_Angle_DTC_A5_2.jpg?v=1726755281",
+       "price": "19.99",
+       "title": "Ground / 1 bag",
+       "url": "/products/espresso-roast-coffee?variant=39781001134135&_pos=2&_psq=ground+coffee&_psid=a8da3e231&_ss=e",
+       "featured_image": {
+        "alt": "Death Wish Coffee - Espresso Roast 14oz Ground Bag.",
+        "aspect_ratio": 1.0,
+        "height": 1500,
+        "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Espresso_Roast_14oz_Ground_Angle_DTC_A5_2.jpg?v=1726755281",
+        "width": 1500
+       }
+      }
+     ],
+     "vendor": "Death Wish Coffee Company",
+     "featured_image": {
+      "alt": "Death Wish Coffee - Espresso Roast 14oz Ground Bag.",
+      "aspect_ratio": 1.0,
+      "height": 1500,
+      "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Espresso_Roast_14oz_Ground_Angle_DTC_A5_2.jpg?v=1726755281",
+      "width": 1500
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "death-wish-coffee",
+     "id": 263612097,
+     "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Dark_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752263",
+     "price": "19.99",
+     "price_max": "84.99",
+     "price_min": "19.99",
+     "tags": [
+      "Bagged",
+      "Dark"
+     ],
+     "title": "Dark Roast Coffee",
+     "type": "Coffee",
+     "url": "/products/death-wish-coffee?_pos=3&_psq=ground+coffee&_psid=a8da3e231&_ss=e&variant=2413985169421",
+     "variants": [
+      {
+       "available": true,
+       "compare_at_price": null,
+       "id": 2413985169421,
+       "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Dark_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752263",
+       "price": "19.99",
+       "title": "Ground / 1 lb",
+       "url": "/products/death-wish-coffee?variant=2413985169421&_pos=3&_psq=ground+coffee&_psid=a8da3e231&_ss=e",
+       "featured_image": {
+        "alt": "Death Wish Coffee - Dark Roast Ground 16oz Bag.",
+        "aspect_ratio": 1.0,
+        "height": 1500,
+        "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Dark_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752263",
+        "width": 1500
+       }
+      }
+     ],
+     "vendor": "Death Wish Coffee Company",
+     "featured_image": {
+      "alt": "Death Wish Coffee - Dark Roast Ground 16oz Bag.",
+      "aspect_ratio": 1.0,
+      "height": 1500,
+      "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Dark_Roast_16oz_Ground_Angle_DTC_A4_2.jpg?v=1726752263",
+      "width": 1500
+     }
+    },
+    {
+     "available": true,
+     "body": "",
+     "compare_at_price_max": "0.00",
+     "compare_at_price_min": "0.00",
+     "handle": "double-indulgence-ground-bundle",
+     "id": 6813619191863,
+     "image": "https://cdn.shopify.com/s/files/1/0271/7209/files/Double_Indulgence_Ground_Bundle.jpg?v=1726759443",
+     "price": "39.98",
+     "price_max": "39.98",
+     "price_min": "39.98",
+     "tags": [
+      "Bagged",
+      "Bundle"
+     ],
+     "title": "Double Indulgence Ground Bundle",
+     "type": "Coffee Bundle",
+     "url": "/products/double-indulgence-ground-bundle?_pos=4&_psq=ground+coffee&_psid=a8da3e231&_ss=e",
+     "variants": [],
+     "vendor": "Death Wish Coffee Company",
+     "featured_image": {
+      "alt": "Death Wish Coffee Double Indulgence Ground Bundle - 14oz Bags.",
+      "aspect_ratio": 1.0,
+      "height": 1500,
+      "url": "https://cdn.shopify.com/s/files/1/0271/7209/files/Double_Indulgence_Ground_Bundle.jpg?v=1726759443",
+      "width": 1500
+     }
+    }
+   ]
+  }
+ }
+}

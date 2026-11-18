@@ -1,0 +1,400 @@
+// MockEngine: replays a made-up but plausible run so the surfaces can be built and tested without
+// a Browsa key. DEMO DATA ONLY: product names, brands, sellers, prices, ratings and order numbers
+// are invented. No real people, no real stores are contacted, no credits are spent.
+
+import type {
+  Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, Pick, RunEvent,
+  RunSummary, ShoppingRequest, Stage, StoreId,
+} from "../core/types.js";
+import type { EnginePort, RunHandle, RunListItem, RunOptions, RunRecord, RunStatus } from "./engine-port.js";
+import { STORE_IDS, deliveredCents } from "./format.js";
+
+export interface MockEngineOptions {
+  /** Delay multiplier: 1 is a realistic pace (a run takes about 10 s), 0 replays instantly (tests). */
+  speed?: number;
+  /** Store that fails its search in the demo (default "target"); null for none. */
+  failStore?: StoreId | null;
+  /** Store that asks the person to sign in at checkout (default "ebay"); null for none. */
+  signInStore?: StoreId | null;
+  /** Base path for demo Phantom Live links (the web app serves a placeholder there); null for none. */
+  liveBase?: string | null;
+}
+
+const DOMAINS: Record<StoreId, string> = {
+  amazon: "amazon.com", walmart: "walmart.com", ebay: "ebay.com", bestbuy: "bestbuy.com", target: "target.com",
+  shopify: "demo-shop.example",
+};
+
+const BRANDS = ["Northbay", "Plainwire", "Arcwell", "Kestrel", "Lumo Basics", "Voltaro"];
+
+interface Template { match: RegExp; titles: string[]; base: number; spread: number; options?: Record<string, string[]> }
+
+const CATALOG: Template[] = [
+  { match: /hub|dock|adapter/i, base: 2899, spread: 1400, titles: [
+    "7-in-1 USB-C Hub, 4K60 HDMI, 100W PD, 2 USB-A, SD", "6-in-1 USB-C Hub, 4K HDMI, 100W pass-through",
+    "8-in-1 USB-C Hub with Ethernet, 4K60 HDMI", "Slim 4-in-1 USB-C Hub, 4K30 HDMI", "USB-C Hub 5-in-1, aluminum, 4K HDMI"] },
+  { match: /hdmi/i, base: 999, spread: 700, options: { length: ["3 ft", "6 ft", "10 ft"] }, titles: [
+    "HDMI 2.1 Cable 6 ft, 8K60 / 4K120, 48Gbps", "High Speed HDMI Cable 6 ft, braided", "Ultra High Speed HDMI Cable 6.6 ft",
+    "HDMI Cable 6 ft, 4K60, gold plated", "Certified HDMI 2.1 Cable 6 ft"] },
+  { match: /charger|power/i, base: 2499, spread: 1500, titles: [
+    "65W USB-C Charger, GaN, 3 ports", "45W USB-C Wall Charger, foldable", "100W GaN Charger, 4 ports", "30W USB-C Charger, compact"] },
+  { match: /mouse/i, base: 1999, spread: 1800, titles: [
+    "Wireless Mouse, silent clicks, USB-C", "Ergonomic Vertical Mouse, Bluetooth", "Compact Travel Mouse, 2.4 GHz"] },
+  { match: /keyboard/i, base: 3999, spread: 3000, titles: [
+    "Wireless Keyboard, low profile, multi-device", "Mechanical Keyboard 75%, hot-swap", "Compact Bluetooth Keyboard"] },
+  { match: /headphone|earbud/i, base: 4999, spread: 4000, titles: [
+    "Wireless Earbuds, ANC, 30 h battery", "Over-Ear Headphones, Bluetooth 5.3", "Open-Ear Sport Earbuds"] },
+];
+
+const STORE_FACTOR: Record<StoreId, number[]> = {
+  // price multiplier per item index; picks land on different stores so the demo shows two checkouts
+  amazon: [0.94, 1.1, 1.0], walmart: [1.03, 0.98, 0.97], ebay: [0.99, 0.86, 1.05],
+  bestbuy: [1.12, 1.15, 1.08], target: [1.05, 1.02, 0.99], shopify: [1.1, 1.08, 1.02],
+};
+
+const DAY = 86_400_000;
+
+function rng(seed: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+}
+
+const usd = (cents: number): Money => ({ cents: Math.round(cents), currency: "USD" });
+const round99 = (cents: number) => Math.max(99, Math.floor(cents / 100) * 100 + 99);
+const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+function dayText(ms: number): { text: string; iso: string } {
+  const d = new Date(ms);
+  const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  const md = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return { text: `Arrives ${wd}, ${md}`, iso: d.toISOString().slice(0, 10) };
+}
+
+/** Very small demo parser: "a and b under $60" -> two items and a budget. The real engine uses the LLM. */
+export function parseDemoPrompt(prompt: string, stores: StoreId[], zip?: string): ShoppingRequest {
+  let text = prompt.trim();
+  let budget: Money | undefined;
+  const b = text.match(/\b(?:under|below|less than|max|budget(?: of)?|up to)\s*\$?\s*(\d+(?:\.\d{1,2})?)/i);
+  if (b) {
+    budget = usd(parseFloat(b[1]) * 100);
+    text = text.replace(b[0], " ");
+  }
+  const parts = text.split(/\s*(?:,|;|\+|\band\b|\bplus\b)\s*/i).map((s) => s.trim()).filter((s) => s.length > 1);
+  const items: ItemRequest[] = (parts.length ? parts : [text || "usb-c hub"]).slice(0, 3).map((p, i) => {
+    const qty = p.match(/^(\d+)\s*(?:x\s+|\s+(?!(?:ft|feet|foot|in|inch|inches|m|cm|mm|w|tb|gb|pack)\b))/i);
+    const description = qty ? p.slice(qty[0].length) : p;
+    const len = description.match(/(\d+(?:\.\d)?)\s*(?:ft|feet|foot)\b/i);
+    return {
+      id: `item-${i + 1}`,
+      query: description,
+      description,
+      quantity: qty ? Math.min(9, parseInt(qty[1], 10)) : 1,
+      options: len ? { length: `${len[1]} ft` } : undefined,
+    };
+  });
+  return { prompt, items, stores, budget, zip, goal: "best_value" };
+}
+
+function makeOffers(store: StoreId, domain: string, item: ItemRequest, itemIndex: number, now: number): Offer[] {
+  const r = rng(`${store}|${item.query}`);
+  const tpl = CATALOG.find((t) => t.match.test(item.query));
+  const titles = tpl?.titles ?? [titleCase(item.query), `${titleCase(item.query)}, pack of 2`, `${titleCase(item.query)}, premium`];
+  const base = tpl?.base ?? 1999 + Math.floor(r() * 3000);
+  const spread = tpl?.spread ?? 1500;
+  const factor = STORE_FACTOR[store][itemIndex % 3];
+  const count = 3 + Math.floor(r() * 2);
+  const out: Offer[] = [];
+  for (let i = 0; i < count; i++) {
+    const title = `${BRANDS[Math.floor(r() * BRANDS.length)]} ${titles[(i + itemIndex) % titles.length]}`;
+    const price = round99((base + (i === 0 ? 0 : r() * spread)) * factor);
+    const freeOver = store === "walmart" || store === "target" ? 3500 : 0;
+    const shipping = store === "ebay" ? (i === 0 || r() < 0.5 ? 0 : 399) : store === "shopify" ? 599 : price >= freeOver ? 0 : 599;
+    const days = store === "amazon" ? 1 + Math.floor(r() * 2) : store === "ebay" ? 4 + Math.floor(r() * 4) : 2 + Math.floor(r() * 3);
+    const when = dayText(now + days * DAY);
+    const stars = Math.round((3.9 + r() * 1.0) * 10) / 10;
+    const seller =
+      store === "amazon" ? (r() < 0.6 ? "Amazon.com" : `Sold by ${BRANDS[i % BRANDS.length]} Direct`) :
+      store === "walmart" ? (r() < 0.5 ? "Walmart.com" : "Marketplace seller") :
+      store === "ebay" ? `demo-seller-${100 + Math.floor(r() * 800)} (99.${Math.floor(r() * 9)}% positive)` :
+      store === "bestbuy" ? "Best Buy" : store === "target" ? "Target" : domain;
+    out.push({
+      store, storeDomain: domain, itemId: item.id, title,
+      url: `https://${domain}/demo/${item.id}-${i + 1}`,
+      productId: `DEMO-${store.toUpperCase()}-${itemIndex + 1}${i + 1}`,
+      price: usd(price),
+      listPrice: r() < 0.3 ? usd(price + 500) : undefined,
+      shipping: usd(shipping),
+      deliveryText: when.text,
+      deliveryDate: when.iso,
+      rating: { stars, count: Math.floor(40 + r() * r() * 14000) },
+      seller,
+      condition: store === "ebay" && i === count - 1 ? "refurbished" : "new",
+      inStock: !(i === count - 1 && r() < 0.25),
+      sponsored: i === 1 && (store === "amazon" || store === "walmart"),
+      variants: tpl?.options,
+      raw: { demo: true },
+    });
+  }
+  return out;
+}
+
+function rank(offers: Offer[]): Offer[] {
+  const ok = offers.filter((o) => o.inStock && !o.subscription && o.condition !== "used");
+  const score = (o: Offer) => {
+    const stars = o.rating?.stars ?? 4;
+    const count = o.rating?.count ?? 0;
+    return deliveredCents(o) * (1 + (4.7 - stars) * 0.12) - Math.log10(count + 1) * 60;
+  };
+  return ok.sort((a, b) => score(a) - score(b));
+}
+
+function reasonFor(best: Offer, all: Offer[]): string {
+  const cheapest = Math.min(...all.map(deliveredCents));
+  const d = deliveredCents(best);
+  const stars = best.rating ? `${best.rating.stars.toFixed(1)} stars from ${best.rating.count.toLocaleString("en-US")} reviews` : "no rating shown";
+  const ship = best.shipping?.cents === 0 ? "free shipping" : "shipping included";
+  if (d === cheapest) return `Lowest delivered price, ${ship}, ${stars}`;
+  return `$${((d - cheapest) / 100).toFixed(2)} more than the cheapest but ${stars}`;
+}
+
+interface MockRun {
+  record: RunRecord;
+  opts: RunOptions;
+  request?: ShoppingRequest;
+  picks: Pick[];
+  carts: Cart[];
+  reviews: CheckoutReview[];
+  orders: OrderResult[];
+  failures: RunSummary["failures"];
+  approvals: Map<StoreId, (a: Approval | null) => void>;
+  cancelled: Set<StoreId>;
+  cancelledAll: boolean;
+  liveUrls: Map<StoreId, string>;
+}
+
+export class MockEngine implements EnginePort {
+  readonly demo = true;
+  private runs = new Map<string, MockRun>();
+  private seq = 0;
+  private speed: number;
+  private failStore: StoreId | null;
+  private signInStore: StoreId | null;
+  private liveBase: string | null;
+
+  constructor(opts: MockEngineOptions = {}) {
+    this.speed = opts.speed ?? 1;
+    this.failStore = opts.failStore === undefined ? "target" : opts.failStore;
+    this.signInStore = opts.signInStore === undefined ? "ebay" : opts.signInStore;
+    this.liveBase = opts.liveBase === undefined ? "/demo-live.html" : opts.liveBase;
+  }
+
+  private wait(ms: number, run?: MockRun): Promise<void> {
+    if (run?.cancelledAll) return Promise.resolve();
+    const t = ms * this.speed;
+    return t <= 0 ? new Promise((r) => setImmediate(r)) : new Promise((r) => setTimeout(r, t));
+  }
+
+  run(prompt: string, opts: RunOptions): RunHandle {
+    const runId = `demo-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${(++this.seq).toString().padStart(3, "0")}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+    const stores = (opts.limits?.allowedStores?.length ? opts.limits.allowedStores : STORE_IDS.filter((s) => s !== "shopify"))
+      .filter((s, i, a) => a.indexOf(s) === i);
+    const record: RunRecord = {
+      runId, prompt, startedAt: new Date().toISOString(), status: "running", stores, orders: 0, events: [],
+    };
+    const run: MockRun = {
+      record, opts, picks: [], carts: [], reviews: [], orders: [], failures: [], approvals: new Map(),
+      cancelled: new Set(), cancelledAll: false, liveUrls: new Map(),
+    };
+    this.runs.set(runId, run);
+    const done = this.drive(run, prompt, stores).catch((e) => {
+      this.emit(run, { type: "log", message: `demo engine error: ${(e as Error).message}` });
+      return this.finish(run, "failed");
+    });
+    return { runId, done };
+  }
+
+  private emit(run: MockRun, e: RunEvent) {
+    run.record.events.push(e);
+    try { run.opts.onEvent(e); } catch { /* a listener error never stops the run */ }
+  }
+
+  private finish(run: MockRun, status: RunStatus): RunSummary {
+    if (run.record.summary) return run.record.summary;
+    const summary: RunSummary = {
+      runId: run.record.runId, startedAt: run.record.startedAt, finishedAt: new Date().toISOString(),
+      picks: run.picks, carts: run.carts, reviews: run.reviews, orders: run.orders, failures: run.failures,
+      creditsUsed: 0,
+    };
+    run.record.status = run.cancelledAll ? "cancelled" : status;
+    run.record.finishedAt = summary.finishedAt;
+    run.record.summary = summary;
+    run.record.orders = run.orders.filter((o) => o.placed).length;
+    this.emit(run, { type: "done", summary });
+    return summary;
+  }
+
+  private fail(run: MockRun, store: StoreId, stage: Stage, error: string) {
+    run.failures.push({ store, stage, error });
+    this.emit(run, { type: "store_failed", store, stage, error });
+  }
+
+  private async drive(run: MockRun, prompt: string, stores: StoreId[]): Promise<RunSummary> {
+    const { opts } = run;
+    const now = Date.now();
+    await this.wait(400, run);
+    const request = parseDemoPrompt(prompt, stores, opts.zip);
+    if (opts.limits?.budget && !request.budget) request.budget = opts.limits.budget;
+    if (opts.shopifyDomains?.length) request.shopifyDomains = opts.shopifyDomains;
+    run.request = request;
+    this.emit(run, { type: "parsed", request });
+    this.emit(run, { type: "log", message: "Demo engine: made-up products and prices, no store is contacted." });
+
+    const domainOf = (s: StoreId) => (s === "shopify" ? opts.shopifyDomains?.[0] ?? DOMAINS.shopify : DOMAINS[s]);
+    const all: Offer[] = [];
+    await Promise.all(stores.map(async (store, si) => {
+      await this.wait(150 + si * 180, run);
+      if (run.cancelledAll) return;
+      const liveUrl = this.liveBase ? `${this.liveBase}?store=${store}&run=${encodeURIComponent(run.record.runId)}` : undefined;
+      if (liveUrl) run.liveUrls.set(store, liveUrl);
+      this.emit(run, { type: "store_started", store, liveUrl });
+      for (const [ii, item] of request.items.entries()) {
+        await this.wait(900 + ((si * 7 + ii * 3) % 5) * 450, run);
+        if (run.cancelledAll || run.cancelled.has(store)) return;
+        if (store === this.failStore && ii === 0) {
+          this.emit(run, { type: "log", store, message: "Search page did not finish loading, trying the AI fallback" });
+          await this.wait(1200, run);
+          this.fail(run, store, "search", "Demo: search results did not load in 30 s (AI fallback found none)");
+          return;
+        }
+        const offers = makeOffers(store, domainOf(store), item, ii, now);
+        all.push(...offers);
+        this.emit(run, { type: "offers", store, itemId: item.id, offers });
+      }
+    }));
+    if (run.cancelledAll) return this.finish(run, "cancelled");
+
+    await this.wait(500, run);
+    let total = 0;
+    for (const item of request.items) {
+      const mine = all.filter((o) => o.itemId === item.id && !run.cancelled.has(o.store));
+      const ranked = rank(mine);
+      if (!ranked.length) continue;
+      const best = ranked[0];
+      total += deliveredCents(best) * item.quantity;
+      run.picks.push({
+        itemId: item.id, offer: best, score: Math.round(1000 - deliveredCents(best) / 10) / 1000,
+        reason: reasonFor(best, mine.filter((o) => o.inStock)), alternatives: ranked.slice(1, 5),
+      });
+    }
+    const overBudget = !!request.budget && total > request.budget.cents;
+    this.emit(run, { type: "picks", picks: run.picks, total: usd(total), overBudget });
+    if (!opts.confirm || run.picks.length === 0) return this.finish(run, "done");
+
+    const pickStores = [...new Set(run.picks.map((p) => p.offer.store))];
+    await Promise.all(pickStores.map((store) => this.checkoutStore(run, store, request)));
+    return this.finish(run, "done");
+  }
+
+  private async checkoutStore(run: MockRun, store: StoreId, request: ShoppingRequest) {
+    const confirm = run.opts.confirm!;
+    const picks = run.picks.filter((p) => p.offer.store === store);
+    const domain = picks[0].offer.storeDomain;
+    if (!(await confirm("cart", store)) || run.cancelled.has(store) || run.cancelledAll) {
+      this.emit(run, { type: "log", store, message: "Cart skipped" });
+      return;
+    }
+    this.emit(run, { type: "log", store, message: `Adding ${picks.length} item${picks.length > 1 ? "s" : ""} to the cart` });
+    await this.wait(1500, run);
+    const lines: CartLine[] = picks.map((p) => {
+      const qty = request.items.find((i) => i.id === p.itemId)?.quantity ?? 1;
+      const options = request.items.find((i) => i.id === p.itemId)?.options;
+      return { title: p.offer.title, quantity: qty, price: usd(p.offer.price.cents * qty), options, url: p.offer.url, productId: p.offer.productId };
+    });
+    const subtotal = lines.reduce((s, l) => s + l.price.cents, 0);
+    const cart: Cart = { store, storeDomain: domain, lines, subtotal: usd(subtotal), readAt: new Date().toISOString(), warnings: [] };
+    run.carts.push(cart);
+    this.emit(run, { type: "cart", cart });
+
+    if (!(await confirm("checkout", store)) || run.cancelled.has(store) || run.cancelledAll) {
+      this.emit(run, { type: "log", store, message: "Checkout review skipped; the cart stays filled" });
+      return;
+    }
+    this.emit(run, { type: "log", store, message: "Going to checkout, declining membership offers" });
+    await this.wait(2000, run);
+    const shipping = picks.reduce((s, p) => s + (p.offer.shipping?.cents ?? 0), 0);
+    const tax = Math.round(subtotal * 0.06);
+    const base: CheckoutReview = {
+      store, storeDomain: domain, lines, subtotal: usd(subtotal), shipping: usd(shipping), tax: usd(tax),
+      total: usd(subtotal + shipping + tax), shipTo: request.zip ? `ZIP ${request.zip}` : undefined,
+      paymentHint: "Demo card ending 0000", reviewedAt: new Date().toISOString(),
+    };
+    if (store === this.signInStore) {
+      const needs = { reason: "sign_in" as const, message: "Demo: the store asks you to sign in before checkout", liveUrl: run.liveUrls.get(store) };
+      const review = { ...base, needsUser: needs };
+      run.reviews.push(review);
+      this.emit(run, { type: "checkout_review", review });
+      this.emit(run, { type: "needs_user", store, needs });
+      return;
+    }
+    run.reviews.push(base);
+    this.emit(run, { type: "checkout_review", review: base });
+    this.emit(run, { type: "awaiting_approval", store, review: base });
+    const approval = await new Promise<Approval | null>((resolve) => run.approvals.set(store, resolve));
+    run.approvals.delete(store);
+    if (!approval) {
+      this.emit(run, { type: "log", store, message: "Not bought; the cart stays filled" });
+      return;
+    }
+    if (approval.approvedTotal.cents !== base.total.cents) {
+      const result: OrderResult = { store, placed: false, confirmationText: "Approved total does not match the review total, order not placed" };
+      run.orders.push(result);
+      this.emit(run, { type: "order", result });
+      return;
+    }
+    this.emit(run, { type: "log", store, message: "Total re-checked, placing the order" });
+    await this.wait(1800, run);
+    const result: OrderResult = {
+      store, placed: true, orderId: `DEMO-${Math.floor(100000 + Math.random() * 900000)}`, total: base.total,
+      confirmationText: "Demo order: nothing was bought", placedAt: new Date().toISOString(),
+    };
+    run.orders.push(result);
+    this.emit(run, { type: "order", result });
+  }
+
+  async approve(runId: string, approval: Approval): Promise<void> {
+    const run = this.runs.get(runId);
+    const resolve = run?.approvals.get(approval.store);
+    if (!run || !resolve) throw new Error(`No checkout waiting for approval at ${approval.store} in run ${runId}`);
+    if (approval.by !== "user") throw new Error("Approval must come from the user");
+    resolve(approval);
+  }
+
+  async cancel(runId: string, store?: StoreId): Promise<void> {
+    const run = this.runs.get(runId);
+    if (!run) throw new Error(`Unknown run ${runId}`);
+    if (store) {
+      run.cancelled.add(store);
+      run.approvals.get(store)?.(null);
+    } else {
+      run.cancelledAll = true;
+      for (const r of run.approvals.values()) r(null);
+    }
+  }
+
+  async listRuns(limit = 50): Promise<RunListItem[]> {
+    return [...this.runs.values()].reverse().slice(0, limit).map(({ record }) => {
+      const { events: _e, summary: _s, ...item } = record;
+      const picks = [...record.events].reverse().find((e) => e.type === "picks");
+      return { ...item, picksTotal: picks && picks.type === "picks" ? picks.total : undefined };
+    });
+  }
+
+  async getRun(runId: string): Promise<RunRecord | undefined> {
+    return this.runs.get(runId)?.record;
+  }
+}

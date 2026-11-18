@@ -1,0 +1,248 @@
+{
+ "id": 6884438704218,
+ "title": "Dreamweave Waffle Bath Sheets Set of 2",
+ "handle": "waffle-bath-sheets",
+ "description": "",
+ "published_at": "2023-10-25T10:36:17-04:00",
+ "created_at": "2023-10-20T10:26:01-04:00",
+ "vendor": "Brooklinen",
+ "type": "Towels",
+ "tags": [],
+ "price": 11900,
+ "price_min": 11900,
+ "price_max": 11900,
+ "available": true,
+ "price_varies": false,
+ "compare_at_price": null,
+ "compare_at_price_min": 0,
+ "compare_at_price_max": 0,
+ "compare_at_price_varies": false,
+ "variants": [
+  {
+   "id": 40331172446298,
+   "title": "White",
+   "option1": "White",
+   "option2": null,
+   "option3": null,
+   "sku": "BS-WFL-1",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Dreamweave Waffle Bath Sheets Set of 2 - White",
+   "public_title": "White",
+   "options": [
+    "White"
+   ],
+   "price": 11900,
+   "weight": 1279,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "840302709184",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 41318293241946,
+   "title": "Pebble",
+   "option1": "Pebble",
+   "option2": null,
+   "option3": null,
+   "sku": "BS-WFL-89",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Dreamweave Waffle Bath Sheets Set of 2 - Pebble",
+   "public_title": "Pebble",
+   "options": [
+    "Pebble"
+   ],
+   "price": 11900,
+   "weight": 1279,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "840302723678",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 40494780481626,
+   "title": "Slate",
+   "option1": "Slate",
+   "option2": null,
+   "option3": null,
+   "sku": "BS-WFL-74",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Dreamweave Waffle Bath Sheets Set of 2 - Slate",
+   "public_title": "Slate",
+   "options": [
+    "Slate"
+   ],
+   "price": 11900,
+   "weight": 1279,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "840302712320",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 41667226927194,
+   "title": "Storm",
+   "option1": "Storm",
+   "option2": null,
+   "option3": null,
+   "sku": "BS-WFL-96",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Dreamweave Waffle Bath Sheets Set of 2 - Storm",
+   "public_title": "Storm",
+   "options": [
+    "Storm"
+   ],
+   "price": 11900,
+   "weight": 1134,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "840302732359",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 41667226959962,
+   "title": "Abyss",
+   "option1": "Abyss",
+   "option2": null,
+   "option3": null,
+   "sku": "BS-WFL-95",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Dreamweave Waffle Bath Sheets Set of 2 - Abyss",
+   "public_title": "Abyss",
+   "options": [
+    "Abyss"
+   ],
+   "price": 11900,
+   "weight": 1134,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "840302732311",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 41793771667546,
+   "title": "Aloe",
+   "option1": "Aloe",
+   "option2": null,
+   "option3": null,
+   "sku": "BS-WFL-103",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Dreamweave Waffle Bath Sheets Set of 2 - Aloe",
+   "public_title": "Aloe",
+   "options": [
+    "Aloe"
+   ],
+   "price": 11900,
+   "weight": 1279,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "840302734773",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 40494780547162,
+   "title": "Botanical Green",
+   "option1": "Botanical Green",
+   "option2": null,
+   "option3": null,
+   "sku": "BS-WFL-69",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Dreamweave Waffle Bath Sheets Set of 2 - Botanical Green",
+   "public_title": "Botanical Green",
+   "options": [
+    "Botanical Green"
+   ],
+   "price": 11900,
+   "weight": 1279,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "840302712481",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  }
+ ],
+ "images": [
+  "//cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathSheet_White_1x_WOgrey.jpg?v=1775836559"
+ ],
+ "featured_image": "//cdn.shopify.com/s/files/1/0951/7126/files/BKL_23-09_Bath_Waffle_BathSheet_White_1x_WOgrey.jpg?v=1775836559",
+ "options": [
+  {
+   "name": "Color",
+   "position": 1,
+   "values": [
+    "White",
+    "Pebble",
+    "Slate",
+    "Storm",
+    "Abyss",
+    "Aloe",
+    "Botanical Green"
+   ]
+  }
+ ],
+ "url": "/products/waffle-bath-sheets",
+ "media": [],
+ "requires_selling_plan": false,
+ "selling_plan_groups": []
+}

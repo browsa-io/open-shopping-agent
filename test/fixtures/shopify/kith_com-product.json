@@ -1,0 +1,218 @@
+{
+ "id": 8285871112320,
+ "title": "Kith Williams III Hoodie - Black",
+ "handle": "khm034166-001",
+ "description": "",
+ "published_at": "2026-03-31T09:23:09-04:00",
+ "created_at": "2025-10-22T13:41:01-04:00",
+ "vendor": "Kith",
+ "type": "Hoodies",
+ "tags": [],
+ "price": 20500,
+ "price_min": 20500,
+ "price_max": 20500,
+ "available": true,
+ "price_varies": false,
+ "compare_at_price": null,
+ "compare_at_price_min": 0,
+ "compare_at_price_max": 0,
+ "compare_at_price_varies": false,
+ "variants": [
+  {
+   "id": 45135932948608,
+   "title": "XS",
+   "option1": "XS",
+   "option2": null,
+   "option3": null,
+   "sku": "2000227280",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Kith Williams III Hoodie - Black - XS",
+   "public_title": "XS",
+   "options": [
+    "XS"
+   ],
+   "price": 20500,
+   "weight": 953,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "2000227280",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 45135932981376,
+   "title": "S",
+   "option1": "S",
+   "option2": null,
+   "option3": null,
+   "sku": "2000227281",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Kith Williams III Hoodie - Black - S",
+   "public_title": "S",
+   "options": [
+    "S"
+   ],
+   "price": 20500,
+   "weight": 953,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "2000227281",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 45135933014144,
+   "title": "M",
+   "option1": "M",
+   "option2": null,
+   "option3": null,
+   "sku": "2000227282",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Kith Williams III Hoodie - Black - M",
+   "public_title": "M",
+   "options": [
+    "M"
+   ],
+   "price": 20500,
+   "weight": 953,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "2000227282",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 45135933046912,
+   "title": "L",
+   "option1": "L",
+   "option2": null,
+   "option3": null,
+   "sku": "2000227283",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Kith Williams III Hoodie - Black - L",
+   "public_title": "L",
+   "options": [
+    "L"
+   ],
+   "price": 20500,
+   "weight": 953,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "2000227283",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 45135933079680,
+   "title": "XL",
+   "option1": "XL",
+   "option2": null,
+   "option3": null,
+   "sku": "2000227284",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Kith Williams III Hoodie - Black - XL",
+   "public_title": "XL",
+   "options": [
+    "XL"
+   ],
+   "price": 20500,
+   "weight": 953,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "2000227284",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  },
+  {
+   "id": 45135933112448,
+   "title": "XXL",
+   "option1": "XXL",
+   "option2": null,
+   "option3": null,
+   "sku": "2000227285",
+   "requires_shipping": true,
+   "taxable": true,
+   "available": true,
+   "name": "Kith Williams III Hoodie - Black - XXL",
+   "public_title": "XXL",
+   "options": [
+    "XXL"
+   ],
+   "price": 20500,
+   "weight": 953,
+   "compare_at_price": null,
+   "inventory_management": "shopify",
+   "barcode": "2000227285",
+   "quantity_rule": {
+    "min": 1,
+    "max": null,
+    "increment": 1
+   },
+   "quantity_price_breaks": [],
+   "requires_selling_plan": false,
+   "selling_plan_allocations": []
+  }
+ ],
+ "images": [
+  "//cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-001_P_16145153_Front-thumbnail-2000.jpg?v=1774978762"
+ ],
+ "featured_image": "//cdn.shopify.com/s/files/1/0094/2252/files/KHM034166-001_P_16145153_Front-thumbnail-2000.jpg?v=1774978762",
+ "options": [
+  {
+   "name": "Size",
+   "position": 1,
+   "values": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "XXL"
+   ]
+  }
+ ],
+ "url": "/products/khm034166-001",
+ "media": [],
+ "requires_selling_plan": false,
+ "selling_plan_groups": []
+}
