@@ -50,6 +50,7 @@ export function browsaFactory(o: BrowsaFactoryOptions): ContextFactory {
     const ctx = {
       store, domain, zip, agentId: base.agentId, signal, log: base.log,
       get page() { return base.page; },
+      newPage: () => base.newPage(),
       // The bench never hands the browser to a person.
       liveLink: async () => { throw new Error("live hand-off is off in the bench"); },
       aiTask: async <T>(task: string, opts?: { schema?: object; maxSteps?: number; startUrl?: string }): Promise<T> => {

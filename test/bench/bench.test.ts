@@ -123,7 +123,7 @@ function fakeAdapter(store: StoreId, calls: string[]): StoreAdapter {
 const fakeFactory = (opened: string[], closed: string[]): ContextFactory => async (store, domain) => {
   opened.push(store);
   const ctx = { store, domain, page: {} as never, agentId: "agent-1", aiTask: async () => { throw new Error("no ai"); },
-    liveLink: async () => { throw new Error("no live"); }, log: () => undefined, signal: new AbortController().signal } as StoreContext;
+    liveLink: async () => { throw new Error("no live"); }, newPage: async () => { throw new Error("no page"); }, log: () => undefined, signal: new AbortController().signal } as StoreContext;
   return { ctx, close: async () => { closed.push(store); } };
 };
 

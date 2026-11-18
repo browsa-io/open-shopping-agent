@@ -13,6 +13,7 @@
   "files": ["dist", "web", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p bench/tsconfig.json",
     "test": "node --import tsx --test $(find test -name '*.test.ts' -not -path '*/fixtures/*' | sort)",
     "dev:web": "tsx src/web/server.ts",
     "bench": "tsx bench/run.ts"
