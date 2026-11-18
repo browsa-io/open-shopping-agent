@@ -16,6 +16,8 @@ export interface RunOptions {
   limits?: Partial<Limits>;
   zip?: string;
   shopifyDomains?: string[];
+  /** A cart at every store with every item (compare real delivered totals) instead of the best store per item. */
+  everyStore?: boolean;
   /**
    * Called before the engine fills a store's cart ("cart") and before it goes to that store's
    * checkout review ("checkout"). Resolve true to go ahead, false to stop that store there.
@@ -48,7 +50,24 @@ export interface RunRecord extends RunListItem {
   summary?: RunSummary;
 }
 
+/**
+ * The person's change to one item before the carts are filled: another offer from this run
+ * (offerKey = `${store}|${url}`), another quantity, or skip the item.
+ */
+export interface PlanChoice {
+  itemId: string;
+  offerKey?: string;
+  quantity?: number;
+  skip?: boolean;
+}
+
 export interface EnginePort {
+  /**
+   * Optional: replace the picks with the person's choices before any cart is filled. Emits a new
+   * "picks" event. Stores that gain a pick get their own cart and checkout steps (and questions).
+   * Throws when a choice names an offer that is not in this run.
+   */
+  setPlan?(runId: string, choices: PlanChoice[]): Promise<void>;
   /** True when the engine returns made-up demo data (MockEngine). The UI shows a badge. */
   readonly demo: boolean;
   /** Start a run. Returns at once; events arrive through opts.onEvent. */

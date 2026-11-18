@@ -12,7 +12,8 @@ import type { Approval, Money, RunEvent, RunSummary, StoreId } from "../core/typ
 import { ShoppingAgent, ShoppingRun, errText, shopKey, type ShoppingAgentOptions } from "../core/engine.js";
 import { getRun as readRun, listRuns as readRuns, newRunId } from "../core/history.js";
 import { STORE_NAMES } from "../stores/index.js";
-import type { EnginePort, GateStep, RunHandle, RunListItem, RunOptions, RunRecord, RunStatus } from "./engine-port.js";
+import type { EnginePort, GateStep, PlanChoice, RunHandle, RunListItem, RunOptions, RunRecord, RunStatus } from "./engine-port.js";
+import { applyChoices } from "./plan.js";
 
 export interface RealEngineOptions extends ShoppingAgentOptions {
   /** An agent to use instead of new ShoppingAgent(options) (tests). */
@@ -45,9 +46,20 @@ interface Live {
   waiters: Map<string, { outcome: Promise<Outcome>; resolve: (o: Outcome) => void }>;
   /** Pending questions and holds that cancel() ends. */
   stops: Set<{ store?: StoreId; stop: () => void }>;
+  /** Per-store cart and checkout flows; setPlan() may add stores while they run. */
+  flows: Map<StoreId, Promise<void>>;
+  flowing: boolean;
 }
 
 const CANCELLED_NOTE = "Run cancelled";
+
+/** Where the person takes over on this run's browser: Phantom Live, the local window, or the CDP provider's viewer. */
+function takeOverPlace(run: ShoppingRun): string {
+  const p = run.provider;
+  if (!p || p.id === "browsa") return "Phantom Live";
+  if (p.id === "local") return p.capabilities.liveLink === "window" ? "the browser window" : "a headed browser (run without OSA_HEADLESS=1)";
+  return "your remote browser";
+}
 
 export class RealEngine implements EnginePort {
   readonly demo = false;
@@ -66,6 +78,7 @@ export class RealEngine implements EnginePort {
     const st: Live = {
       runId, prompt, startedAt: new Date().toISOString(), status: "running", events: [], opts,
       abort: new AbortController(), cancelled: new Set(), cancelledAll: false, waiters: new Map(), stops: new Set(),
+      flows: new Map(), flowing: false,
     };
     this.live.set(runId, st);
     const done = this.drive(st).then(
@@ -102,14 +115,21 @@ export class RealEngine implements EnginePort {
       runId: st.runId,
       zip: opts.zip,
       shopifyDomains: opts.shopifyDomains,
+      everyStore: opts.everyStore,
       defaultStores: opts.limits?.allowedStores?.length ? opts.limits.allowedStores : undefined,
     });
     st.run = run;
     try {
       await run.start(st.prompt);
       if (!st.cancelledAll && opts.confirm && run.picks.length && !run.overBudget) {
-        const stores = [...new Set(run.picks.map((p) => p.offer.store))];
-        await Promise.all(stores.map((s) => this.storeFlow(st, run, s).catch((e) => run.note(`Stopped: ${errText(e)}`, s))));
+        st.flowing = true;
+        for (const s of new Set(run.picks.map((p) => p.offer.store))) this.startFlow(st, run, s);
+        // setPlan() can add a store's flow while these run: wait until no new flow appeared.
+        for (let seen = -1; seen !== st.flows.size;) {
+          seen = st.flows.size;
+          await Promise.all([...st.flows.values()]);
+        }
+        st.flowing = false;
       }
     } catch (e) {
       run.note(`Run error: ${errText(e)}`);
@@ -117,6 +137,36 @@ export class RealEngine implements EnginePort {
       if (st.cancelledAll) run.note(CANCELLED_NOTE);
     }
     return run.close();
+  }
+
+  private startFlow(st: Live, run: ShoppingRun, store: StoreId): void {
+    if (st.flows.has(store)) return;
+    st.flows.set(store, this.storeFlow(st, run, store).catch((e) => run.note(`Stopped: ${errText(e)}`, store))
+      .finally(() => run.releaseCapped(store).catch(() => {})));
+  }
+
+  /**
+   * The person's picks before any cart is filled: swap offers, change quantities, skip items.
+   * Emits a new "picks" event (also saved in the run history) and starts the cart and checkout
+   * steps for stores that gained a pick.
+   */
+  async setPlan(runId: string, choices: PlanChoice[]): Promise<void> {
+    const st = this.live.get(runId);
+    const run = st?.run;
+    if (!st || !run || st.status !== "running" || !run.picks.length) throw new Error("This run is not waiting at the comparison");
+    if (run.carts.size) throw new Error("A cart is already filled. Start a new search to change the picks.");
+    const applied = applyChoices(run.request, run.picks, run.offers, choices, run.budget ?? run.request.budget);
+    for (const [id, q] of applied.quantities) {
+      const item = run.request.items.find((i) => i.id === id);
+      if (item) item.quantity = q;
+    }
+    run.picks = applied.picks;
+    run.total = applied.total;
+    run.overBudget = applied.overBudget;
+    // ShoppingRun's emit also records the event in the run history.
+    run["emit"]({ type: "picks", picks: applied.picks, total: applied.total, overBudget: applied.overBudget });
+    run.note(`You changed the picks: ${applied.picks.length} item${applied.picks.length === 1 ? "" : "s"}, ${(applied.total.cents / 100).toFixed(2)} ${applied.total.currency}`);
+    if (st.flowing && !applied.overBudget) for (const s of new Set(applied.picks.map((p) => p.offer.store))) this.startFlow(st, run, s);
   }
 
   private stopped(st: Live, store: StoreId): boolean {
@@ -184,7 +234,12 @@ export class RealEngine implements EnginePort {
       }
       await Promise.all(waits);
       if (!needs.length || this.stopped(st, store)) return;
-      if (n + 1 < max) run.note("Finish in Phantom Live, then review the checkout again", store);
+      if (run.capped) {
+        // With a browser cap the next store needs this browser: hand off here instead of holding it.
+        run.note("Browsers are capped (OSA_MAX_BROWSERS), so this store stops at its hand-off and its browser is closed for the next store", store);
+        return;
+      }
+      if (n + 1 < max) run.note(`Finish in ${takeOverPlace(run)}, then review the checkout again`, store);
       domains = needs;
     }
   }
@@ -209,7 +264,7 @@ export class RealEngine implements EnginePort {
   /** Keep the browser open while the person finishes in Phantom Live (until cancel or holdMs). */
   private async hold(st: Live, run: ShoppingRun, store: StoreId): Promise<void> {
     const ms = this.o.holdMs ?? 10 * 60_000;
-    run.note(`Finish in Phantom Live. The browser stays open for ${Math.round(ms / 60_000)} minutes.`, store);
+    run.note(`Finish in ${takeOverPlace(run)}. The browser stays open for ${Math.round(ms / 60_000)} minutes.`, store);
     let timer: NodeJS.Timeout | undefined;
     let entry: { store?: StoreId; stop: () => void } | undefined;
     await new Promise<void>((resolve) => {
@@ -244,7 +299,8 @@ export class RealEngine implements EnginePort {
       st.cancelledAll = true;
       st.abort.abort();
       // Stop the browsers now (Browsa bills browser time), not when the steps in flight notice.
-      await st.run?.close().catch(() => undefined);
+      // No wait for late data charges: a stop must be quick.
+      await st.run?.close({ settle: false }).catch(() => undefined);
     }
     for (const [k, slot] of [...st.waiters]) if (!store || k === store || k.startsWith(`${store}:`)) slot.resolve("declined");
     for (const s of [...st.stops]) if (!store || s.store === store) s.stop();

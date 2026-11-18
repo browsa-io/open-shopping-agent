@@ -1,0 +1,83 @@
+/* Design tokens: the one place for color, type, spacing, radius and motion.
+   Dark by default with the Browsa green. Text colors meet WCAG AA on --bg and --surface. */
+:root {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #0a0c0b;
+  --surface: #111513;
+  --surface-2: #161b18;
+  --surface-3: #1d2420;
+  --line: #222a25;
+  --line-2: #2e3832;
+  --line-3: #3d4a43;
+
+  /* text (contrast on --surface: text 15.6:1, muted 8.1:1, faint 5.0:1) */
+  --text: #e9eee9;
+  --muted: #a6b0aa;
+  --faint: #838e88;
+
+  /* brand and states */
+  --green: #22c55e;
+  --green-hover: #34d46e;
+  --green-ink: #04140a;
+  --green-text: #4ade80;
+  --green-soft: rgba(34, 197, 94, 0.12);
+  --green-line: rgba(34, 197, 94, 0.4);
+  --blue: #7cb7ff;
+  --blue-soft: rgba(124, 183, 255, 0.12);
+  --blue-line: rgba(124, 183, 255, 0.35);
+  --amber: #fbbf24;
+  --amber-text: #fde68a;
+  --amber-soft: rgba(251, 191, 36, 0.12);
+  --amber-line: rgba(251, 191, 36, 0.32);
+  --red: #f87171;
+  --red-text: #fecaca;
+  --red-soft: rgba(248, 113, 113, 0.12);
+  --red-line: rgba(248, 113, 113, 0.32);
+
+  /* type scale */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-base: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 32px;
+  --lh: 1.5;
+  --lh-tight: 1.25;
+
+  /* spacing scale (4px base) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --s10: 40px;
+  --s12: 48px;
+
+  /* radius */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  /* layout */
+  --page: 1160px;
+  --gutter: 16px;
+  --top-h: 56px;
+  --dock-h: 76px;
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --t-fast: 120ms;
+  --t-med: 200ms;
+
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--green);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}

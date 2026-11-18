@@ -262,3 +262,46 @@ export function pickAll(request: ShoppingRequest, offers: Offer[], opts: Omit<Ra
   const total = { cents, currency };
   return { picks, total, overBudget: !!budget && cents > budget.cents, unpicked };
 }
+
+/**
+ * "Every store" mode: pick every item at each store (each Shopify shop counts as a store) from that
+ * store's own offers, so each store gets a full cart and the carts show real delivered totals side
+ * by side. A store whose cart would go over the budget gets no picks (named in `unpicked`, item id
+ * "*"). `total` is the cheapest complete store cart, the one you would buy; `overBudget` is true
+ * only when every store is over the budget.
+ */
+export function pickEveryStore(request: ShoppingRequest, offers: Offer[], opts: Omit<RankOptions, "goal"> & { budget?: Money } = {}): PickResult & { storeTotals: { key: string; total: Money; complete: boolean }[] } {
+  const currency = opts.currency ?? request.budget?.currency ?? "USD";
+  const budget = opts.budget ?? request.budget;
+  const groups = new Map<string, Offer[]>();
+  for (const o of offers) {
+    const key = o.store === "shopify" ? `shopify:${o.storeDomain}` : o.store;
+    groups.set(key, [...(groups.get(key) ?? []), o]);
+  }
+  const picks: Pick[] = [];
+  const unpicked: PickResult["unpicked"] = [];
+  const storeTotals: { key: string; total: Money; complete: boolean }[] = [];
+  let within = 0;
+  let tried = 0;
+  for (const [key, mine] of groups) {
+    const r = pickAll({ ...request, budget: undefined }, mine, { ...opts, currency, budget: undefined });
+    if (!r.picks.length) continue;
+    tried++;
+    const label = key.startsWith("shopify:") ? key.slice(8) : STORE_NAMES[key] ?? key;
+    if (budget && r.total.cents > budget.cents) {
+      unpicked.push({ itemId: "*", reason: `${label}: the cart would be ${formatMoney(r.total)}, over the ${formatMoney(budget)} budget` });
+      continue;
+    }
+    within++;
+    picks.push(...r.picks);
+    storeTotals.push({ key, total: r.total, complete: r.picks.length === request.items.length });
+  }
+  for (const item of request.items) {
+    if (!picks.some((p) => p.itemId === item.id)) {
+      unpicked.push({ itemId: item.id, reason: offers.some((o) => o.itemId === item.id) ? "no store has an offer that fits" : "no offers found" });
+    }
+  }
+  const full = storeTotals.filter((s) => s.complete);
+  const cheapest = (full.length ? full : storeTotals).reduce<Money | undefined>((m, s) => (!m || s.total.cents < m.cents ? s.total : m), undefined);
+  return { picks, total: cheapest ?? { cents: 0, currency }, overBudget: !!budget && tried > 0 && within === 0, unpicked, storeTotals };
+}

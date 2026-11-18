@@ -6,7 +6,8 @@ import type {
   Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, Pick, RunEvent,
   RunSummary, ShoppingRequest, Stage, StoreId,
 } from "../core/types.js";
-import type { EnginePort, RunHandle, RunListItem, RunOptions, RunRecord, RunStatus } from "./engine-port.js";
+import type { EnginePort, PlanChoice, RunHandle, RunListItem, RunOptions, RunRecord, RunStatus } from "./engine-port.js";
+import { applyChoices } from "./plan.js";
 import { STORE_IDS, deliveredCents } from "./format.js";
 
 export interface MockEngineOptions {
@@ -175,6 +176,9 @@ interface MockRun {
   cancelled: Set<StoreId>;
   cancelledAll: boolean;
   liveUrls: Map<StoreId, string>;
+  all: Offer[];
+  flows: Map<StoreId, Promise<void>>;
+  flowing: boolean;
 }
 
 export class MockEngine implements EnginePort {
@@ -208,7 +212,7 @@ export class MockEngine implements EnginePort {
     };
     const run: MockRun = {
       record, opts, picks: [], carts: [], reviews: [], orders: [], failures: [], approvals: new Map(),
-      cancelled: new Set(), cancelledAll: false, liveUrls: new Map(),
+      cancelled: new Set(), cancelledAll: false, liveUrls: new Map(), all: [], flows: new Map(), flowing: false,
     };
     this.runs.set(runId, run);
     const done = this.drive(run, prompt, stores).catch((e) => {
@@ -295,19 +299,51 @@ export class MockEngine implements EnginePort {
     this.emit(run, { type: "picks", picks: run.picks, total: usd(total), overBudget });
     if (!opts.confirm || run.picks.length === 0) return this.finish(run, "done");
 
-    const pickStores = [...new Set(run.picks.map((p) => p.offer.store))];
-    await Promise.all(pickStores.map((store) => this.checkoutStore(run, store, request)));
+    if (overBudget) return this.finish(run, "done");
+    run.all = all;
+    run.flowing = true;
+    for (const store of new Set(run.picks.map((p) => p.offer.store))) this.startFlow(run, store);
+    for (let seen = -1; seen !== run.flows.size;) {
+      seen = run.flows.size;
+      await Promise.all([...run.flows.values()]);
+    }
+    run.flowing = false;
     return this.finish(run, "done");
+  }
+
+  private startFlow(run: MockRun, store: StoreId) {
+    if (run.flows.has(store) || !run.request) return;
+    run.flows.set(store, this.checkoutStore(run, store, run.request).catch((e) => this.emit(run, { type: "log", store, message: `Stopped: ${(e as Error).message}` })));
+  }
+
+  async setPlan(runId: string, choices: PlanChoice[]): Promise<void> {
+    const run = this.runs.get(runId);
+    if (!run || !run.request || run.record.status !== "running" || !run.picks.length) throw new Error("This run is not waiting at the comparison");
+    if (run.carts.length) throw new Error("A cart is already filled. Start a new search to change the picks.");
+    const applied = applyChoices(run.request, run.picks, run.all, choices, run.request.budget);
+    for (const [id, q] of applied.quantities) {
+      const item = run.request.items.find((i) => i.id === id);
+      if (item) item.quantity = q;
+    }
+    run.picks = applied.picks;
+    this.emit(run, { type: "picks", picks: applied.picks, total: applied.total, overBudget: applied.overBudget });
+    this.emit(run, { type: "log", message: `You changed the picks: ${applied.picks.length} item${applied.picks.length === 1 ? "" : "s"}` });
+    if (run.flowing && !applied.overBudget) for (const s of new Set(applied.picks.map((p) => p.offer.store))) this.startFlow(run, s);
   }
 
   private async checkoutStore(run: MockRun, store: StoreId, request: ShoppingRequest) {
     const confirm = run.opts.confirm!;
-    const picks = run.picks.filter((p) => p.offer.store === store);
-    const domain = picks[0].offer.storeDomain;
     if (!(await confirm("cart", store)) || run.cancelled.has(store) || run.cancelledAll) {
       this.emit(run, { type: "log", store, message: "Cart skipped" });
       return;
     }
+    // Read the picks after the answer: the person may have changed them (setPlan) meanwhile.
+    const picks = run.picks.filter((p) => p.offer.store === store);
+    if (!picks.length) {
+      this.emit(run, { type: "log", store, message: "No pick here any more; cart not filled" });
+      return;
+    }
+    const domain = picks[0].offer.storeDomain;
     this.emit(run, { type: "log", store, message: `Adding ${picks.length} item${picks.length > 1 ? "s" : ""} to the cart` });
     await this.wait(1500, run);
     const lines: CartLine[] = picks.map((p) => {

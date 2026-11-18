@@ -14,6 +14,7 @@ import { compareFromEvents, money, storeName } from "../web/format.js";
 import { RunHub, type Gate } from "../web/session.js";
 import { CliError, HELP, parseArgs, type CliArgs } from "./args.js";
 import { Progress, colorEnabled, paint, renderCompare, renderLines, renderReview, totalLine } from "./render.js";
+import { friendlyError, shortRaw } from "../../web/lib/wording.js";
 
 const VERSION = "0.1.0";
 
@@ -29,6 +30,9 @@ export async function main(argv: string[]): Promise<number> {
     }
     throw e;
   }
+  // --browser and --headless reach the web app and the MCP server through the environment.
+  if (args.browser) process.env.OSA_BROWSER = args.browser;
+  if (args.headless) process.env.OSA_HEADLESS = "1";
   switch (args.command) {
     case "help": process.stdout.write(HELP); return 0;
     case "version": process.stdout.write(`${VERSION}\n`); return 0;
@@ -96,10 +100,17 @@ async function runs(args: CliArgs): Promise<number> {
   return 0;
 }
 
+/** ", 12 credits" (this run's own browsers and tasks), ", about 12 credits" when estimated, else "". */
+export function creditsText(s: { creditsUsed?: number; creditsEstimated?: boolean }): string {
+  if (s.creditsUsed === undefined) return "";
+  return `, ${s.creditsEstimated ? "about " : ""}${s.creditsUsed} credit${s.creditsUsed === 1 ? "" : "s"}`;
+}
+
 async function shop(args: CliArgs): Promise<number> {
   const config = new ConfigStore();
   const cfg = await config.effective();
-  const engine = await createEngine(cfg, { demo: args.demo });
+  if (args.headless) process.env.OSA_HEADLESS = "1";
+  const engine = await createEngine(cfg, { demo: args.demo, browser: args.browser });
   const hub = new RunHub(engine);
   const p = paint(colorEnabled(process.stdout));
   const err = process.stderr;
@@ -114,6 +125,7 @@ async function shop(args: CliArgs): Promise<number> {
     zip: args.zip ?? cfg.zip,
     shopifyDomains: args.shopifyDomains ?? cfg.shopifyDomains,
     checkout: interactive,
+    everyStore: args.everyStore,
   });
 
   process.once("SIGINT", () => {
@@ -139,6 +151,7 @@ async function shop(args: CliArgs): Promise<number> {
   let compared = false;
   const exitWarnings: string[] = [];
   const offers = new Map<StoreId, number>();
+  const failed = new Set<StoreId>();
 
   const rl = interactive && process.stdin.isTTY ? createInterface({ input: process.stdin, output: process.stdout }) : null;
   let chain = Promise.resolve();
@@ -162,38 +175,62 @@ async function shop(args: CliArgs): Promise<number> {
       const mine = picks.filter((pk) => pk.offer.store === g.store);
       const yes = await ask(`Fill cart at ${p.bold(name)} (${mine.length} item${mine.length === 1 ? "" : "s"}, ${money({ cents: mine.reduce((s, pk) => s + pk.offer.price.cents, 0), currency: "USD" })})?`);
       hub.answer(run.runId, "cart", g.store, yes);
+      if (yes) out.write(p.dim(`${name}: Filling cart\n`));
     } else {
       const yes = await ask(`Review checkout at ${p.bold(name)}? It stops before Place order.`);
       hub.answer(run.runId, "checkout", g.store, yes);
+      if (yes) out.write(p.dim(`${name}: Reviewing checkout\n`));
     }
   };
 
   const onEvent = async (e: RunEvent) => {
     switch (e.type) {
+      case "browser":
+        out.write(p.dim(`Browser: ${e.label}${e.provider === "local" && e.capabilities.liveLink === "none" ? " (headless)" : ""}\n`));
+        break;
       case "parsed":
         out.write(`${p.bold("Looking for")} ${e.request.items.map((i) => (i.quantity > 1 ? `${i.quantity} x ${i.description}` : i.description)).join(", ")}` +
           `${e.request.budget ? p.dim(`, budget ${money(e.request.budget)}`) : ""}\n`);
-        for (const s of e.request.stores) progress.set(s, { label: "starting browser", tone: "busy" });
+        for (const s of e.request.stores) progress.set(s, { label: "Starting", tone: "busy" });
         break;
-      case "store_started": progress.set(e.store, { label: e.exit ? `searching (exit: ${e.exit})` : "searching", tone: "busy" }); break;
+      case "store_started": progress.set(e.store, { label: "Searching", tone: "busy" }); break;
       case "offers": {
         const n = (offers.get(e.store) ?? 0) + e.offers.length;
         offers.set(e.store, n);
-        progress.set(e.store, { label: `${n} offer${n === 1 ? "" : "s"}`, tone: "busy" });
+        progress.set(e.store, { label: `Reading prices (${n} offer${n === 1 ? "" : "s"})`, tone: "busy" });
         break;
       }
-      case "store_failed":
-        if (!compared) progress.set(e.store, { label: `failed at ${e.stage}: ${e.error}`, tone: "bad" });
-        else out.write(p.red(`${storeName(e.store)} failed at ${e.stage}: ${e.error}\n`));
+      case "store_failed": {
+        // Same plain words as the web app: what happened and what to do next.
+        const f = friendlyError(e.error, e.stage, e.store, e.domain);
+        failed.add(e.store);
+        if (!compared) progress.set(e.store, { label: `${f.title}. ${f.hint}`, tone: "bad" });
+        else out.write(p.red(`${storeName(e.store, e.domain)}: ${f.title}. `) + f.hint + p.dim(` (${shortRaw(f.raw, 120)})`) + "\n");
+        // One plain line on a non-Browsa browser that a store blocked.
+        if (e.hint) { if (compared) out.write(p.dim(`  ${e.hint}\n`)); else exitWarnings.push(e.hint); }
         break;
+      }
       case "picks": {
-        for (const [s, n] of offers) progress.set(s, { label: `${n} offer${n === 1 ? "" : "s"}`, tone: "ok" });
+        const parsed = run.events.find((x): x is Extract<RunEvent, { type: "parsed" }> => x.type === "parsed");
+        if (compared) {
+          out.write(p.dim(`Picks changed: total ${money(e.total)}\n`));
+          break;
+        }
+        for (const s of parsed?.request.stores ?? []) {
+          const n = offers.get(s) ?? 0;
+          if (n) progress.set(s, { label: `Found ${n} offer${n === 1 ? "" : "s"}`, tone: "ok" });
+          else if (!failed.has(s)) progress.set(s, { label: "Nothing found", tone: "warn" });
+        }
         progress.stop();
         compared = true;
-        const parsed = run.events.find((x): x is Extract<RunEvent, { type: "parsed" }> => x.type === "parsed");
-        out.write("\n" + renderCompare(compareFromEvents(run.events), p, { width: out.columns ?? 100 }) + "\n");
-        out.write(totalLine(e.total, parsed?.request.budget, e.overBudget, p) + "\n\n");
+        const cmp = compareFromEvents(run.events);
+        out.write("\n" + renderCompare(cmp, p, { width: out.columns ?? 100 }) + "\n");
+        const shipUnknown = e.picks.some((pk) => !pk.offer.shipping);
+        out.write(totalLine(e.total, parsed?.request.budget, e.overBudget, p, shipUnknown) + "\n\n");
         for (const w of exitWarnings.splice(0)) out.write(p.yellow(`! ${w}\n\n`));
+        if (!e.picks.length) out.write(p.yellow("Nothing found. Try simpler words, like \"usb-c hub\".\n"));
+        else if (e.overBudget) out.write(p.yellow("Over budget: carts are not filled. Search again with a higher --budget or fewer items.\n"));
+        else if (interactive) out.write(p.dim("Next: fill the carts. You are asked per store, and nothing is bought without a y.\n"));
         break;
       }
       case "cart":
@@ -201,8 +238,8 @@ async function shop(args: CliArgs): Promise<number> {
         for (const w of e.cart.warnings) out.write(p.yellow(`  ! ${w}\n`));
         break;
       case "needs_user":
-        out.write(p.yellow(`${storeName(e.store)}: ${e.needs.message}\n`));
-        if (e.needs.liveUrl) out.write(`  Take over in Phantom Live: ${e.needs.liveUrl}\n`);
+        out.write(p.yellow(`${storeName(e.store, e.domain)}: Needs you. `) + `${e.needs.message}\n`);
+        if (e.needs.liveUrl) out.write(`  Open the live browser: ${e.needs.liveUrl}\n`);
         break;
       case "awaiting_approval": {
         const r = e.review;
@@ -222,7 +259,7 @@ async function shop(args: CliArgs): Promise<number> {
         break;
       case "log":
         if (compared && e.store) out.write(p.dim(`  ${storeName(e.store)}: ${e.message}\n`));
-        else if (/may block Browsa's default exit/.test(e.message)) {
+        else if (/may block Browsa's default exit|often block non-US or datacenter browsers|AI fallback is off/.test(e.message)) {
           // Printed after the progress lines, which redraw in place.
           if (compared) out.write(p.yellow(`! ${e.message}\n`)); else exitWarnings.push(e.message);
         }
@@ -240,7 +277,7 @@ async function shop(args: CliArgs): Promise<number> {
   progress.stop();
   rl?.close();
   const placed = summary.orders.filter((o) => o.placed);
-  out.write(p.dim(`\nRun ${summary.runId}: ${placed.length} order${placed.length === 1 ? "" : "s"} placed, ${summary.failures.length} store failure${summary.failures.length === 1 ? "" : "s"}${summary.creditsUsed !== undefined ? `, ${summary.creditsUsed} credits` : ""}.\n`));
+  out.write(p.dim(`\nRun ${summary.runId}: ${placed.length} order${placed.length === 1 ? "" : "s"} placed, ${summary.failures.length} store failure${summary.failures.length === 1 ? "" : "s"}${creditsText(summary)}.\n`));
   return 0;
 }
 

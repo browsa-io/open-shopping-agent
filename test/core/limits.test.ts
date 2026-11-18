@@ -79,21 +79,18 @@ test("approval gate: membership and subscription lines block the order", () => {
   assert.deepEqual(forbiddenLines([{ title: "Prime Hydration drink 12 pack", quantity: 1, price: usd(20) }, { title: "Industrial fan", quantity: 1, price: usd(50) }]), []);
 });
 
-test("credit meter: measured from the balance, refuses over the cap, caps AI tasks", async () => {
-  let balance = 100;
-  const m = new CreditMeter(async () => ({ balance }), 40);
+test("credit meter: refuses over the cap, caps AI tasks", async () => {
+  const m = new CreditMeter(undefined, 40);
   await m.begin();
   assert.equal(await m.spend(5, "browser"), 5);
-  balance -= 5;
-  balance -= 20;
+  assert.equal(await m.spend(20, "AI task"), 20);
   assert.equal(await m.used(), 25);
   assert.equal(await m.spend(15, "AI task"), 15);
-  balance -= 15;
   await assert.rejects(m.spend(1, "another browser"), (e: unknown) => e instanceof LimitError && e.code === "credits");
 });
 
-test("credit meter: estimates when the balance cannot be read", async () => {
-  const m = new CreditMeter(async () => { throw new Error("offline"); }, 10);
+test("credit meter: estimates when the ledger cannot be read", async () => {
+  const m = new CreditMeter({ ledger: async () => { throw new Error("offline"); } }, 10);
   await m.begin();
   await m.spend(5, "a");
   await m.spend(5, "b");

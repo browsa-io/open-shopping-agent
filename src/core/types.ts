@@ -2,6 +2,8 @@
 // adapters and the front ends (web app, CLI, MCP). Change it only in the core workstream, and keep
 // every change backwards compatible within v1.
 
+import type { BrowserCapabilities, ProviderId } from "./providers/types.js";
+
 export type StoreId = "amazon" | "walmart" | "ebay" | "bestbuy" | "target" | "shopify";
 
 /** Money in the store's currency, in minor units (cents) so sums are exact. */
@@ -156,7 +158,10 @@ export type RunEvent =
   /** exit (added in v1 hardening): the store browser's exit, "your proxy", "Browsa residential (US)" or "Browsa default". */
   | { type: "store_started"; store: StoreId; liveUrl?: string; domain?: string; exit?: string }
   | { type: "offers"; store: StoreId; itemId: string; offers: Offer[] }
-  | { type: "store_failed"; store: StoreId; stage: Stage; error: string; domain?: string }
+  /** hint (added with browser providers): one line for the person, e.g. "Amazon blocked this browser. Browsa's Phantom passes it: browsa.io". */
+  | { type: "store_failed"; store: StoreId; stage: Stage; error: string; domain?: string; hint?: string }
+  /** Added with browser providers: where this run's browsers run, sent once before the stores start. */
+  | { type: "browser"; provider: ProviderId; label: string; capabilities: BrowserCapabilities; fallback?: string }
   | { type: "picks"; picks: Pick[]; total: Money; overBudget: boolean }
   | { type: "cart"; cart: Cart }
   | { type: "checkout_review"; review: CheckoutReview }
@@ -177,7 +182,8 @@ export interface RunSummary {
   reviews: CheckoutReview[];
   orders: OrderResult[];
   failures: { store: StoreId; stage: Stage; error: string }[];
-  creditsUsed?: number;               // Browsa credits charged for this run, when known
+  creditsUsed?: number;               // Browsa credits of this run's own browsers and tasks, when known
+  creditsEstimated?: boolean;         // true when creditsUsed is partly estimated from browser time ("about")
   /** Added in v1 core: screenshots saved in the run folder (.osa/runs/<runId>/screenshots/). */
   screenshots?: { store: StoreId; label: string; path: string }[];
 }

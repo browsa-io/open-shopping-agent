@@ -13,7 +13,7 @@ import type {
   Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult,
 } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
-import { clean, evalWithRenew, gotoRetry, isDeadPageError, needsUser, nowIso, pageIsDead, pressAndHold, replacePage } from "./util.js";
+import { CaptchaHandoffError, clean, evalWithRenew, gotoRetry, isDeadPageError, needsUser, nowIso, pageIsDead, passPressAndHold, replacePage } from "./util.js";
 
 const ORIGIN = "https://www.target.com";
 const REDSKY = "https://redsky.target.com/redsky_aggregations/v1/web/";
@@ -394,9 +394,12 @@ async function ensureOnTarget(ctx: StoreContext, path = "/"): Promise<void> {
   throw new Error("Target refused this browser ('Sorry for the wait'). Target serves US visitors only: give the Target browser a US exit.");
 }
 
-/** Target's PerimeterX "Press & hold" check (see pressAndHold in util.ts). */
-function solvePressAndHold(ctx: StoreContext): Promise<boolean> {
-  return pressAndHold(ctx, { name: "Target" });
+/**
+ * Target's PerimeterX "Press & hold" check: Browsa solves it in the session; elsewhere, or when
+ * Browsa does not handle it, OSA holds it (see passPressAndHold in util.ts).
+ */
+function solvePressAndHold(ctx: StoreContext, waitMs = 0): Promise<boolean> {
+  return passPressAndHold(ctx, { name: "Target", waitMs });
 }
 
 /**
@@ -407,17 +410,21 @@ async function targetApi(ctx: StoreContext, url: string, init?: { method?: strin
   await ensureOnTarget(ctx);
   let r = await pageFetch(ctx, url, init);
   if (isTargetBlock(r.status, r.body)) {
-    ctx.log(`Target API blocked by its bot check (HTTP ${r.status}); trying to pass it`);
     const back = ctx.page.url();
     const probe = url.includes("redsky") ? url : `${REDSKY}store_location_v1?key=${TARGET_WEB_KEY}&channel=WEB`;
-    await goto(ctx, probe).catch(() => {});
-    await ctx.page.waitForTimeout(2500);
-    await solvePressAndHold(ctx);
-    await goto(ctx, onTarget(back) ? back : ORIGIN + "/");
-    await ctx.page.waitForTimeout(2000);
-    r = await pageFetch(ctx, url, init);
+    // Two tries: on a slow exit the challenge sometimes had not drawn yet (seen live 2026-11-18).
+    for (let attempt = 1; attempt <= 2 && isTargetBlock(r.status, r.body); attempt++) {
+      ctx.log(`Target API blocked by its bot check (HTTP ${r.status}); trying to pass it${attempt > 1 ? " again" : ""}`);
+      await goto(ctx, probe).catch(() => {});
+      await ctx.page.waitForTimeout(2500);
+      const held = await solvePressAndHold(ctx, 12_000);
+      if (!held) ctx.log("Target showed no press-and-hold button on the blocked page");
+      await goto(ctx, onTarget(back) ? back : ORIGIN + "/");
+      await ctx.page.waitForTimeout(2000);
+      r = await pageFetch(ctx, url, init);
+    }
     if (isTargetBlock(r.status, r.body)) {
-      throw new Error("Target's bot check (PerimeterX press and hold) did not clear after one try. Open the store's live view and press and hold, then retry.");
+      throw new Error("Target's bot check (PerimeterX press and hold) did not clear after two tries. Open the store's live view and press and hold, then retry.");
     }
   }
   if (r.status < 200 || r.status >= 300) throw new Error(`Target API ${new URL(url).pathname.split("/").pop()} answered HTTP ${r.status}: ${r.body.slice(0, 160)}`);
@@ -650,7 +657,13 @@ export const target: StoreAdapter = {
     // Open the cart and press "Check out". Guests get Target's sign-in sheet; signed-in profiles go to /checkout.
     await goto(ctx, `${ORIGIN}/cart`);
     await ctx.page.waitForTimeout(3000);
-    await solvePressAndHold(ctx);
+    try {
+      await solvePressAndHold(ctx);
+    } catch (e) {
+      if (!(e instanceof CaptchaHandoffError)) throw e;
+      base.needsUser = e.handoff;
+      return base;
+    }
     if (!(await mouseClick(ctx, '[data-test="checkout-button"]', 15_000))) {
       await goto(ctx, `${ORIGIN}/checkout`);
     }

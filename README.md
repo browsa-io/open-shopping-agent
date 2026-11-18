@@ -7,9 +7,9 @@ An open-source AI shopping agent. It searches Amazon, Walmart, eBay, Best Buy, T
 [![bench](https://github.com/browsa-io/open-shopping-agent/actions/workflows/bench.yml/badge.svg)](https://github.com/browsa-io/open-shopping-agent/actions/workflows/bench.yml)
 [![CI](https://github.com/browsa-io/open-shopping-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/browsa-io/open-shopping-agent/actions/workflows/ci.yml)
 
-![A real run in the web app: Walmart and satechi.com searched, the Walmart cart filled and read back, checkout stopped at Walmart's sign-in (sped up 8x)](docs/demo.gif)
+![A real run in the web app: six stores searched one browser at a time, a cart at every store, the Amazon cart read back and its checkout stopped at Amazon's sign-in (sped-up parts are labelled)](docs/demo.gif)
 
-One real run of `osa web` on Phantom browsers, recorded on 2026-11-18 (the middle part is sped up 8x). Screens from the same run: [request](docs/screens/real-home.png), [stores working](docs/screens/real-stores.png), [compare](docs/screens/real-compare.png), [cart read back](docs/screens/real-carts.png), [checkout stop](docs/screens/real-checkout.png). As a guest no store showed its order review in these runs (Walmart asked for a sign-in, eBay for an address, Target for a $35 minimum), so the run hands the browser over there and the Buy button never appears.
+One real run of `osa web` on Phantom browsers with "a cart at every store" and one browser at a time, recorded on 2026-11-18. Sped-up parts are labelled in the frame; the recording was reattached once during the search, so about a minute of it is missing. Screens from the same run: [request](docs/screens/real-home.png), [stores working](docs/screens/real-stores.png), [compare](docs/screens/real-compare.png), [cart read back](docs/screens/real-carts.png), [checkout stop](docs/screens/real-checkout.png). As a guest no store shows its order review (Amazon, Walmart and Best Buy ask for a sign-in, eBay and Shopify stores for an address, Target for its $35 minimum on smaller carts), so the run hands the browser over there and the Buy button never appears.
 
 ## What it does
 
@@ -22,7 +22,7 @@ One real run of `osa web` on Phantom browsers, recorded on 2026-11-18 (the middl
 
 ## Quick start
 
-You need Node 20 or later and a Browsa API key. A free key comes with 100 credits: [browsa.io](https://browsa.io).
+You need Node 20 or later. It runs on any browser (see [Works with any browser, best on Browsa](#works-with-any-browser-best-on-browsa)); the examples below use a Browsa API key. A free key comes with 100 credits: [browsa.io](https://browsa.io).
 
 ### Command line
 
@@ -30,6 +30,8 @@ You need Node 20 or later and a Browsa API key. A free key comes with 100 credit
 export BROWSA_API_KEY=your_key
 npx open-shopping-agent "a USB-C hub with HDMI under \$40 and a pack of AA batteries"
 ```
+
+By default each item goes to the store with the best pick. `--every-store` fills a cart with every item at each store instead, so you can compare the real delivered totals the stores show. `OSA_MAX_BROWSERS=2` keeps at most two Phantom browsers open at once (stores take turns).
 
 ### Web app (Docker)
 
@@ -63,6 +65,87 @@ Claude Code:
 ```bash
 claude mcp add open-shopping-agent -e BROWSA_API_KEY=your_key -- npx -y open-shopping-agent mcp
 ```
+
+## Works with any browser, best on Browsa
+
+Open Shopping Agent runs on three kinds of browser. Pick one with `--browser`, `OSA_BROWSER` or Settings in the web app. Without a choice it uses Browsa when a Browsa key is set, else your own Chrome, so it works with no signup.
+
+**1. Phantom on Browsa** (cloud browsers, Browsa key)
+
+```bash
+export BROWSA_API_KEY=your_key
+npx open-shopping-agent "6 ft usb-c cable under \$15"
+```
+
+**2. Your own Chrome, no signup** (Chrome or Edge installed on this computer)
+
+```bash
+npx open-shopping-agent --browser local "6 ft usb-c cable under \$15"
+```
+
+A window opens so you can take over (sign-in, a code, a bot check). Add `--headless` (or `OSA_HEADLESS=1`) to hide it, and `OSA_CHROME_PATH` to pick a browser binary. Logins and carts stay in `.osa/browsers/<store>` on this computer.
+
+**3. Any browser that speaks the DevTools protocol** (your remote Chrome, another cloud provider)
+
+```bash
+export OSA_CDP_URL=ws://my-host:9222/devtools/browser/...   # or http://my-host:9222
+export OSA_CDP_HEADERS='{"X-API-Key":"..."}'                # optional
+npx open-shopping-agent --browser cdp "6 ft usb-c cable under \$15"
+```
+
+| | Your Chrome | Any CDP browser | Phantom on Browsa |
+|---|---|---|---|
+| Request parsing, search, compare, carts | yes | yes | yes |
+| Approval gate (never buys without your OK) | yes | yes | yes |
+| Watches, web app, CLI, MCP | yes | yes | yes |
+| Bot checks passed with Phantom | no, you solve them in the window | no | yes |
+| Captchas solved in-session | no | no | yes |
+| US home-internet exit per store | your own proxy only | your provider's proxy | yes |
+| Take over from any device (Phantom Live) | no, the window on this computer | no | yes |
+| AI fallback | with your own model key | with your own model key | yes (hosted model or your key) |
+| Saved profiles in the cloud | no, a folder on this computer | no | yes |
+| Daily measured success rates | not measured | not measured | yes, [the bench](bench/) |
+
+On Browsa, when a store shows a captcha or a press-and-hold check, the agent asks Browsa to solve it in the same browser session (the `Browsa.solveCaptcha` command on the browser's CDP socket). The run notes say which check it was and how long Browsa took. If Browsa cannot solve it, you get a Phantom Live link to finish it yourself. Captchas solved in-session need Browsa.
+
+**Measured on 2026-11-18**, one run per browser from a home connection outside the US: "usb-c hub with hdmi and a 6 ft hdmi cable under $60", ZIP 10001, a cart at every store, stopped before buying. Numbers and timings in [docs/RELEASE-CHECK.md](docs/RELEASE-CHECK.md).
+
+| Store | Your Chrome | Your Chrome, headless | CDP (a local Chrome) | Phantom on Browsa |
+|---|---|---|---|---|
+| Amazon | cart filled, stopped at sign-in | blocked at the cart (bot check) | not run | cart filled, checkout handed off (it said an item was out of stock) |
+| Walmart | blocked at the cart (bot check) | blocked at search (bot check) | blocked at the cart (bot check) | cart filled, stopped at sign-in |
+| eBay | blocked at search (403) | blocked at search (403) | not run | cart filled, stopped at guest checkout |
+| Best Buy | cart filled, stayed on the cart (no shipping to the ZIP Best Buy guessed) | blocked at the cart (product pages refused) | not run | cart 1 of 2 items, stopped at sign-in or guest |
+| Target | no pick (every offer shown out of stock) | cart 1 of 2 items, checkout did not open | not run | cart filled, stopped at the $35 minimum and sign-in |
+| satechi.com (Shopify) | cart filled, stopped at guest checkout | cart filled, stopped at guest checkout | cart filled, stopped at guest checkout | cart filled, stopped at guest checkout |
+
+A blocked store ends with one line, for example "Walmart blocked this browser. Browsa's Phantom passes it: browsa.io". A US home connection may get further on your Chrome; that was not measured.
+
+On your Chrome or a CDP browser, a store that shows a bot check stops with "This store showed a bot check. Solve it in the browser window, or run with Browsa to pass it automatically." Amazon, Target and Best Buy often block non-US or datacenter browsers; the agent warns once per run. Success rates in the bench table are measured on Browsa only.
+
+## Bring your own keys
+
+**Proxies.** Free on every browser. Browsa takes them as its own-proxy option (they replace the built-in exit), your Chrome gets them as its launch proxy, and a CDP browser uses the proxy set at your provider.
+
+| Setting | What it does |
+|---|---|
+| `OSA_PROXY=http://user:pass@host:port` | one proxy for every store (`http`, `https` or `socks5`; `host:port` and `host:port:user:pass` work too) |
+| `OSA_PROXY_AMAZON=socks5://host:1080` | one store's proxy (also `WALMART`, `EBAY`, `BESTBUY`, `TARGET`, `SHOPIFY`); wins over `OSA_PROXY` |
+| `OSA_PROXIES=host1:8000,host2:8000` or `@proxies.txt` | a small pool, rotated per store and run; one that fails a quick check is skipped |
+
+The exit order per store stays: your proxy, else Browsa's residential US exit for Amazon, Target and Best Buy, else the default exit with a warning. Logs and the UI show only `host:port`. Settings has a Test proxy button that shows the exit IP and country.
+
+**Models.** Your own key for everything that uses a model: reading your request and the AI fallback.
+
+```bash
+export OSA_LLM=anthropic:claude-sonnet-5-5     # or openai:<model>, openrouter:<model>, google:<model>
+export OSA_LLM_API_KEY=your_model_key
+export OSA_LLM_BASE_URL=https://.../v1         # optional, any OpenAI-compatible API
+```
+
+On Browsa the AI fallback runs as a Browsa task with your key (no markup), or with a saved Browsa key (`OSA_AI_LLM_KEY_ID`); without a key it uses Browsa's hosted model. On your Chrome or a CDP browser the fallback is a small loop on the store's own page: it reads the page, asks your model for one action, does it, and stops after 8 steps. It never clicks a final order or pay button, never signs in and never types card details. Without any model key, requests are read by a rule parser and the AI fallback is off on non-Browsa browsers (the run says so once).
+
+Keys stay on your machine: the environment, or `.osa/config.json` (mode 0600) when saved in Settings. The web app only ever gets masked values. Settings has a Test key button.
 
 ## Supported stores
 
@@ -133,7 +216,7 @@ Each check uses Browsa credits for browser time. The scheduler itself costs noth
 
 - **Never buys without your approval.** The approval is tied to the exact total you saw. If the store asks for more, the order is not placed.
 - **No subscriptions or memberships.** It picks one-time purchase and declines Prime, Walmart+ and free trials.
-- **Budget caps.** Set a total budget per run and a cap on Browsa credits per run (default 40).
+- **Budget caps.** Set a total budget per run and a cap on Browsa credits per run (default 40, `OSA_MAX_CREDITS`). The cap and the credits a run prints count only that run's own browsers and AI tasks, read from Browsa's credit ledger, so other runs on the same account do not count. A fresh browser counts 1 credit per started 12 minutes it ran, plus residential exit data. If Browsa's figures cannot be read, the run estimates from browser time and says "about".
 - **Your keys stay local.** Your Browsa key and alert settings stay in your environment. Store passwords are never typed by the agent: you sign in yourself in Phantom Live.
 - **You are responsible for following each store's terms.** Some stores limit automated access. Read [docs/SAFETY.md](docs/SAFETY.md).
 
@@ -158,10 +241,10 @@ A store is one file in `src/stores/`, built from `src/stores/_template.ts`, plus
 The code is free. Browsers run on Browsa: a free key has 100 credits. What one shopping run costs depends on the stores and on how often the AI fallback is needed. The [bench](bench/) records the credits of every daily run, so see the latest results there.
 
 **Does it work without Browsa?**
-Not in v1. Each store runs in a Phantom cloud browser so carts and sign-ins persist and you can take over from your phone.
+Yes. Run it on your own Chrome (`--browser local`) or any DevTools browser (`--browser cdp`). Browsa adds bot checks passed with Phantom, captchas solved in-session, a US home-internet exit per store and take-over from any device. See [Works with any browser, best on Browsa](#works-with-any-browser-best-on-browsa).
 
 **Which countries?**
-The US stores for now (amazon.com, walmart.com, ebay.com, bestbuy.com, target.com), and Shopify stores that ship to you.
+The US stores for now (amazon.com, walmart.com, ebay.com, bestbuy.com, target.com), and Shopify stores that ship to you. `--zip 10001` sets the delivery ZIP the way a guest can on each store, with no sign-in. Best Buy and Walmart guess a place from the browser's address; when one of them keeps its own ZIP, the run notes and the cart say which one.
 
 **Will it buy something by mistake?**
 It cannot place an order without an approval for the exact total. The bench and the tests never place orders.

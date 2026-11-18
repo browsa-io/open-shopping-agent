@@ -1,4 +1,4 @@
-// Safety limits and the approval gate. Pure functions plus a small credit meter.
+// Safety limits and the approval gate. Pure functions (the credit meter is in credits.ts).
 // v1 rules that no option can turn off: approval before every order, no subscriptions, no
 // memberships or trials.
 
@@ -133,55 +133,8 @@ export function approvalFor(review: CheckoutReview, now = new Date()): Approval 
   return { store: review.store, storeDomain: review.storeDomain, approvedTotal: { ...review.total }, approvedAt: now.toISOString(), by: "user" };
 }
 
-/** Reads the Browsa balance to keep a run under Limits.maxCreditsPerRun. */
-export class CreditMeter {
-  private start?: number;
-  private estimated = 0;
-  constructor(private readCredits: (() => Promise<Record<string, any>>) | undefined, readonly max: number) {}
-
-  /** Read the starting balance. Safe to call when credits cannot be read (estimates are used then). */
-  async begin(): Promise<void> {
-    this.start = await this.balance();
-  }
-
-  private async balance(): Promise<number | undefined> {
-    if (!this.readCredits) return undefined;
-    try { return balanceOf(await this.readCredits()); } catch { return undefined; }
-  }
-
-  /** Credits used so far: measured from the balance when possible, else the sum of estimates. */
-  async used(): Promise<number> {
-    const now = this.start !== undefined ? await this.balance() : undefined;
-    if (this.start !== undefined && now !== undefined) return Math.max(0, this.start - now);
-    return this.estimated;
-  }
-
-  /**
-   * Before something that can cost up to `n` credits. Throws LimitError when it does not fit.
-   * Returns the credits still free (at most n), the cap to give an AI task.
-   */
-  spend(n: number, what: string): Promise<number> {
-    // One check at a time, so stores opening in parallel cannot all pass on the same balance.
-    const p = this.lock.then(() => this.spendNow(n, what));
-    this.lock = p.catch(() => {});
-    return p;
-  }
-
-  private lock: Promise<unknown> = Promise.resolve();
-
-  private async spendNow(n: number, what: string): Promise<number> {
-    // A non-number would turn every later check into NaN comparisons that never refuse.
-    if (!Number.isFinite(n) || n < 0) throw new LimitError("credits", `${what}: no valid credit cap (${n}); refusing to start it`);
-    // The most each step could cost, or the measured spend when that is higher (safe side).
-    const used = Math.max(await this.used(), this.estimated);
-    const left = this.max - used;
-    if (n > left) {
-      throw new LimitError("credits", `${what} can cost up to ${n} credits; this run has ${Math.max(0, left)} of its ${this.max} left (raise maxCreditsPerRun to allow it)`);
-    }
-    this.estimated += n;
-    return Math.min(n, left);
-  }
-}
+// The run's credit meter lives in credits.ts (it counts only this run's own browsers and tasks).
+export { CreditMeter } from "./credits.js";
 
 /** The balance in a GET /v1/credits answer. */
 export function balanceOf(r: Record<string, any> | undefined): number | undefined {

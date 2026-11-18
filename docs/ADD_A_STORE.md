@@ -36,7 +36,8 @@ Use the helpers in `src/stores/util.ts` instead of writing your own:
 - HTML: `parseHtml` with `qs`, `qsa` and `textOf` (a small selector engine), or the string helpers
   `elementsWith`, `firstWith`, `attr`, `textLines`, `jsonLd` and `jsonAfterMarker` on raw page HTML.
 - Options and dates: `pickVariant`, `optionWarnings`, `sameOption`, `parseDeliveryDate`.
-- Bot checks and clicks: `passBotCheck` (wait for Phantom, retry once), `pressAndHold`,
+- Bot checks and clicks: `passBotCheck` (on Browsa, Browsa solves it in the session; else wait for Phantom, retry once),
+  `passPressAndHold` (PerimeterX "Press & hold"), `browsaSolves` (any other check you detect),
   `clickFirstVisible`, `declineOffer` (only "No thanks" style buttons), and `approvalMatches` in `placeOrder`.
 - `ctx.newPage()` replaces a crashed or frozen tab with a fresh one in the same browser (same cookies and cart).
 - `aiSearchFallback(ctx, ...)` reads a search page with the AI task when the direct parser found nothing.

@@ -6,6 +6,7 @@ import type { Page } from "playwright-core";
 import type {
   Approval, Cart, CheckoutReview, ItemRequest, Money, NeedsUser, Offer, OrderResult, StoreId,
 } from "../core/types.js";
+import type { BrowserCapabilities } from "../core/providers/types.js";
 
 /** What the engine hands an adapter for one store in one run. */
 export interface StoreContext {
@@ -39,6 +40,12 @@ export interface StoreContext {
   newPage(): Promise<Page>;
   log(message: string): void;
   signal: AbortSignal;
+  /**
+   * What this browser can do (added with browser providers). Unset on Phantom on Browsa, which has
+   * every capability. On your own Chrome or a CDP browser: no captcha solving, and aiTask throws
+   * CapabilityMissing without a model key.
+   */
+  capabilities?: BrowserCapabilities;
 }
 
 export interface StoreAdapter {

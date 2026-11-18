@@ -9,7 +9,7 @@
 import type { Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
 import {
-  attr, clean, elementAt, elementsWith, firstWith, jsonAfterMarker as jsonAfter, jsonLd, moneyFromNumeric as moneyFromNumber,
+  attr, browsaSolves, clean, elementAt, elementsWith, firstWith, jsonAfterMarker as jsonAfter, jsonLd, moneyFromNumeric as moneyFromNumber,
   isDeadPageError, needsUser, nowIso, pageIsDead, parseCount, parseMoney, replacePage, sameOption, textLines, textOfHtml as textOf,
 } from "./util.js";
 
@@ -452,6 +452,14 @@ async function goto(ctx: StoreContext, url: string, waitMs = 1500): Promise<{ ht
 async function load(ctx: StoreContext, url: string, waitMs = 1500, warmQuery?: string): Promise<string> {
   let p = await goto(ctx, url, waitMs);
   if (!isErrorPage(p.html, p.title) && !isSecurityCheck(p.html, p.title)) return p.html;
+  if (isSecurityCheck(p.html, p.title) && await browsaSolves(ctx, "eBay", async () => {
+    const s = { html: await ctx.page.content(), title: await ctx.page.title().catch(() => "") };
+    return isSecurityCheck(s.html, s.title);
+  }, { check: "a security check" })) {
+    // Solved: eBay sends the browser on to the page it asked for.
+    const html = await ctx.page.content();
+    if (!isErrorPage(html, await ctx.page.title().catch(() => "")) && samePath(ctx.page.url(), url)) return html;
+  }
   ctx.log(`eBay showed ${p.title || "an error page"} (status ${p.status ?? "?"}), warming up and retrying once`);
   if (isSecurityCheck(p.html, p.title)) await sleep(ctx, 8000);
   await goto(ctx, HOME, 1500);
@@ -462,7 +470,7 @@ async function load(ctx: StoreContext, url: string, waitMs = 1500, warmQuery?: s
       if (await box.isVisible().catch(() => false)) {
         await box.focus({ timeout: 8000 });
         await box.pressSequentially(warmQuery, { delay: 40, timeout: 15_000 });
-        await Promise.all([ctx.page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => null), box.press("Enter", { timeout: 8000 })]);
+        await Promise.all([ctx.page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => null), box.press("Enter", { timeout: 8000, noWaitAfter: true })]);
         await sleep(ctx, 1500);
       }
     } catch (e) { ctx.log(`eBay warm-up search: ${(e as Error).message.split("\n")[0]}`); }
@@ -470,6 +478,176 @@ async function load(ctx: StoreContext, url: string, waitMs = 1500, warmQuery?: s
   p = await goto(ctx, url, waitMs);
   if (isErrorPage(p.html, p.title) || isSecurityCheck(p.html, p.title)) throw new Error(`eBay refused the page twice (${p.title || "error page"}, status ${p.status ?? "?"}) at ${url}`);
   return p.html;
+}
+
+function samePath(a: string, b: string): boolean {
+  try { return new URL(a).pathname === new URL(b).pathname; } catch { return false; }
+}
+
+/** True when the tab already shows eBay (a page of www.ebay.com that is not an error page). */
+async function onEbay(ctx: StoreContext): Promise<boolean> {
+  if (!/^https:\/\/www\.ebay\.com\//.test(ctx.page.url())) return false;
+  const title = await ctx.page.title().catch(() => "");
+  return !isErrorPage("", title) && !isSecurityCheck("", title);
+}
+
+/**
+ * Type a search into eBay's search box and submit it, like a person: the results page then has a
+ * real referrer and same-site fetch headers. Opens the home page first when the tab is not on
+ * eBay yet. Returns false when there was no search box.
+ */
+async function typeSearch(ctx: StoreContext, query: string): Promise<boolean> {
+  try {
+    // A fresh session often gets 403 on its first home page loads while eBay's sensor runs;
+    // in the sessions measured on 2026-11-18 the third load passed, so try up to three times.
+    for (let i = 0; i < 3 && !(await onEbay(ctx)); i++) {
+      if (i > 0) { ctx.log("eBay showed its error page; waiting for its check and loading the home page again"); await sleep(ctx, 6000); }
+      await goto(ctx, HOME, 2000);
+    }
+    const box = ctx.page.locator(`input[name="_nkw"]`).first();
+    if (!(await box.isVisible().catch(() => false))) return false;
+    await box.click({ timeout: 8000 });
+    await box.fill("", { timeout: 5000 }).catch(() => {});
+    await box.pressSequentially(query, { delay: 35, timeout: 20_000 });
+    await Promise.all([ctx.page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => null), box.press("Enter", { timeout: 8000, noWaitAfter: true })]);
+    await sleep(ctx, 1500);
+    return true;
+  } catch (e) {
+    ctx.log(`eBay typed search: ${(e as Error).message.split("\n")[0]}`);
+    return false;
+  }
+}
+
+/** Navigate from inside the page (same tab, same-origin referrer), like a link on the page; falls back to goto. */
+async function navigateInPage(ctx: StoreContext, url: string, waitMs = 1500): Promise<{ html: string; title: string }> {
+  if (await onEbay(ctx)) {
+    try {
+      await Promise.all([
+        ctx.page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 45_000 }),
+        ctx.page.evaluate((u: string) => { location.assign(u); }, url),
+      ]);
+      await sleep(ctx, waitMs);
+      return { html: await ctx.page.content(), title: await ctx.page.title().catch(() => "") };
+    } catch (e) {
+      if (isDeadPageError(e)) throw e;
+      ctx.log(`eBay in-page navigation: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+  const p = await goto(ctx, url, waitMs);
+  return { html: p.html, title: p.title };
+}
+
+/** Poll the tab's URL until `ok` (navigation events can be missed on a slow connection). */
+async function urlBecomes(ctx: StoreContext, ok: (u: string) => boolean, ms: number): Promise<boolean> {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (ok(ctx.page.url())) return true;
+    await ctx.page.waitForTimeout(500).catch(() => {});
+  }
+  return ok(ctx.page.url());
+}
+
+/** Item id of an eBay item page URL ("/itm/<id>" or "/itm/<slug>/<id>"). */
+export function itemIdOfUrl(url: string): string | undefined {
+  return /ebay\.com\/itm\/(?:[^/?#]+\/)?(\d{9,})/.exec(url)?.[1];
+}
+
+/**
+ * Click the result card of item `id` on the search page in this tab (its link's target is
+ * removed so it opens in the same tab). Returns the item page HTML, or undefined when the card is
+ * not on the page or eBay refused the page.
+ */
+async function clickResult(ctx: StoreContext, id: string): Promise<string | undefined> {
+  const page = ctx.page;
+  // The visible title link: the image link has no size when images are not loaded.
+  const link = page.locator(`li[data-listingid="${id}"] a[href*="/itm/"]:visible`).first();
+  if (!(await link.count().catch(() => 0))) return undefined;
+  const onItem = (u: URL | string) => itemIdOfUrl(u.toString()) === id;
+  const href = await link.getAttribute("href").catch(() => null);
+  try {
+    await link.evaluate((a: any) => a.removeAttribute("target"));
+    await link.scrollIntoViewIfNeeded({ timeout: 5000 }).catch(() => {});
+    // eBay's results script opens the item in a new tab even without target (seen live
+    // 2026-11-18): notice that tab at once instead of waiting for this one to move.
+    let popped = false;
+    const onPopup = () => { popped = true; };
+    page.context().on("page", onPopup);
+    // Do not let the click wait for the navigation: on a slow exit that outlasts the click timeout.
+    // A click that "times out" may still have started the navigation, so the URL decides.
+    await link.click({ timeout: 15_000, noWaitAfter: true }).catch((e: Error) => {
+      if (isDeadPageError(e)) throw e;
+      ctx.log(`eBay result click: ${e.message.split("\n")[0].slice(0, 120)}`);
+    });
+    const until = Date.now() + 12_000;
+    while (Date.now() < until && !popped && !onItem(page.url())) await page.waitForTimeout(400).catch(() => {});
+    page.context().off("page", onPopup);
+    if (!onItem(page.url()) && href && /^https:\/\/www\.ebay\.com\/itm\//.test(href)) {
+      // The click did not open it here (a script or a new tab took it): follow the same link from
+      // this page, which keeps the tab and the results page as the referrer.
+      const others = page.context().pages().filter((p) => p !== page);
+      ctx.log(`eBay result click did not open the item in this tab${others.length ? ` (${others.length} other tab${others.length > 1 ? "s" : ""} open)` : ""}; following its link from the results page`);
+      for (const p of others) if (onItem(p.url()) || p.url() === "about:blank") await p.close().catch(() => {});
+      await page.evaluate((h: string) => { location.assign(h); }, href).catch(() => {});
+      await urlBecomes(ctx, onItem, 40_000);
+    }
+    await page.waitForLoadState("domcontentloaded", { timeout: 45_000 }).catch(() => {});
+  } catch (e) {
+    if (isDeadPageError(e)) throw e;
+    ctx.log(`eBay result click: ${(e as Error).message.split("\n")[0]}`);
+  }
+  if (!onItem(page.url())) return undefined;
+  await sleep(ctx, 1500);
+  const html = await page.content();
+  const title = await page.title().catch(() => "");
+  if (isErrorPage(html, title) || isSecurityCheck(html, title)) {
+    ctx.log(`eBay refused the item page after a click (${title || "error page"})`);
+    return undefined;
+  }
+  return html;
+}
+
+/**
+ * Open an item page the way a person does: by clicking its card on the search results, never by
+ * typing its URL into a fresh session (eBay's Akamai answers 403 to that, seen live 2026-11-18).
+ * Order: the item page already open; the card on this page; the card after going back to the
+ * results; the card after searching again (the offer's search, then its item number); last, the
+ * item URL with the home-page warm-up.
+ */
+async function openItem(ctx: StoreContext, offer: Offer): Promise<string> {
+  const id = itemIdOf(offer);
+  const page = ctx.page;
+  if (itemIdOfUrl(page.url()) === id) {
+    const html = await page.content();
+    if (!isErrorPage(html, await page.title().catch(() => "")) && /x-item-title|itemprop="name"|data-testid="x-/.test(html)) return html;
+  }
+  let html = await clickResult(ctx, id);
+  if (html) return html;
+  if (itemIdOfUrl(page.url())) {
+    // On another item page (details() opened it): back to the results.
+    await page.goBack({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => null);
+    await sleep(ctx, 1200);
+    html = await clickResult(ctx, id);
+    if (html) return html;
+  }
+  const searchUrl = typeof offer.raw?.searchUrl === "string" ? offer.raw.searchUrl : undefined;
+  if (searchUrl) {
+    // A fresh browser (the cart step can open a new one) first gets past eBay's check like a person.
+    if (!(await onEbay(ctx))) await typeSearch(ctx, warmQueryFor(offer) ?? id);
+    await navigateInPage(ctx, searchUrl);
+    html = await clickResult(ctx, id);
+    if (html) return html;
+  }
+  // eBay opens the item itself when the search text is its item number.
+  if (await typeSearch(ctx, id)) {
+    if (itemIdOfUrl(page.url()) === id) {
+      html = await page.content();
+      if (!isErrorPage(html, await page.title().catch(() => ""))) return html;
+    }
+    html = await clickResult(ctx, id);
+    if (html) return html;
+  }
+  ctx.log(`eBay: item ${id} could not be opened from the results; opening its page directly`);
+  return load(ctx, `https://www.ebay.com/itm/${id}`, 1500, warmQueryFor(offer));
 }
 
 /**
@@ -566,8 +744,15 @@ export const adapter: StoreAdapter = {
     const url = searchUrlFor(item.query, { zip: ctx.zip, condition: wantedCondition(item) });
     let offers: Offer[] = [];
     try {
-      const html = await load(ctx, url, 1500, item.query);
-      offers = parseSearch(html, item.id);
+      // Like a person: the home page, the typed search, then the filtered results from inside the
+      // page. A fresh session that opens a deep URL first gets 403 from eBay's Akamai.
+      let html: string | undefined;
+      if (await typeSearch(ctx, item.query)) {
+        const p = await navigateInPage(ctx, url);
+        if (!isErrorPage(p.html, p.title) && !isSecurityCheck(p.html, p.title)) html = p.html;
+      }
+      html ??= await load(ctx, url, 1500, item.query);
+      offers = parseSearch(html, item.id).map((o) => ({ ...o, raw: { ...o.raw, searchUrl: url } }));
     } catch (e) {
       ctx.log(`eBay search direct path failed: ${(e as Error).message}`);
     }
@@ -589,7 +774,7 @@ export const adapter: StoreAdapter = {
 
   async details(ctx, offer) {
     const id = itemIdOf(offer);
-    const html = await load(ctx, `https://www.ebay.com/itm/${id}`, 1500, warmQueryFor(offer));
+    const html = await openItem(ctx, offer);
     const it = parseItem(html);
     const variants = it.msku ? Object.fromEntries(it.msku.menus.map((m) => [m.label, m.values.filter((v) => !v.outOfStock).map((v) => v.name)])) : offer.variants;
     return {
@@ -611,7 +796,7 @@ export const adapter: StoreAdapter = {
   async addToCart(ctx, offer, quantity, options) {
     const id = itemIdOf(offer);
     const warnings: string[] = [];
-    const html = await load(ctx, `https://www.ebay.com/itm/${id}`, 1500, warmQueryFor(offer));
+    const html = await openItem(ctx, offer);
     const it = parseItem(html);
     if (it.auctionOnly || !it.buyItNow) throw new Error(`eBay listing ${id} has no Buy It Now price (auction only); not adding it`);
 
@@ -657,7 +842,7 @@ export const adapter: StoreAdapter = {
 
     const atc = ctx.page.locator(`#atcBtn_btn_1, a[data-testid="ux-call-to-action"]:has-text("Add to cart"), button:has-text("Add to cart")`).first();
     if (!(await atc.count())) throw new Error(`eBay listing ${id} has no Add to cart button`);
-    await atc.click({ timeout: 15_000 });
+    await atc.click({ timeout: 15_000, noWaitAfter: true });
     await sleep(ctx, 3000);
 
     const cart = await readCartNow(ctx, warnings);

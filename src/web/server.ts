@@ -11,9 +11,11 @@ import type { Money, StoreId } from "../core/types.js";
 import type { AlertsPort } from "./alerts-port.js";
 import { validateWatch } from "./alerts-port.js";
 import { ConfigStore, osaHome } from "./config.js";
-import { createAlerts, createEngine } from "./engine-factory.js";
+import { checkFor, createAlerts, createEngine } from "./engine-factory.js";
+import { browserMeta, testModelKey, testProxyFromSettings } from "./byok-api.js";
 import type { EnginePort } from "./engine-port.js";
 import { STORE_IDS, dollarsToMoney } from "./format.js";
+import { parseChoices } from "./plan.js";
 import { HubError, RunHub, type HubMessage } from "./session.js";
 
 export const VERSION = "0.1.0";
@@ -158,9 +160,11 @@ export function createApp(opts: AppOptions): Server {
     if (p === "/api/health") return send(res, 200, { ok: true });
     if (p === "/api/meta" && m === "GET") {
       const c = await config.effective();
-      return send(res, 200, { version: VERSION, demo: hub.engine.demo, alertsDemo: alerts.demo, canCheckWatches: !!alerts.check && !!c.browsaApiKey, hasBrowsaApiKey: !!c.browsaApiKey, stores: STORE_IDS });
+      return send(res, 200, { version: VERSION, demo: hub.engine.demo, alertsDemo: alerts.demo, canCheckWatches: !!alerts.check && !!checkFor(c), hasBrowsaApiKey: !!c.browsaApiKey, stores: STORE_IDS, ...browserMeta(c) });
     }
     if (p === "/api/settings" && m === "GET") return send(res, 200, await config.publicView());
+    if (p === "/api/settings/test-key" && m === "POST") return send(res, 200, await testModelKey(await readJson(req), await config.effective()));
+    if (p === "/api/settings/test-proxy" && m === "POST") return send(res, 200, await testProxyFromSettings(await readJson(req), await config.effective()));
     if (p === "/api/settings" && m === "PUT") {
       const body = await readJson(req);
       try {
@@ -182,6 +186,7 @@ export function createApp(opts: AppOptions): Server {
       const zip = typeof body.zip === "string" && /^\d{5}$/.test(body.zip) ? body.zip : c.zip;
       const run = hub.start(prompt, {
         limits: { allowedStores: stores, budget }, zip, shopifyDomains: c.shopifyDomains, checkout: body.checkout !== false,
+        everyStore: body.everyStore === true,
       });
       return send(res, 201, { runId: run.runId });
     }
@@ -202,6 +207,16 @@ export function createApp(opts: AppOptions): Server {
       if (!step) throw new HubError(400, "step must be cart or checkout");
       const ok = hub.answer(mm[1], step, asStore(b.store), b.yes === true);
       return ok ? send(res, 200, { ok: true }) : send(res, 409, { error: "That step is not waiting for an answer" });
+    }
+    if ((mm = /^\/api\/runs\/([\w.-]+)\/fill$/.exec(p)) && m === "POST") {
+      const b = (await readJson(req)) as Record<string, unknown>;
+      let choices;
+      try {
+        choices = b.plan === undefined ? undefined : parseChoices(b.plan);
+      } catch (e) {
+        throw new HubError(400, (e as Error).message);
+      }
+      return send(res, 200, { ok: true, stores: await hub.fillCarts(mm[1], choices) });
     }
     if ((mm = /^\/api\/runs\/([\w.-]+)\/approve$/.exec(p)) && m === "POST") {
       const b = (await readJson(req)) as Record<string, unknown>;

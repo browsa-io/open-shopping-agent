@@ -10,7 +10,7 @@ import type {
 } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
 import {
-  aiSearchFallback, approvalMatches, clean, clickFirstVisible, declineOffer, decodeEntities, formatMoney, gotoRetry, hasClass, jsonAfter, needsUser,
+  aiSearchFallback, approvalMatches, CaptchaHandoffError, clean, clickFirstVisible, declineOffer, decodeEntities, formatMoney, gotoRetry, hasClass, jsonAfter, needsUser,
   nowIso, optionWarnings, parseCount, parseDeliveryDate, parseHtml, parseMoney, parseStars, passBotCheck, pickVariant, qs, qsa,
   shortAddress, sumLines, textOf, type HNode, type VariantChoice,
 } from "./util.js";
@@ -243,7 +243,7 @@ export function parseAmazonCart(html: string): Cart {
 }
 
 export type CheckoutState =
-  | "signin" | "mfa" | "captcha" | "membership_offer" | "address" | "payment" | "review" | "confirmation" | "unknown";
+  | "signin" | "mfa" | "captcha" | "membership_offer" | "address" | "payment" | "review" | "confirmation" | "unavailable" | "unknown";
 
 /** Which checkout page Amazon shows, from its URL and HTML. */
 export function amazonCheckoutState(url: string, html: string): CheckoutState {
@@ -255,6 +255,9 @@ export function amazonCheckoutState(url: string, html: string): CheckoutState {
   const text = textOf(qs(doc, "body") ?? doc).slice(0, 20_000);
   if (qs(doc, "input[name=\"placeYourOrder1\"], #submitOrderButtonId, #placeOrder, #bottomSubmitOrderButtonId, #turbo-checkout-pyo-button")
     || /Place your order/.test(text) && /Order total/i.test(text)) return "review";
+  // Seen live 2026-11-18: a bare page "You cannot buy this item because it's out of stock" right
+  // after Proceed to checkout, for items the cart showed in stock a moment before.
+  if (/cannot buy this item because it'?s out of stock/i.test(text)) return "unavailable";
   if (/prime/i.test(url) && /\/(checkout|gp\/buy)/.test(url)) return "membership_offer";
   if (/(Try|Start your|Get) .{0,30}(Prime|free trial)|Prime free trial|FREE trial of Prime/i.test(text)
     && qs(doc, "#prime-declineCTA, #prime-no-thanks, .prime-nothanks-button, a[id*=\"decline\"], a[id*=\"nothanks\"], button[id*=\"decline\"]")) return "membership_offer";
@@ -409,6 +412,7 @@ async function amazonCheckoutReview(ctx: StoreContext): Promise<CheckoutReview> 
   const clicked = await clickFirstVisible(page, ["input[name=\"proceedToRetailCheckout\"]", "#sc-buy-box-ptc-button input", "[data-feature-id=\"proceed-to-checkout-action\"]"]);
   if (!clicked) await page.goto(`${AMZ}/gp/cart/desktop/go-to-checkout.html`, { waitUntil: "domcontentloaded" });
   let declined = 0;
+  let unavailable = 0;
   for (let step = 0; step < 8; step++) {
     await page.waitForLoadState("domcontentloaded", { timeout: 15_000 }).catch(() => undefined);
     await page.waitForTimeout(2000);
@@ -417,12 +421,28 @@ async function amazonCheckoutReview(ctx: StoreContext): Promise<CheckoutReview> 
     switch (state) {
       case "signin": return stop("sign_in", "Amazon asks you to sign in. Open the live link, sign in, then run checkout again.");
       case "mfa": return stop("verification_code", "Amazon asks for a verification code. Open the live link and enter it.");
-      case "captcha": await amazonPassBotCheck(ctx); continue;
+      case "captcha":
+        try { await amazonPassBotCheck(ctx); } catch (e) {
+          if (e instanceof CaptchaHandoffError) return { store: "amazon", storeDomain: DOMAIN, ...base, needsUser: e.handoff, reviewedAt: nowIso() };
+          throw e;
+        }
+        continue;
       case "membership_offer":
         if (declined++ < 3 && await declineOffer(page, ["#prime-declineCTA", "#prime-no-thanks", ".prime-nothanks-button", "a[id*=\"nothanks\"]", "a[id*=\"decline\"]", "button[id*=\"decline\"]"])) continue;
         return stop("other", "Amazon shows a Prime or trial offer that could not be declined safely. Open the live link and decline it.");
       case "address": return stop("address", "Amazon needs a delivery address. Open the live link and add it.");
       case "payment": return stop("payment", "Amazon needs a payment method. Open the live link and choose one.");
+      case "unavailable":
+        if (unavailable++ === 0) {
+          // Once: back to the cart and Proceed to checkout again.
+          ctx.log("Amazon checkout says an item is out of stock; going back to the cart and trying once more");
+          await readAmazonCart(ctx);
+          if (!(await clickFirstVisible(page, ["input[name=\"proceedToRetailCheckout\"]", "#sc-buy-box-ptc-button input", "[data-feature-id=\"proceed-to-checkout-action\"]"]))) {
+            await page.goto(`${AMZ}/gp/cart/desktop/go-to-checkout.html`, { waitUntil: "domcontentloaded" }).catch(() => undefined);
+          }
+          continue;
+        }
+        return stop("other", "Amazon's checkout says an item in the cart is out of stock, although the cart shows it. Open the live link to choose another seller or item.");
       case "review": {
         const r = parseAmazonReview(await page.content());
         if (!r.total || r.total.cents === 0) return stop("other", "Amazon's order review did not show a total. Open the live link to check it.");
@@ -529,7 +549,12 @@ const adapter: StoreAdapter = {
     if (await atc.count()) {
       const q = await page.evaluate(`(${SET_QTY_JS})(${quantity})`).catch(() => "error");
       if (q !== "ok") ctx.log(`Amazon quantity select: ${q}`);
-      await atc.click({ timeout: 10_000 });
+      await atc.click({ timeout: 15_000, noWaitAfter: true }).catch(async (e: Error) => {
+        // Covered or never "stable" on a slow page: press the same button from the page itself.
+        ctx.log(`Amazon Add to cart click: ${e.message.split("\n")[0].slice(0, 100)}; pressing it from the page`);
+        await atc.evaluate((el: any) => el.click());
+      });
+      await page.waitForLoadState("domcontentloaded", { timeout: 45_000 }).catch(() => undefined);
       await page.waitForTimeout(2500);
       // Decline protection plans offered in a side sheet.
       await clickFirstVisible(page, ["#attachSiNoCoverage input", "#attachSiNoCoverage", "button:has-text(\"No Thanks\")", "#attach-close_sideSheet-link"]);

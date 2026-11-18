@@ -16,6 +16,7 @@ import { RunHub } from "../../src/web/session.js";
 import { createEngine } from "../../src/web/engine-factory.js";
 import { WatchAlerts } from "../../src/web/alerts-port.js";
 import { MockEngine } from "../../src/web/mock-engine.js";
+import { localChromeAvailable } from "../../src/core/providers/index.js";
 import { FakeAdapter, FakeDetailAdapter, fakeBrowsers, offer, usd } from "../core/fake-adapter.js";
 
 const registered: StoreId[] = [];
@@ -192,8 +193,18 @@ test("real engine: a store without an adapter reports not installed; history lis
 
 test("createEngine: real with a key, demo with --demo or OSA_DEMO=1", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "osa-real-"));
-  assert.ok((await createEngine({}, { dataDir })) instanceof MockEngine);
-  assert.ok((await createEngine({ browsaApiKey: "agt_test" }, { dataDir })) instanceof RealEngine);
+  // No key: your own Chrome when one is installed (zero signup), else demo data.
+  const noKey = await createEngine({}, { dataDir });
+  assert.ok(localChromeAvailable() ? noKey instanceof RealEngine : noKey instanceof MockEngine);
+  if (noKey instanceof RealEngine) assert.equal(noKey.agent.options.browser, "local");
+  assert.ok((await createEngine({ browser: "browsa" }, { dataDir })) instanceof MockEngine); // Browsa needs a key
+  const chosen = (await createEngine({}, { dataDir, browser: "local" })) as RealEngine;
+  assert.ok(chosen instanceof RealEngine);
+  assert.equal(chosen.agent.options.browser, "local");
+  assert.ok((await createEngine({ cdpUrl: "ws://127.0.0.1:9222" }, { dataDir })) instanceof RealEngine); // a CDP URL and no key: cdp
+  const withKey = (await createEngine({ browsaApiKey: "agt_test" }, { dataDir })) as RealEngine;
+  assert.ok(withKey instanceof RealEngine);
+  assert.equal(withKey.agent.options.browser, "browsa");
   assert.ok((await createEngine({ browsaApiKey: "agt_test" }, { dataDir, demo: true })) instanceof MockEngine);
   process.env.OSA_DEMO = "1";
   try {

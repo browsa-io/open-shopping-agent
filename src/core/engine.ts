@@ -10,20 +10,28 @@
 // A failing store never fails the run: it gets a "store_failed" event and the others go on.
 
 import type {
-  Approval, Cart, CheckoutReview, ItemRequest, Limits, Money, Offer, OrderResult, Pick, RunEvent, RunSummary,
+  Approval, Cart, CheckoutReview, ItemRequest, Limits, Money, NeedsUser, Offer, OrderResult, Pick, RunEvent, RunSummary,
   ShoppingRequest, Stage, StoreId,
 } from "./types.js";
 import type { StoreAdapter, StoreContext } from "../stores/adapter.js";
 import { loadAdapter, STORE_NAMES } from "../stores/index.js";
-import { formatMoney, isDeadPageError, nowIso } from "../stores/util.js";
+import { formatMoney, isDeadPageError, isExitError, nowIso } from "../stores/util.js";
 import { parseRequest, ALL_STORES } from "./parse.js";
 import { llmFromEnv, type LLMConfig } from "./llm.js";
 import { BrowserPool, defaultDomain, proxyFromText, type BrowserMode, type BrowsaClient, type StoreBrowser } from "./browsers.js";
-import { deliveredTotal, pickAll, scoreOffers } from "./rank.js";
+import { deliveredTotal, pickAll, pickEveryStore, scoreOffers } from "./rank.js";
+import type { SpendEvent } from "./credits.js";
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 import {
   allowedStores, approvalProblem, CreditMeter, effectiveBudget, forbiddenLines, LimitError, resolveLimits,
 } from "./limits.js";
 import { newRunId, RunRecorder } from "./history.js";
+import {
+  BLOCKY_STORES, BrowsaProvider, CdpProvider, LocalProvider, NON_BROWSA_EXIT_WARNING, ProxyPlan, blockedNote, botCheckMessage,
+  browsaTaskLlm, chooseProvider, describeFallback, hasProxies, isBotBlock, proxySettingsFrom, toBrowsaProxy,
+  type BrowserProvider, type ProviderId, type ProxySettings,
+} from "./providers/index.js";
 
 export interface ShoppingAgentOptions {
   /** Browsa API key (agt_...). Default: BROWSA_API_KEY. */
@@ -58,10 +66,16 @@ export interface ShoppingAgentOptions {
   searchLimit?: number;
   /** Product pages opened per item per store to fill shipping and delivery (adapter.details). Default 2. */
   detailsTop?: number;
-  /** Most time one store may spend on the search stage. Default 4 minutes. */
+  /** Most time one store may spend on the search stage. Default 6 minutes (residential exits load slowly). */
   storeTimeoutMs?: number;
   /** Most time one adapter call may take. Default 2 minutes. */
   stepTimeoutMs?: number;
+  /**
+   * Most Phantom browsers open at once (OSA_MAX_BROWSERS). With a cap, stores wait their turn, a
+   * fresh browser stops right after its search (it opens again for the cart) and after its checkout
+   * stop. Default: no cap.
+   */
+  maxBrowsers?: number;
   /** Stores searched at once. Default 6. */
   concurrency?: number;
   /** Mint a view-only Phantom Live link per store for "store_started". Default true. */
@@ -72,6 +86,27 @@ export interface ShoppingAgentOptions {
   history?: boolean;
   /** Default stores when the prompt names none. */
   defaultStores?: StoreId[];
+  /**
+   * Where the browsers run: "browsa" (Phantom on Browsa), "local" (your Chrome, Edge or Chromium),
+   * "cdp" (any DevTools browser at OSA_CDP_URL), or a BrowserProvider. Default: OSA_BROWSER, else
+   * browsa when a Browsa key is set, else cdp when OSA_CDP_URL is set, else local.
+   */
+  browser?: ProviderId | BrowserProvider;
+  /** Your own proxies per store and a rotated pool (see providers/proxy.ts). The environment adds to them. */
+  proxies?: ProxySettings;
+  /** local provider: run headless (default OSA_HEADLESS=1) and the browser binary (default OSA_CHROME_PATH). */
+  headless?: boolean;
+  chromePath?: string;
+  /** cdp provider: the browser's URL and headers (default OSA_CDP_URL, OSA_CDP_HEADERS). */
+  cdpUrl?: string;
+  cdpHeaders?: Record<string, string>;
+  /** Most steps of the AI fallback loop on local and CDP browsers (your own model key). Default 8. */
+  aiLoopSteps?: number;
+  /**
+   * After the browsers stop, wait this long before counting credits when a browser used an exit
+   * billed per GB (its last data charge reaches the ledger a few seconds late). Default 16000.
+   */
+  creditSettleMs?: number;
 }
 
 export interface RunOptions {
@@ -89,6 +124,8 @@ export interface RunOptions {
   shopifyDomains?: string[];
   /** Stores searched when the prompt names none (default: the agent's defaultStores, else all six). */
   defaultStores?: StoreId[];
+  /** Pick every item at each store (a cart per store, to compare real delivered totals) instead of the best store per item. */
+  everyStore?: boolean;
 }
 
 type StageError = { store: StoreId; stage: Stage; error: string; domain?: string };
@@ -114,8 +151,52 @@ export class ShoppingAgent {
     return run;
   }
 
+  private providerCache?: BrowserProvider;
+
+  /** The browser provider of this agent's runs (see providers/). */
+  provider(): BrowserProvider {
+    if (this.providerCache) return this.providerCache;
+    const b = this.options.browser;
+    if (b && typeof b === "object") return (this.providerCache = b);
+    const hasKey = !!(this.options.apiKey ?? process.env.BROWSA_API_KEY) || !!this.options.client;
+    const id = chooseProvider({ flag: b, hasBrowsaKey: hasKey }).id;
+    if (id === "local") {
+      this.providerCache = new LocalProvider({
+        dataDir: this.options.dataDir ?? ".osa", headless: this.options.headless, chromePath: this.options.chromePath,
+        llm: this.llm, aiMaxSteps: this.options.aiLoopSteps,
+      });
+    } else if (id === "cdp") {
+      this.providerCache = new CdpProvider({
+        url: this.options.cdpUrl, headers: this.options.cdpHeaders, llm: this.llm, aiMaxSteps: this.options.aiLoopSteps,
+        userProxies: hasProxies(this.proxySettings()),
+      });
+    } else {
+      // The engine opens Browsa browsers through its own BrowserPool (credits, live links, exits).
+      this.providerCache = new BrowsaProvider(() => { throw new Error("the engine opens Browsa browsers through its pool"); });
+    }
+    return this.providerCache;
+  }
+
+  /** The user's proxies: options.proxies and options.proxy, with the environment on top. */
+  proxySettings(): ProxySettings {
+    const s = proxySettingsFrom(process.env, this.options.proxies ?? {});
+    const p = this.options.proxy;
+    if (typeof p === "string" && p.trim()) s.all = p.trim();
+    return s;
+  }
+
+  /** The AI fallback's model on Browsa: the user's own key when given, else the hosted tier. */
+  browsaFallback() {
+    return browsaTaskLlm({ llm: this.llm, aiLlm: this.options.aiLlm, aiLlmApiKey: this.options.aiLlmApiKey });
+  }
+
+  /** One line about the AI fallback on this provider. */
+  fallbackText(id: ProviderId): string {
+    return describeFallback(id, this.llm, id === "browsa" ? this.browsaFallback() : undefined);
+  }
+
   /** Internal: the Browsa pool, made on first use. */
-  makePool(spend: (n: number, what: string) => Promise<number>, log: (s: StoreId, m: string) => void): BrowserPool | undefined {
+  makePool(spend: (n: number, what: string) => Promise<number>, log: (s: StoreId, m: string) => void, plan?: ProxyPlan, signal?: AbortSignal, track?: (e: SpendEvent) => void): BrowserPool | undefined {
     if (this.options.openBrowser) return undefined;
     const apiKey = this.options.apiKey ?? process.env.BROWSA_API_KEY ?? "";
     const p = this.options.proxy ?? process.env.OSA_PROXY;
@@ -125,8 +206,10 @@ export class ShoppingAgent {
       proxy, usExit: this.options.usExit ?? process.env.OSA_US_EXIT !== "0",
       saveData: this.options.saveData ?? (process.env.OSA_SAVE_DATA === "0" ? "never" : process.env.OSA_SAVE_DATA === "always" ? "always" : "residential"),
       dataDir: this.options.dataDir ?? ".osa", mode: this.options.browserMode ?? ((process.env.OSA_BROWSERS as BrowserMode) || "auto"),
-      aiLlm: this.options.aiLlm ?? process.env.OSA_AI_LLM ?? "browsa", aiLlmApiKey: this.options.aiLlmApiKey,
-      aiMaxCredits: this.options.aiMaxCredits, spend, log,
+      ...pickKeys(this.browsaFallback(), ["aiLlm", "aiLlmApiKey", "aiLlmBaseUrl", "aiLlmKeyId"]),
+      ...(plan && !plan.empty ? { proxyFor: async (s: StoreId) => { const sp = await plan.forStore(s); return sp ? toBrowsaProxy(sp) : undefined; } } : {}),
+      aiMaxCredits: this.options.aiMaxCredits, spend, track, log, signal,
+      maxBrowsers: this.options.maxBrowsers ?? (Number(process.env.OSA_MAX_BROWSERS) > 0 ? Math.floor(Number(process.env.OSA_MAX_BROWSERS)) : undefined),
     });
   }
 }
@@ -158,6 +241,8 @@ export class ShoppingRun {
   readonly startedAt = nowIso();
   finishedAt?: string;
   creditsUsed?: number;
+  /** True when part of creditsUsed is estimated from browser time (Browsa's figures could not be read). */
+  creditsEstimated?: boolean;
 
   private readonly o: ShoppingAgentOptions;
   private readonly shops = new Map<string, Shop>();
@@ -166,6 +251,10 @@ export class ShoppingRun {
   private readonly recorder?: RunRecorder;
   private meter!: CreditMeter;
   private pool?: BrowserPool;
+  /** The browser provider of this run (unset with a custom openBrowser hook). */
+  provider?: BrowserProvider;
+  /** Opens a store's browser through a provider other than the engine's Browsa pool. */
+  private openFn?: (store: StoreId, domain: string) => Promise<StoreBrowser>;
   private closed = false;
   private readonly runAbort = new AbortController();
 
@@ -200,7 +289,17 @@ export class ShoppingRun {
     const error = errText(e);
     const f: StageError = domain && store === "shopify" ? { store, stage, error, domain } : { store, stage, error };
     this.failures.push(f);
-    this.emit({ type: "store_failed", ...f });
+    // A bot wall on a browser that does not pass them: hand it to the person, and say what passes it.
+    const prov = this.provider;
+    const blocked = !!prov && !prov.capabilities.captchaSolving && isBotBlock(e);
+    // Browsa tried the check and failed: the adapter made a Phantom Live link for the person.
+    const handoff = (e as { handoff?: NeedsUser } | undefined)?.handoff;
+    if (handoff) {
+      this.emit({ type: "needs_user", store, needs: handoff, ...(f.domain ? { domain: f.domain } : {}) });
+    } else if (blocked) {
+      this.emit({ type: "needs_user", store, needs: { reason: "captcha_handoff", message: botCheckMessage(prov.id, prov.capabilities) }, ...(f.domain ? { domain: f.domain } : {}) });
+    }
+    this.emit({ type: "store_failed", ...f, ...(blocked ? { hint: blockedNote(STORE_NAMES[store]) } : {}) });
     return f;
   }
 
@@ -209,6 +308,21 @@ export class ShoppingRun {
 
   async start(input: string | ShoppingRequest): Promise<void> {
     this.limits = resolveLimits(this.opts.limits);
+    let plan: ProxyPlan | undefined;
+    if (!this.o.openBrowser) {
+      const prov = this.agent.provider();
+      this.provider = prov;
+      plan = new ProxyPlan(this.agent.proxySettings(), { log: (m) => this.log(m) });
+      this.emit({ type: "browser", provider: prov.id, label: prov.label, capabilities: prov.capabilities, fallback: this.agent.fallbackText(prov.id) });
+      if (prov.id !== "browsa" || this.o.browser === prov) {
+        if (!prov.capabilities.aiFallback) this.log(this.agent.fallbackText(prov.id));
+        const p = plan;
+        this.openFn = async (store, domain) => prov.open(store, {
+          domain, log: (m) => this.log(m, store),
+          ...(prov.id === "local" ? { proxy: (await p.forStore(store)) ?? null } : {}),
+        });
+      }
+    }
     this.request = typeof input === "string" ? await this.agent.parse(input, (m) => this.log(m), this.opts.defaultStores, !!this.opts.shopifyDomains?.length) : normalizeRequest(input);
     if (this.opts.zip && !this.request.zip) this.request.zip = this.opts.zip;
     if (this.opts.shopifyDomains?.length && this.request.stores.includes("shopify")) {
@@ -219,8 +333,21 @@ export class ShoppingRun {
     void this.recorder?.request(this.request);
 
     const client = this.o.client;
-    this.meter = new CreditMeter(client ? () => client.credits() : this.o.openBrowser ? undefined : () => this.poolClient().credits(), this.limits.maxCreditsPerRun);
-    this.pool = this.agent.makePool((n, what) => this.meter.spend(n, what), (s, m) => this.log(m, s));
+    // Only this run's own browsers and tasks count (other runs on the account do not).
+    const browsa = (): BrowsaClient | undefined => (this.o.openBrowser || this.openFn ? undefined : client ?? this.pool?.client);
+    this.meter = new CreditMeter(this.o.openBrowser || this.openFn ? undefined : {
+      ledger: async (limit) => {
+        const c = browsa();
+        if (typeof c?.listLedger !== "function") throw new Error("no ledger");
+        return c.listLedger({ limit });
+      },
+      agent: async (id) => {
+        const c = browsa();
+        if (!c) throw new Error("no Browsa client");
+        return c.getAgent(id);
+      },
+    }, this.limits.maxCreditsPerRun);
+    this.pool = this.openFn ? undefined : this.agent.makePool((n, what) => this.meter.spend(n, what), (s, m) => this.log(m, s), plan, this.runAbort.signal, (e) => this.meter.track(e));
     await this.meter.begin();
 
     const { stores, refused } = allowedStores(this.request, this.limits);
@@ -247,11 +374,6 @@ export class ShoppingRun {
     }
   }
 
-  private poolClient(): BrowsaClient {
-    if (!this.pool) throw new Error("no Browsa client");
-    return this.pool.client;
-  }
-
   private shopsToOpen(stores: StoreId[]): { store: StoreId; domain: string }[] {
     const out: { store: StoreId; domain: string }[] = [];
     for (const s of stores) {
@@ -267,6 +389,7 @@ export class ShoppingRun {
   private async searchAll(stores: StoreId[]): Promise<void> {
     const warn = await this.pool?.exitWarning(stores).catch(() => undefined);
     if (warn) this.log(warn);
+    if (this.provider && !this.provider.capabilities.residentialExit && stores.some((s) => BLOCKY_STORES.includes(s))) this.log(NON_BROWSA_EXIT_WARNING);
     const targets = this.shopsToOpen(stores);
     const byStore = new Map<StoreId, string[]>();
     for (const t of targets) byStore.set(t.store, [...(byStore.get(t.store) ?? []), t.domain]);
@@ -279,7 +402,9 @@ export class ShoppingRun {
       }
       // Browser slots are shared and all in use (another store waits for one): a fresh browser
       // keeps nothing worth a slot, so stop it now; it opens again if this store gets a pick.
-      if (this.pool?.slotsShort && (await this.pool.modeFor(store)) === "burner") {
+      if (this.pool?.capped && (await this.pool.modeFor(store)) === "burner") {
+        await this.releaseStore(store, "Stopped this browser after the search to keep within the browser cap (a fresh one opens for the cart)");
+      } else if (this.pool?.slotsShort && (await this.pool.modeFor(store)) === "burner") {
         await this.releaseStore(store, "Browser slots are short; stopped this browser after the search (a fresh one opens for the cart)");
       }
     });
@@ -291,7 +416,7 @@ export class ShoppingRun {
     if (!p) {
       p = this.o.openBrowser
         ? this.o.openBrowser(store, domain, (n, what) => this.meter.spend(n, what))
-        : this.pool!.openStore(store, domain);
+        : this.openFn ? this.openFn(store, domain) : this.pool!.openStore(store, domain);
       this.browsers.set(store, p);
       p.catch(() => this.browsers.delete(store));
     }
@@ -322,26 +447,27 @@ export class ShoppingRun {
   }
 
   private async searchStore(store: StoreId, domain: string): Promise<void> {
-    const deadline = Date.now() + (this.o.storeTimeoutMs ?? 240_000);
     let shop: Shop;
     try {
-      shop = await withTimeout(this.openShop(store, domain), this.o.stepTimeoutMs ?? 300_000, `opening ${STORE_NAMES[store]}`);
+      // With a browser cap the store may wait its turn for a browser: that wait is not its search time.
+      shop = await withTimeout(this.openShop(store, domain), this.pool?.capped ? 3_600_000 : this.o.stepTimeoutMs ?? 300_000, `opening ${STORE_NAMES[store]}`);
     } catch (e) {
       this.fail(store, "search", e, domain);
       return;
     }
+    const deadline = Date.now() + (this.o.storeTimeoutMs ?? 360_000);
     const limit = this.o.searchLimit ?? 8;
     let failedItems = 0;
     for (const item of this.request.items) {
       if (shop.abort.signal.aborted) break;
       const left = deadline - Date.now();
       if (left <= 0) {
-        this.fail(store, "search", new Error(`store timed out after ${Math.round((this.o.storeTimeoutMs ?? 240_000) / 1000)}s`), domain);
+        this.fail(store, "search", new Error(`store timed out after ${Math.round((this.o.storeTimeoutMs ?? 360_000) / 1000)}s`), domain);
         shop.abort.abort();
         return;
       }
       try {
-        let offers = await this.step(shop, () => shop.adapter.search(shop.ctx, item, limit), Math.min(left, this.o.stepTimeoutMs ?? 120_000), `searching ${STORE_NAMES[store]}`);
+        let offers = await this.step(shop, () => shop.adapter.search(shop.ctx, item, limit), Math.min(left, this.o.stepTimeoutMs ?? 180_000), `searching ${STORE_NAMES[store]}`);
         offers = (Array.isArray(offers) ? offers : []).filter(isOffer).map((o) => ({ ...o, itemId: item.id, store, storeDomain: o.storeDomain || domain }));
         offers = await this.addDetails(shop, item, offers, deadline);
         this.offers.push(...offers);
@@ -383,6 +509,19 @@ export class ShoppingRun {
     }
   }
 
+  /**
+   * Stop a store's browser now when browsers are capped (OSA_MAX_BROWSERS), e.g. once its checkout
+   * stop is reached, so the next store can open one. Its Phantom Live link stops working. No-op
+   * without a cap.
+   */
+  /** True when this run's browsers are capped (OSA_MAX_BROWSERS). */
+  get capped(): boolean { return !!this.pool?.capped; }
+
+  async releaseCapped(store: StoreId): Promise<void> {
+    if (!this.pool?.capped || this.closed) return;
+    await this.releaseStore(store, "Stopped this browser to keep within the browser cap (OSA_MAX_BROWSERS); its live link is closed");
+  }
+
   /** Stop one store's browser and forget its shops; a later step opens a fresh one. */
   private async releaseStore(store: StoreId, note: string): Promise<void> {
     const p = this.browsers.get(store);
@@ -404,8 +543,41 @@ export class ShoppingRun {
     try {
       return await withTimeout(fn(), ms, what);
     } catch (e) {
-      if (!(await this.renewDeadTab(shop, e))) throw e;
+      if (!(await this.renewDeadTab(shop, e)) && !(await this.renewBrowser(shop, e))) throw e;
       return withTimeout(fn(), ms, what);
+    }
+  }
+
+  /** Browser renewals per store in this run (an exit that failed the tunnel). */
+  private renewals = new Map<StoreId, number>();
+
+  /**
+   * For an exit error (the proxy tunnel failed, e.g. net::ERR_TUNNEL_CONNECTION_FAILED): stop the
+   * store's browser and open a fresh one on the same exit, which on a residential exit is a fresh
+   * address, then rebind the store's shops to it. At most twice per store per run; never for a
+   * saved profile (same address). The fresh browser has an empty cart.
+   */
+  private async renewBrowser(shop: Shop, e: unknown): Promise<boolean> {
+    if (!isExitError(e) || shop.abort.signal.aborted || this.closed) return false;
+    if (shop.browser.mode === "persistent") return false;
+    const n = this.renewals.get(shop.store) ?? 0;
+    if (n >= 2) return false;
+    this.renewals.set(shop.store, n + 1);
+    this.log(`The exit could not reach the store (${errText(e).match(/net::ERR_\w+/)?.[0] ?? "proxy error"}); retrying in a fresh browser (new address)`, shop.store);
+    const old = this.browsers.get(shop.store);
+    this.browsers.delete(shop.store);
+    await old?.then((b) => b.close()).catch(() => {});
+    try {
+      const nb = await this.getBrowser(shop.store, shop.domain);
+      for (const s of this.shops.values()) {
+        if (s.store !== shop.store) continue;
+        s.browser = nb;
+        s.ctx = nb.context(s.domain, { zip: this.request.zip, signal: s.abort.signal, log: (m) => this.log(m, s.store) });
+      }
+      return true;
+    } catch (x) {
+      this.log(`A fresh browser could not be opened: ${errText(x)}`, shop.store);
+      return false;
     }
   }
 
@@ -417,13 +589,15 @@ export class ShoppingRun {
   }
 
   private pickNow(): void {
-    const r = pickAll(this.request, this.offers, { budget: this.budget, currency: this.budget?.currency ?? "USD" });
+    const opts = { budget: this.budget, currency: this.budget?.currency ?? "USD" };
+    const r = this.opts.everyStore ? pickEveryStore(this.request, this.offers, opts) : pickAll(this.request, this.offers, opts);
+    if (this.opts.everyStore) this.log("Every store: each store gets its own cart with every item, to compare real delivered totals");
     this.picks = r.picks;
     this.total = r.total;
     this.overBudget = r.overBudget;
     for (const u of r.unpicked) {
       const item = this.request.items.find((i) => i.id === u.itemId);
-      this.log(`No pick for "${item?.query ?? u.itemId}": ${u.reason}`);
+      this.log(u.itemId === "*" ? `No cart: ${u.reason}` : `No pick for "${item?.query ?? u.itemId}": ${u.reason}`);
     }
     this.emit({ type: "picks", picks: this.picks, total: r.total, overBudget: r.overBudget });
     if (r.overBudget && this.budget) this.log(`The picks come to ${formatMoney(r.total)}, over the ${formatMoney(this.budget)} budget`);
@@ -483,23 +657,42 @@ export class ShoppingRun {
       return undefined;
     }
     let cart: Cart | undefined;
-    for (const p of picks) {
-      if (p.offer.subscription) { this.log(`Skipped a subscription offer: ${p.offer.title}`, store); continue; }
-      const item = this.request.items.find((i) => i.id === p.itemId);
-      try {
-        const ms = this.o.stepTimeoutMs ?? 120_000;
+    // On an exit error the store gets a fresh browser (new address, empty cart): add every pick again.
+    for (let round = 0; round < 3; round++) {
+      let exitErr: { e: unknown; p: Pick } | undefined;
+      for (const p of picks) {
+        if (p.offer.subscription) { if (round === 0) this.log(`Skipped a subscription offer: ${p.offer.title}`, store); continue; }
+        const item = this.request.items.find((i) => i.id === p.itemId);
         try {
-          cart = await withTimeout(shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
+          const ms = this.o.stepTimeoutMs ?? 180_000; // opening the item from the results takes longer on slow exits
+          try {
+            cart = await withTimeout(shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
+          } catch (e) {
+            if (!(await this.renewDeadTab(shop, e))) throw e;
+            // The add may have gone through before the tab died: read the cart before adding again.
+            const now = await withTimeout(shop.adapter.readCart(shop.ctx), ms, "reading the cart");
+            const there = now.lines.some((l) => (p.offer.productId && l.productId === p.offer.productId) || l.url === p.offer.url);
+            cart = there ? now : await withTimeout(shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
+          }
         } catch (e) {
-          if (!(await this.renewDeadTab(shop, e))) throw e;
-          // The add may have gone through before the tab died: read the cart before adding again.
-          const now = await withTimeout(shop.adapter.readCart(shop.ctx), ms, "reading the cart");
-          const there = now.lines.some((l) => (p.offer.productId && l.productId === p.offer.productId) || l.url === p.offer.url);
-          cart = there ? now : await withTimeout(shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
+          if (isExitError(e)) { exitErr = { e, p }; break; }
+          // A slow page can time the step out after the add went through (seen live on Best Buy):
+          // the cart decides.
+          if (/timed out after/.test(errText(e)) && !shop.abort.signal.aborted) {
+            const now = await withTimeout(shop.adapter.readCart(shop.ctx), this.o.stepTimeoutMs ?? 120_000, "reading the cart").catch(() => undefined);
+            if (now?.lines.some((l) => (p.offer.productId && l.productId === p.offer.productId) || l.url === p.offer.url)) {
+              this.log(`Adding "${p.offer.title.slice(0, 60)}" timed out, but the cart shows it`, store);
+              cart = now;
+              continue;
+            }
+          }
+          this.fail(store, "cart", new Error(`"${p.offer.title.slice(0, 60)}": ${errText(e)}`), storeDomain);
         }
-      } catch (e) {
-        this.fail(store, "cart", new Error(`"${p.offer.title.slice(0, 60)}": ${errText(e)}`), storeDomain);
       }
+      if (!exitErr) break;
+      if (await this.renewBrowser(shop, exitErr.e)) { cart = undefined; continue; }
+      this.fail(store, "cart", new Error(`"${exitErr.p.offer.title.slice(0, 60)}": ${errText(exitErr.e)}`), storeDomain);
+      break;
     }
     if (!cart) {
       try { cart = await this.step(shop, () => shop.adapter.readCart(shop.ctx), this.o.stepTimeoutMs ?? 120_000, "reading the cart"); } catch { return undefined; }
@@ -539,7 +732,18 @@ export class ShoppingRun {
     if (!shop) throw new Error(`${STORE_NAMES[store]} has no cart in this run`);
     let review: CheckoutReview;
     try {
-      review = await this.step(shop, () => shop.adapter.reviewCheckout(shop.ctx), this.o.stepTimeoutMs ?? 180_000, "checkout review");
+      const ms = this.o.stepTimeoutMs ?? 180_000;
+      try {
+        review = await withTimeout(shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
+      } catch (e) {
+        if (await this.renewDeadTab(shop, e)) {
+          review = await withTimeout(shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
+        } else if (await this.renewBrowser(shop, e)) {
+          // A fresh browser has an empty cart: fill it again, then review.
+          await this.fillOne(this.picks.filter((p) => shopKey(p.offer.store, p.offer.storeDomain) === shop.key));
+          review = await withTimeout(shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
+        } else throw e;
+      }
     } catch (e) {
       this.fail(store, "checkout", e, shop.domain);
       throw e;
@@ -641,6 +845,7 @@ export class ShoppingRun {
       failures: this.failures.map(({ store, stage, error }) => ({ store, stage, error })),
     };
     if (this.creditsUsed !== undefined) s.creditsUsed = this.creditsUsed;
+    if (this.creditsUsed !== undefined && this.creditsEstimated) s.creditsEstimated = true;
     if (this.recorder?.screenshots.length) s.screenshots = [...this.recorder.screenshots];
     return s;
   }
@@ -661,15 +866,28 @@ export class ShoppingRun {
 
   get isClosed(): boolean { return this.closed; }
 
-  /** Stop every browser of the run (saved profiles are kept), count credits, emit "done". */
-  async close(): Promise<RunSummary> {
+  /**
+   * Stop every browser of the run (saved profiles are kept), count credits, emit "done".
+   * `settle: false` (a stop by the person) does not wait for late data charges; the count then
+   * says "about" when an exit billed per GB was used.
+   */
+  async close(opts: { settle?: boolean } = {}): Promise<RunSummary> {
     if (this.closed) return this.summary();
     this.closed = true;
     this.runAbort.abort();
     const opened = await Promise.allSettled([...this.browsers.values()]);
     await Promise.allSettled(opened.map((r) => (r.status === "fulfilled" ? r.value.close() : Promise.resolve())));
     await this.pool?.closeAll();
-    try { this.creditsUsed = await this.meter?.used(); } catch { /* unknown */ }
+    // No Browsa credits on your own Chrome or a CDP browser.
+    if (!this.openFn && this.meter) {
+      try {
+        const settle = opts.settle !== false && this.meter.dataBilled;
+        if (settle) await sleep(this.o.creditSettleMs ?? 16_000);
+        const m = await this.meter.measure();
+        this.creditsUsed = m.credits;
+        this.creditsEstimated = !m.exact || (this.meter.dataBilled && !settle);
+      } catch { /* unknown */ }
+    }
     this.finishedAt = nowIso();
     const s = this.summary();
     this.emit({ type: "done", summary: s });
@@ -726,6 +944,12 @@ export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise
     p.finally(() => clearTimeout(t)),
     new Promise<never>((_, rej) => { t = setTimeout(() => rej(new Error(`${what} timed out after ${Math.round(ms / 1000)}s`)), ms); }),
   ]);
+}
+
+function pickKeys<T extends object, K extends keyof T>(o: T, keys: K[]): { [P in K]?: T[P] } {
+  const out = {} as { [P in K]?: T[P] };
+  for (const k of keys) if (o[k] !== undefined) out[k] = o[k];
+  return out;
 }
 
 async function mapLimit<T>(xs: T[], limit: number, fn: (x: T) => Promise<void>): Promise<void> {

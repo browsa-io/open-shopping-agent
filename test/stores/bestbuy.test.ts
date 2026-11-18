@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import adapter, {
-  chooseVariation, conditionOf, detectWall, isSignInPage, parseCart, parseProduct, parseReview, parseSearch, searchSkus, skuUrl,
+  cartBlocker, chooseVariation, conditionOf, detectWall, isCartUrl, isSignInPage, parseCart, parseProduct, parseReview, parseSearch, searchSkus, skuUrl,
 } from "../../src/stores/bestbuy.js";
 
 const fx = (name: string) => readFileSync(fileURLToPath(new URL(`../fixtures/bestbuy/${name}`, import.meta.url)), "utf8");
@@ -111,6 +111,25 @@ test("bestbuy: conditions", () => {
   assert.equal(conditionOf("Open-Box Excellent"), "used");
   assert.equal(conditionOf("Geek Squad Certified Refurbished"), "refurbished");
   assert.equal(conditionOf("New"), "new");
+});
+
+test("bestbuy: a ZIP next to Shipping is not a price; a cart that stays put is not a review", () => {
+  // Seen live on 2026-11-18 from a non-US connection: Best Buy guessed ZIP 96939, shipping was
+  // unavailable, the Checkout click stayed on the cart and "96939" was read as $96,939.00 shipping.
+  const html = `<div class="order-summary"><span>Subtotal</span><span>$32.98</span><span>Shipping</span>
+    <span>Shipping to 96939</span><span>Shipping unavailable to 96939.</span><span>Estimated Sales Tax</span><span>$2.14</span>
+    <span>Total</span><span>$35.12</span></div><button class="btn">Checkout</button>`;
+  const r = parseReview(html);
+  assert.equal(r.shipping, undefined);
+  assert.deepEqual(r.tax, { cents: 214, currency: "USD" });
+  assert.deepEqual(r.total, { cents: 3512, currency: "USD" });
+  assert.equal(r.placeEnabled, false);
+  assert.equal(isCartUrl("https://www.bestbuy.com/cart"), true);
+  assert.equal(isCartUrl("https://www.bestbuy.com/cart?x=1"), true);
+  assert.equal(isCartUrl("https://www.bestbuy.com/checkout/r/fast-track"), false);
+  assert.equal(cartBlocker(html), "Shipping unavailable to 96939.");
+  assert.equal(cartBlocker("<p>This item is no longer available for shipping.</p>"), "This item is no longer available for shipping.");
+  assert.equal(cartBlocker(fx("cart.html")), undefined);
 });
 
 test("bestbuy: review page parser reads the total and the Place Your Order button", () => {

@@ -159,7 +159,7 @@ test("a residential exit that cannot reach the store is replaced by the default 
   const logs: string[] = [];
   let made = 0;
   const conn = async (): Promise<Browser> => {
-    const tunnelBroken = made++ === 0;
+    const tunnelBroken = made++ < 2; // both residential browsers (two addresses) fail
     const page = {
       url: () => "about:blank", isClosed: () => false,
       goto: async () => { if (tunnelBroken) throw new Error("page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://www.amazon.com/"); return null; },
@@ -170,10 +170,112 @@ test("a residential exit that cannot reach the store is replaced by the default 
   const b = await p.openStore("amazon");
   assert.equal(b.exit?.kind, "default");
   const created = c.calls.filter((x) => x.fn === "createAgent");
-  assert.deepEqual(created.map((x) => x.args.proxy), [{ network: "residential", country: "us" }, undefined]);
-  assert.deepEqual(c.calls.filter((x) => x.fn === "destroyAgent").map((x) => x.args.id), ["agt_1"], "the broken browser is destroyed");
+  assert.deepEqual(created.map((x) => x.args.proxy), [{ network: "residential", country: "us" }, { network: "residential", country: "us" }, undefined]);
+  assert.deepEqual(c.calls.filter((x) => x.fn === "destroyAgent").map((x) => x.args.id), ["agt_1", "agt_2"], "the broken browsers are destroyed");
+  assert.ok(logs.some((l) => /trying a fresh browser on the same exit \(new address\)/.test(l)));
   assert.ok(logs.some((l) => /cannot reach www.amazon.com \(net::ERR_TUNNEL_CONNECTION_FAILED\)/.test(l)));
   assert.ok(logs.some((l) => /Amazon may block Browsa's default exit/.test(l)));
+  await b.close();
+});
+
+test("a residential exit that cannot reach the store: a second residential browser (new address) is tried first", async () => {
+  const c = fakeClient();
+  let made = 0;
+  const conn = async (): Promise<Browser> => {
+    const tunnelBroken = made++ === 0;
+    const page = {
+      url: () => "about:blank", isClosed: () => false,
+      goto: async () => { if (tunnelBroken) throw new Error("page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://www.amazon.com/"); return null; },
+    };
+    return { contexts: () => [{ pages: () => [page] }], close: async () => {} } as unknown as Browser;
+  };
+  const p = new BrowserPool({ apiKey: "agt_test", client: c.client, connect: conn, mode: "burner", dataDir: await mkdtemp(join(tmpdir(), "osa-tf2-")) });
+  const b = await p.openStore("amazon");
+  assert.equal(b.exit?.kind, "residential_us", "the second address works, the exit is kept");
+  assert.deepEqual(c.calls.filter((x) => x.fn === "createAgent").map((x) => x.args.proxy), [{ network: "residential", country: "us" }, { network: "residential", country: "us" }]);
+  assert.deepEqual(c.calls.filter((x) => x.fn === "destroyAgent").map((x) => x.args.id), ["agt_1"]);
+  await b.close();
+});
+
+test("a failed stop request is tried again so no browser is left running", async () => {
+  const c = fakeClient();
+  let fails = 1;
+  const destroyed: string[] = [];
+  (c.client as unknown as Record<string, unknown>).destroyAgent = async (id: string) => {
+    if (fails-- > 0) throw new Error("network error: fetch failed");
+    destroyed.push(id);
+  };
+  const logs: string[] = [];
+  const p = new BrowserPool({ apiKey: "agt_test", client: c.client, connect, mode: "burner", startRetryMs: 1, log: (_s, m) => logs.push(m), dataDir: await mkdtemp(join(tmpdir(), "osa-rel-")) });
+  const b = await p.openStore("walmart");
+  await b.close();
+  assert.deepEqual(destroyed, [b.agentId]);
+  assert.ok(logs.some((l) => /failed: network error: fetch failed; trying again/.test(l)));
+});
+
+test("maxBrowsers: a third browser waits until one of two is closed", async () => {
+  const c = fakeClient();
+  const logs: string[] = [];
+  const p = new BrowserPool({ apiKey: "agt_test", client: c.client, connect, mode: "burner", maxBrowsers: 2, log: (_s, m) => logs.push(m), dataDir: await mkdtemp(join(tmpdir(), "osa-cap-")) });
+  assert.equal(p.capped, true);
+  const a = await p.openStore("walmart");
+  const b = await p.openStore("ebay");
+  let third: Awaited<ReturnType<typeof p.openStore>> | undefined;
+  const pending = p.openStore("shopify", "satechi.com").then((x) => { third = x; return x; });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(third, undefined, "the third waits");
+  assert.ok(logs.some((l) => /waiting for a free browser \(at most 2 open at once\)/.test(l)));
+  await a.close();
+  await pending;
+  assert.ok(third);
+  assert.equal(c.calls.filter((x) => x.fn === "createAgent").length, 3);
+  await b.close();
+  await third!.close();
+  await third!.close(); // twice is safe and frees one place only
+  const d = await p.openStore("walmart");
+  const e = await p.openStore("ebay");
+  await Promise.all([d.close(), e.close()]);
+});
+
+test("a stopped run ends the waits at once: for a free place (maxBrowsers) and for a busy slot (429)", async () => {
+  // Seen live on 2026-11-18: Ctrl-C during "all browser slots are in use" took minutes to exit.
+  const c = fakeClient();
+  const real = (c.client as unknown as Record<string, (a: unknown) => Promise<unknown>>).createAgent;
+  let busy = true;
+  (c.client as unknown as Record<string, unknown>).createAgent = async (a: Record<string, unknown>) => {
+    if (busy) throw Object.assign(new Error("HTTP 429: too many running agents"), { status: 429, retryAfter: 30 });
+    return real(a);
+  };
+  const stop = new AbortController();
+  const p = new BrowserPool({ apiKey: "agt_test", client: c.client, connect, mode: "burner", maxBrowsers: 1, slotWaitMs: 240_000, signal: stop.signal, dataDir: await mkdtemp(join(tmpdir(), "osa-stop-")) });
+  const first = p.openStore("walmart");     // waits for a slot (429, retry in 30 s)
+  const second = p.openStore("ebay");       // waits for a place under maxBrowsers: 1
+  first.catch(() => {}); second.catch(() => {});
+  await new Promise((r) => setTimeout(r, 50));
+  const t0 = Date.now();
+  stop.abort();
+  await assert.rejects(first, /429|run stopped/);
+  await assert.rejects(second, /run stopped/);
+  assert.ok(Date.now() - t0 < 2_000, "both waits ended right away");
+  busy = false;
+  assert.equal(c.calls.filter((x) => x.fn === "createAgent").length, 0, "no browser was made after the stop");
+});
+
+test("Browsa failing to start a browser (502 Cloud session request failed) is retried on the same exit", async () => {
+  const c = fakeClient();
+  let fails = 2;
+  (c.client as unknown as Record<string, unknown>).createAgent = async (a: Record<string, any>) => {
+    c.calls.push({ fn: "createAgent", args: a });
+    if (fails-- > 0) throw Object.assign(new Error("HTTP 502: UPSTREAM_UNAVAILABLE Cloud session request failed."), { status: 502 });
+    return { id: "agt_ok", status: "running", cdp_http: "https://browsa.io/api/v1/cdp/ok" };
+  };
+  const fetch = (async () => new Response(JSON.stringify({ agents: [] }), { status: 200 })) as unknown as typeof globalThis.fetch;
+  const logs: string[] = [];
+  const p = new BrowserPool({ apiKey: "agt_test", client: c.client, connect, mode: "burner", fetch, log: (_s, m) => logs.push(m), startRetryMs: 1, dataDir: await mkdtemp(join(tmpdir(), "osa-sf-")) });
+  const b = await p.openStore("amazon");
+  assert.equal(b.exit?.kind, "residential_us", "a start failure is not a refused exit");
+  assert.deepEqual(c.calls.filter((x) => x.fn === "createAgent").map((x) => x.args.proxy?.network), ["residential", "residential", "residential"]);
+  assert.equal(logs.filter((l) => /could not start the browser/.test(l)).length, 2);
   await b.close();
 });
 

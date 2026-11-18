@@ -183,6 +183,26 @@ test("run over the API: SSE stream, gates, approval", async () => {
   assert.equal((await json("/api/runs/nope")).status, 404);
 });
 
+test("fill carts: plan is validated, then every cart question is answered", async () => {
+  const created = await json("/api/runs", { method: "POST", body: JSON.stringify({ prompt: "usb-c hub", stores: ["amazon", "walmart"] }) });
+  const id = created.body.runId as string;
+  await readEvents(`/api/runs/${id}/events`, (_e, g) => g.some((x) => x.step === "cart" && x.open));
+  const bad = await json(`/api/runs/${id}/fill`, { method: "POST", body: JSON.stringify({ plan: [{ itemId: "item-1", quantity: 0 }] }) });
+  assert.equal(bad.status, 400);
+  assert.match(bad.body.error, /quantity/);
+  const notList = await json(`/api/runs/${id}/fill`, { method: "POST", body: JSON.stringify({ plan: "all" }) });
+  assert.equal(notList.status, 400);
+  const ok = await json(`/api/runs/${id}/fill`, { method: "POST", body: JSON.stringify({ plan: [{ itemId: "item-1", quantity: 3 }] }) });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.stores.length, 1);
+  const { events } = await readEvents(`/api/runs/${id}/events`, (e) => e.some((x) => x.type === "cart"));
+  const cart = events.find((e): e is Extract<RunEvent, { type: "cart" }> => e.type === "cart")!;
+  assert.equal(cart.cart.lines[0].quantity, 3);
+  await json(`/api/runs/${id}/cancel`, { method: "POST", body: "{}" });
+  const missing = await json(`/api/runs/nope/fill`, { method: "POST", body: "{}" });
+  assert.equal(missing.status, 409);
+});
+
 test("SSE resumes after Last-Event-ID", async () => {
   const { body } = await json("/api/runs", { method: "POST", body: JSON.stringify({ prompt: "usb-c hub", checkout: false }) });
   const all = await readEvents(`/api/runs/${body.runId}/events`, (e) => e.some((x) => x.type === "done"));

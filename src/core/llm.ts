@@ -6,7 +6,7 @@
 //   OSA_LLM=openai:gpt-4o-mini                   key: OPENAI_API_KEY   (OSA_LLM_BASE_URL for any compatible API)
 //   OSA_LLM=openrouter:anthropic/claude-sonnet-5.5   key: OPENROUTER_API_KEY
 //   OSA_LLM=google:gemini-2.5-flash          key: GOOGLE_API_KEY or GEMINI_API_KEY
-//   OSA_LLM_KEY overrides the key for any provider. OSA_LLM=none turns the LLM off.
+//   OSA_LLM_KEY (or OSA_LLM_API_KEY) overrides the key for any provider. OSA_LLM=none turns the LLM off.
 
 export type LLMProvider = "anthropic" | "openai" | "google";
 
@@ -48,7 +48,7 @@ export function llmFromEnv(env: Record<string, string | undefined> = process.env
     model = i < 0 ? undefined : spec.slice(i + 1);
   }
   const keyFor = (p: string): string | undefined => {
-    if (env.OSA_LLM_KEY) return env.OSA_LLM_KEY;
+    if (env.OSA_LLM_KEY || env.OSA_LLM_API_KEY) return env.OSA_LLM_KEY || env.OSA_LLM_API_KEY;
     if (p === "anthropic") return env.ANTHROPIC_API_KEY;
     if (p === "openai") return env.OPENAI_API_KEY;
     if (p === "openrouter") return env.OPENROUTER_API_KEY;

@@ -76,3 +76,28 @@ test("cancelling a run declines open gates and finishes it", async () => {
   assert.equal(list[0].runId, run.runId);
   assert.equal(list[0].status, "cancelled");
 });
+
+test("fill carts with a plan: a swap moves an item to another store, quantity reaches the cart", async () => {
+  const hub = hubOf({ signInStore: null, failStore: null });
+  const run = hub.start("usb-c hub and 6 ft hdmi", { limits: { allowedStores: ["amazon", "walmart", "ebay"] } });
+  await hub.waitFor(run.runId, (r) => r.gates.some((g) => g.step === "cart"), 5000);
+  const picks = (run.events.find((e) => e.type === "picks") as Extract<RunEvent, { type: "picks" }>).picks;
+  const item = picks[0];
+  const offers = run.events.flatMap((e) => (e.type === "offers" && e.itemId === item.itemId ? e.offers : []));
+  const other = offers.find((o) => o.store !== item.offer.store && o.inStock)!;
+  await assert.rejects(hub.fillCarts(run.runId, [{ itemId: item.itemId, offerKey: "amazon|https://nope.example/x" }]), /not in this run/);
+  const stores = await hub.fillCarts(run.runId, [{ itemId: item.itemId, offerKey: `${other.store}|${other.url}`, quantity: 2 }]);
+  assert.ok(stores.includes(other.store));
+  const latest = [...run.events].reverse().find((e) => e.type === "picks") as Extract<RunEvent, { type: "picks" }>;
+  assert.equal(latest.picks.find((p) => p.itemId === item.itemId)?.offer.url, other.url);
+  assert.equal(latest.picks.find((p) => p.itemId === item.itemId)?.reason, "Your choice");
+  // every store with a pick fills its cart without another question
+  await hub.waitFor(run.runId, (r) => stores.every((s) => r.events.some((e) => e.type === "cart" && e.cart.store === s)), 5000);
+  const cart = run.events.find((e) => e.type === "cart" && e.cart.store === other.store) as Extract<RunEvent, { type: "cart" }>;
+  const line = cart.cart.lines.find((l) => l.url === other.url)!;
+  assert.equal(line.quantity, 2);
+  assert.equal(line.price.cents, other.price.cents * 2);
+  await hub.cancel(run.runId);
+  await run.done;
+  await assert.rejects(hub.fillCarts(run.runId), /not running/);
+});

@@ -30,7 +30,7 @@ export function deliveredCents(o: Offer): number {
 }
 
 export function shippingText(o: Offer): string {
-  if (!o.shipping) return "?";
+  if (!o.shipping) return "not shown";
   return o.shipping.cents === 0 ? "Free" : money(o.shipping);
 }
 

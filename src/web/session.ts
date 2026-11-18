@@ -4,7 +4,7 @@
 // against the review total before passing them to the engine.
 
 import type { CheckoutReview, Limits, Money, RunEvent, RunSummary, StoreId } from "../core/types.js";
-import type { EnginePort, GateStep, RunListItem, RunRecord, RunStatus } from "./engine-port.js";
+import type { EnginePort, GateStep, PlanChoice, RunListItem, RunRecord, RunStatus } from "./engine-port.js";
 
 export interface Gate { step: GateStep; store: StoreId }
 
@@ -18,6 +18,8 @@ export interface StartOptions {
   shopifyDomains?: string[];
   /** false: stop after the comparison (no gates, no carts). Default true. */
   checkout?: boolean;
+  /** A cart at every store with every item, instead of the best store per item. */
+  everyStore?: boolean;
 }
 
 export interface LiveRun {
@@ -37,6 +39,8 @@ interface Internal extends LiveRun {
   engine: EnginePort;
   resolvers: Map<string, (yes: boolean) => void>;
   listeners: Set<Listener>;
+  /** Stores the person asked to fill (fillCarts); their later cart questions answer yes. */
+  autoCart?: Set<StoreId>;
 }
 
 const gateKey = (step: GateStep, store: StoreId) => `${step}:${store}`;
@@ -58,13 +62,15 @@ export class RunHub {
     const confirm = opts.checkout === false ? undefined : (step: GateStep, store: StoreId) =>
       new Promise<boolean>((resolve) => {
         if (!run || run.status !== "running") return resolve(false);
+        // After "Fill carts", a store that gained a pick (setPlan) is filled without asking again.
+        if (step === "cart" && run.autoCart?.has(store)) return resolve(true);
         const key = gateKey(step, store);
         run.gates.push({ step, store });
         run.resolvers.set(key, resolve);
         this.notify(run, { kind: "gate", gate: { step, store }, open: true });
       });
     const engine = this.engine;
-    const handle = engine.run(prompt, { onEvent, limits: opts.limits, zip: opts.zip, shopifyDomains: opts.shopifyDomains, confirm });
+    const handle = engine.run(prompt, { onEvent, limits: opts.limits, zip: opts.zip, shopifyDomains: opts.shopifyDomains, everyStore: opts.everyStore, confirm });
     run = {
       engine, runId: handle.runId, prompt, startedAt: new Date().toISOString(), status: "running", events: [], gates: [],
       resolvers: new Map(), listeners: new Set(), done: handle.done,
@@ -134,6 +140,32 @@ export class RunHub {
     this.notify(run, { kind: "gate", gate: { step, store }, open: false });
     resolve(yes);
     return true;
+  }
+
+  /**
+   * "Fill carts": apply the person's plan (when given), then answer every open cart question:
+   * yes for stores that have a pick, no for the others. Stores that gain a pick later are filled
+   * without asking again. Returns the stores being filled.
+   */
+  async fillCarts(runId: string, choices?: PlanChoice[]): Promise<StoreId[]> {
+    const run = this.runs.get(runId);
+    if (!run || run.status !== "running") throw new HubError(409, "This run is not running");
+    if (choices?.length) {
+      if (!run.engine.setPlan) throw new HubError(409, "This engine cannot change the picks");
+      try {
+        await run.engine.setPlan(runId, choices);
+      } catch (e) {
+        throw new HubError(409, (e as Error).message);
+      }
+    }
+    let picks: { offer: { store: StoreId } }[] = [];
+    let over = false;
+    for (const e of run.events) if (e.type === "picks") { picks = e.picks; over = e.overBudget; }
+    if (over) throw new HubError(409, "The picks are over your budget. Choose cheaper ones or search again with a higher budget.");
+    const stores = new Set(picks.map((p) => p.offer.store));
+    run.autoCart = stores;
+    for (const g of [...run.gates]) if (g.step === "cart") this.answer(runId, "cart", g.store, stores.has(g.store));
+    return [...stores];
   }
 
   /** The review now awaiting approval for this store, if any. */

@@ -147,6 +147,7 @@ test("checkout states and review totals", () => {
   assert.equal(amazonCheckoutState("https://www.amazon.com/ap/signin?openid.return_to=x", "<form name=\"signIn\"><input id=\"ap_email\"></form>"), "signin");
   assert.equal(amazonCheckoutState("https://www.amazon.com/ap/mfa?x", "<input id=\"auth-mfa-otpcode\">"), "mfa");
   assert.equal(amazonCheckoutState("https://www.amazon.com/errors/validateCaptcha", ""), "captcha");
+  assert.equal(amazonCheckoutState("https://www.amazon.com/checkout/p/p-1/x", "<body><h4>You cannot buy this item because it's out of stock</h4><p>Another seller might have a comparable offer for the same item.</p></body>"), "unavailable");
   assert.equal(amazonCheckoutState("https://www.amazon.com/gp/cart/view.html", fx("cart-one-item.html")), "unknown");
   const reviewHtml = `<div id="deliver-to-address-text"><span>Jane Doe</span><span>1 Main St</span><span>CHEYENNE, WY 82001-1234</span><span>United States</span></div>
     <div>Visa ending in 1234</div><input name="placeYourOrder1" type="submit">

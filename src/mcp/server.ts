@@ -123,7 +123,7 @@ function textTable(run: LiveRun): string {
     lines.push("| | Store | Product | Price | Shipping | Delivery | Rating | Seller |", "|---|---|---|---|---|---|---|---|");
     for (const r of item.rows.slice(0, 8)) {
       const o = r.offer;
-      lines.push(`| ${r.best ? "best" : r.alternative ? "alt" : ""} | ${storeName(o.store, o.storeDomain)} | [${o.title.replace(/\|/g, "/")}](${o.url})${o.inStock ? "" : " (out of stock)"} | ${money(o.price)} | ${!o.shipping ? "?" : o.shipping.cents === 0 ? "Free" : money(o.shipping)} | ${(o.deliveryText ?? "?").replace(/^Arrives\s+/i, "")} | ${o.rating ? `${o.rating.stars.toFixed(1)} (${o.rating.count})` : ""} | ${o.seller ?? ""} |`);
+      lines.push(`| ${r.best ? "best" : r.alternative ? "alt" : ""} | ${storeName(o.store, o.storeDomain)} | [${o.title.replace(/\|/g, "/")}](${o.url})${o.inStock ? "" : " (out of stock)"} | ${money(o.price)} | ${!o.shipping ? "not shown" : o.shipping.cents === 0 ? "Free" : money(o.shipping)} | ${(o.deliveryText ?? "–").replace(/^Arrives\s+/i, "")} | ${o.rating ? `${o.rating.stars.toFixed(1)} (${o.rating.count})` : ""} | ${o.seller ?? ""} |`);
     }
     lines.push("");
   }
@@ -205,7 +205,7 @@ export function createMcpHandler(hub: RunHub, alerts: AlertsPort, config: Config
           if (needs_user) return `${storeName(store)}: needs the person. ${needs_user.message}${needs_user.liveUrl ? `\nTake over in Phantom Live: ${needs_user.liveUrl}` : ""}${hub.engine.demo ? "" : "\nWhen they are done, call review_checkout again for this store."}`;
           if (!review) return `${storeName(store)}: no review (see failures).`;
           return `${storeName(store, review.storeDomain)} checkout review:\n` + review.lines.map((l) => `- ${l.quantity} x ${l.title}: ${money(l.price)}`).join("\n") +
-            `\nSubtotal ${money(review.subtotal)}, shipping ${review.shipping ? money(review.shipping) : "?"}, tax ${review.tax ? money(review.tax) : "?"}\nTOTAL ${money(review.total)}` +
+            `\nSubtotal ${money(review.subtotal)}, shipping ${review.shipping ? money(review.shipping) : "not shown"}, tax ${review.tax ? money(review.tax) : "not shown"}\nTOTAL ${money(review.total)}` +
             (review.shipTo ? `\nShips to ${review.shipTo}` : "") + (review.paymentHint ? `\nPayment: ${review.paymentHint}` : "");
         }).join("\n\n");
         return ok(`${text}\n\nNext: ask the human to approve each total. Only after an explicit yes, call place_order with approved_total equal to the TOTAL.`, {

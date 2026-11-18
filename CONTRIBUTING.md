@@ -35,7 +35,7 @@ Node 20 or later. Unit tests need no network and no Browsa key.
 - Tests use saved HTML fixtures. Trim them and remove personal data (names, addresses, order numbers, emails) before you commit them.
 - Live tests are opt-in with `OSA_LIVE=1` and a `BROWSA_API_KEY`. They stop at the cart or the first checkout page.
 - **Never place a real order, never enter card details, and never commit a store account password** in tests, fixtures or examples.
-- Do not add code that solves captchas or gets around a store's access limits. Hand those steps to the person through Phantom Live.
+- Do not add code that solves captchas or gets around a store's access limits. Call `passBotCheck` or `browsaSolves` (on Browsa, Browsa's solver tries it in the session) and hand the rest to the person through Phantom Live.
 - Call the browser **Phantom** in docs and UI text.
 - Writing: short plain sentences. Do not claim numbers that the bench or a test did not measure.
 

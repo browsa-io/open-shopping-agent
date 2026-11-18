@@ -34,7 +34,7 @@ The agent stops and gives you a single-use Phantom Live link when a store asks f
 - an address or payment change,
 - a captcha or other check that a person should do.
 
-You do that step in the live browser. The agent does not type store passwords and does not solve captchas.
+You do that step in the live browser. The agent does not type store passwords. On Browsa, Browsa's own solver tries a captcha in the session first; if it cannot, you get the live link.
 
 ## What is stored where
 

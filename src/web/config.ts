@@ -6,8 +6,23 @@ import { join, resolve } from "node:path";
 import type { Money, StoreId } from "../core/types.js";
 import { STORE_IDS, maskKey } from "./format.js";
 import { proxyDisplay, proxyFromText } from "../core/browsers.js";
+import { cdpDisplay, maskProxyText, parseProviderId, parseProxy, PROVIDER_CHOICES, PROVIDER_TABLE, type ProviderId } from "../core/providers/index.js";
 
-export interface OsaConfig {
+/** Settings added with browser providers and bring-your-own keys (see byokPublic). */
+export interface ByokConfig {
+  /** Browser provider: "auto" (default), "browsa", "local" or "cdp". OSA_BROWSER wins. */
+  browser?: ProviderId | "auto";
+  /** A DevTools browser URL for the cdp provider. OSA_CDP_URL wins. Shown as host only. */
+  cdpUrl?: string;
+  /** Your own proxy per store. OSA_PROXY_<STORE> wins. */
+  storeProxies?: Partial<Record<StoreId, string>>;
+  /** A small pool of your proxies, rotated per store and run. OSA_PROXIES wins. */
+  proxyPool?: string[];
+  /** OpenAI-compatible base URL of your own model (OpenRouter, a local server). OSA_LLM_BASE_URL wins. */
+  llmBaseUrl?: string;
+}
+
+export interface OsaConfig extends ByokConfig {
   browsaApiKey?: string;
   llm?: string;              // "browsa" (hosted, default) or a provider/model name
   llmApiKey?: string;
@@ -41,6 +56,8 @@ export interface PublicConfig {
   browserMode: BrowserChoice;
   proxy: string;             // "host:port" only, never the user name or password
   hasProxy: boolean;
+  /** Added with browser providers and bring-your-own keys. */
+  byok: ByokPublic;
 }
 
 export function osaHome(): string {
@@ -72,6 +89,9 @@ export class ConfigStore {
       llm: process.env.OSA_LLM || c.llm,
       llmApiKey: process.env.OSA_LLM_API_KEY || c.llmApiKey,
       proxy: process.env.OSA_PROXY || c.proxy,
+      browser: (process.env.OSA_BROWSER as OsaConfig["browser"]) || c.browser,
+      cdpUrl: process.env.OSA_CDP_URL || c.cdpUrl,
+      llmBaseUrl: process.env.OSA_LLM_BASE_URL || c.llmBaseUrl,
     };
   }
 
@@ -81,7 +101,7 @@ export class ConfigStore {
 
   async update(patch: unknown): Promise<OsaConfig> {
     const cur = await this.read();
-    const next = { ...cur, ...sanitize(patch, cur) };
+    const next = { ...cur, ...sanitize(patch, cur), ...sanitizeByok(patch, cur) };
     await mkdir(join(this.file, ".."), { recursive: true });
     await writeFile(this.file, JSON.stringify(next, null, 2), { mode: 0o600 });
     await chmod(this.file, 0o600).catch(() => {});
@@ -103,7 +123,94 @@ export function toPublic(c: OsaConfig): PublicConfig {
     browserMode: c.browserMode === "persistent" ? "persistent" : "burner",
     proxy: c.proxy ? safeProxyDisplay(c.proxy) : "",
     hasProxy: !!c.proxy,
+    byok: byokPublic(c),
   };
+}
+
+export interface ByokPublic {
+  browser: ProviderId | "auto";
+  choices: typeof PROVIDER_CHOICES;
+  table: typeof PROVIDER_TABLE;
+  cdpUrl: string;              // host only
+  hasCdpUrl: boolean;
+  storeProxies: Partial<Record<StoreId, string>>; // "scheme://host:port" only
+  proxyPool: string[];         // "scheme://host:port" only
+  llmBaseUrl: string;
+}
+
+/** The provider and bring-your-own-key settings as the web app sees them: never a password or token. */
+export function byokPublic(c: OsaConfig): ByokPublic {
+  let browser: ProviderId | "auto" = "auto";
+  try { browser = parseProviderId(c.browser) ?? "auto"; } catch { /* a bad env value: show auto */ }
+  return {
+    browser,
+    choices: PROVIDER_CHOICES,
+    table: PROVIDER_TABLE,
+    cdpUrl: c.cdpUrl ? cdpDisplay(c.cdpUrl) : "",
+    hasCdpUrl: !!c.cdpUrl,
+    storeProxies: Object.fromEntries(Object.entries(c.storeProxies ?? {}).filter(([, v]) => v).map(([k, v]) => [k, maskProxyText(v)])),
+    proxyPool: (c.proxyPool ?? []).map((p) => maskProxyText(p)),
+    llmBaseUrl: c.llmBaseUrl ? safeBase(c.llmBaseUrl) : "",
+  };
+}
+
+function safeBase(u: string): string {
+  try { const x = new URL(u); return `${x.protocol}//${x.host}${x.pathname}`; } catch { return "set"; }
+}
+
+const masked = (v: unknown) => typeof v === "string" && (v.includes("•") || v.includes("(with login)"));
+
+/** The provider and BYOK part of the settings form. Masked values keep what is stored. */
+export function sanitizeByok(input: unknown, cur: OsaConfig): Partial<OsaConfig> {
+  const i = (input ?? {}) as Record<string, unknown>;
+  const out: Partial<OsaConfig> = {};
+  if ("browser" in i) {
+    const id = parseProviderId(typeof i.browser === "string" ? i.browser : undefined);
+    out.browser = id ?? undefined;
+  }
+  if ("cdpUrl" in i) {
+    const v = typeof i.cdpUrl === "string" ? i.cdpUrl.trim() : "";
+    if (i.cdpUrl === null || !v) out.cdpUrl = undefined;
+    else if (v === cdpDisplay(cur.cdpUrl ?? "") || masked(v)) out.cdpUrl = cur.cdpUrl;
+    else if (!/^(wss?|https?):\/\/[^\s]+$/i.test(v)) throw new Error("The CDP URL must start with ws://, wss://, http:// or https://");
+    else out.cdpUrl = v.slice(0, 1000);
+  }
+  if ("storeProxies" in i) {
+    // Per store: empty or missing keeps the saved proxy, null or "none" removes it.
+    const src = (i.storeProxies ?? {}) as Record<string, unknown>;
+    const next: Partial<Record<StoreId, string>> = {};
+    for (const s of STORE_IDS) {
+      const v = src[s];
+      if (v === null || (typeof v === "string" && v.trim().toLowerCase() === "none")) continue;
+      if (typeof v !== "string" || !v.trim()) { if (cur.storeProxies?.[s]) next[s] = cur.storeProxies[s]; continue; }
+      if (masked(v) || v === maskProxyText(cur.storeProxies?.[s])) { if (cur.storeProxies?.[s]) next[s] = cur.storeProxies[s]; continue; }
+      parseProxy(v); // throws a readable error
+      next[s] = v.trim().slice(0, 400);
+    }
+    out.storeProxies = Object.keys(next).length ? next : undefined;
+  }
+  if ("proxyPool" in i) {
+    const list = Array.isArray(i.proxyPool) ? i.proxyPool : typeof i.proxyPool === "string" ? i.proxyPool.split(/[\n,]+/) : [];
+    const curMasked = new Map((cur.proxyPool ?? []).map((p) => [maskProxyText(p), p]));
+    const next: string[] = [];
+    for (const raw of list) {
+      if (typeof raw !== "string" || !raw.trim()) continue;
+      const v = raw.trim();
+      const kept = curMasked.get(v);
+      if (kept) { next.push(kept); continue; }
+      parseProxy(v);
+      next.push(v.slice(0, 400));
+    }
+    out.proxyPool = next.length ? next.slice(0, 50) : undefined;
+  }
+  if ("llmBaseUrl" in i) {
+    const v = typeof i.llmBaseUrl === "string" ? i.llmBaseUrl.trim() : "";
+    if (!v) out.llmBaseUrl = undefined;
+    else if (v === safeBase(cur.llmBaseUrl ?? "")) out.llmBaseUrl = cur.llmBaseUrl;
+    else if (!/^https?:\/\/[^\s]+$/i.test(v)) throw new Error("The model base URL must start with http:// or https://");
+    else out.llmBaseUrl = v.slice(0, 400);
+  }
+  return out;
 }
 
 function safeProxyDisplay(text: string): string {

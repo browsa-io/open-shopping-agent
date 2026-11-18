@@ -79,7 +79,7 @@ export function renderCompare(items: CompareItem[], p: Paint, opts: { maxRows?: 
       truncate(r.offer.title, titleMax) + (r.offer.inStock ? "" : " (out of stock)"),
       money(r.offer.price),
       shippingText(r.offer),
-      (r.offer.deliveryText ?? "?").replace(/^Arrives\s+/i, ""),
+      (r.offer.deliveryText ?? "–").replace(/^Arrives\s+/i, ""),
       ratingText(r.offer),
     ]);
     out.push(renderTable([
@@ -100,8 +100,8 @@ export function renderLines(lines: Cart["lines"], p: Paint): string {
 export function renderReview(r: CheckoutReview, p: Paint): string {
   const sums = [
     ["Subtotal", money(r.subtotal)],
-    ["Shipping", r.shipping ? (r.shipping.cents === 0 ? "Free" : money(r.shipping)) : "?"],
-    ["Tax", r.tax ? money(r.tax) : "?"],
+    ["Shipping", r.shipping ? (r.shipping.cents === 0 ? "Free" : money(r.shipping)) : "not shown"],
+    ["Tax", r.tax ? money(r.tax) : "not shown"],
     [p.bold("Total"), p.bold(money(r.total))],
   ];
   const w = Math.max(...sums.map((s) => visibleLength(s[1])));
@@ -157,7 +157,7 @@ export class Progress {
   }
 }
 
-export function totalLine(total: Money, budget: Money | undefined, over: boolean, p: Paint): string {
+export function totalLine(total: Money, budget: Money | undefined, over: boolean, p: Paint, shippingUnknown = false): string {
   const b = budget ? (over ? p.red(` over the ${money(budget)} budget`) : p.green(` within ${money(budget)}`)) : "";
-  return `${p.bold("Total for best picks")} ${p.bold(money(total))}${b} ${p.dim("(tax at checkout)")}`;
+  return `${p.bold("Total for best picks")} ${p.bold(money(total))}${b} ${p.dim(shippingUnknown ? "(plus shipping where not shown, tax at checkout)" : "(tax at checkout)")}`;
 }

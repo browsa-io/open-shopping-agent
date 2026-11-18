@@ -22,6 +22,7 @@ export interface RunListItem {
   orders: number;
   failures: number;
   creditsUsed?: number;
+  creditsEstimated?: boolean;
 }
 
 export interface SavedRun {
@@ -134,6 +135,7 @@ export async function listRuns(dataDir = ".osa", limit = 50): Promise<RunListIte
       orders: summary?.orders.filter((o) => o.placed).length ?? 0,
       failures: summary?.failures.length ?? 0,
       creditsUsed: summary?.creditsUsed,
+      ...(summary?.creditsEstimated ? { creditsEstimated: true } : {}),
     });
   }
   return out;

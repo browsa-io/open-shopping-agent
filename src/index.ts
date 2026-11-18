@@ -29,6 +29,8 @@ export {
   forbiddenLines, CreditMeter, balanceOf, DEFAULT_MAX_CREDITS,
 } from "./core/limits.js";
 export type { LimitCode, ApprovalCheck } from "./core/limits.js";
+export { browserTimeCredits } from "./core/credits.js";
+export type { SpendSource, SpendEvent, Spend } from "./core/credits.js";
 
 export { createWatchCheck } from "./core/watch-check.js";
 export type { WatchCheckOptions } from "./core/watch-check.js";
@@ -42,4 +44,6 @@ export {
 
 export {
   parseMoney, moneyFromParts, formatMoney, addMoney, parseStars, parseCount, clean, needsUser, firstVisible, nowIso,
+  browsaSolves, passBotCheck, passPressAndHold, BotCheckError, CaptchaHandoffError,
 } from "./stores/util.js";
+export { solveWithBrowsa, type CaptchaOutcome, type CaptchaReply } from "./stores/captcha.js";

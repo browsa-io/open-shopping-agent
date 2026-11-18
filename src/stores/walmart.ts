@@ -6,9 +6,9 @@ import type { Page } from "playwright-core";
 import type { Cart, CartLine, CheckoutReview, Money, NeedsUser, Offer, OrderResult } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
 import {
-  aiSearchFallback, approvalMatches, clean, clickFirstVisible, declineOffer, formatMoney, gotoRetry, moneyFromNumber, needsUser, nowIso,
+  aiSearchFallback, approvalMatches, CaptchaHandoffError, clean, clickFirstVisible, declineOffer, formatMoney, gotoRetry, moneyFromNumber, needsUser, nowIso,
   optionWarnings, parseDeliveryDate, parseHtml, parseMoney, passBotCheck, pickVariant, qs, qsa, shortAddress, sumLines, textOf,
-  type HNode, type VariantChoice,
+  typeZip, zipNotTaken, type HNode, type VariantChoice,
 } from "./util.js";
 
 const WM = "https://www.walmart.com";
@@ -280,8 +280,47 @@ async function gotoWalmart(ctx: StoreContext, url: string): Promise<void> {
   });
 }
 
+/**
+ * The ZIP Walmart prices and delivers for, from the JSON it embeds: the page's location
+ * (pageMetadata.location.postalCode, adsContext.locationContext.zipCode, seen 2026-11-18), else a
+ * fulfillment postalCode. A guest gets one from the exit address (95829, Sacramento, for a non-US one).
+ */
+export function walmartZip(html: string): string | undefined {
+  for (const re of [/"pageMetadata":\{"location":\{"postalCode":"(\d{5})/, /"locationContext":\{"zipCode":"(\d{5})/, /"location":\{"postalCode":"(\d{5})/, /"postalCode":"(\d{5})/]) {
+    const m = re.exec(html);
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
+// --zip: once per browser, compare Walmart's ZIP with the run's; when they differ, type the ZIP in
+// Walmart's own "Pickup or delivery?" box (no sign-in, nothing but the ZIP), load the page again
+// and check. When Walmart keeps its own ZIP, the run notes and the cart say so.
+// Keyed by the store context's stop signal: one per store and run, so a later run checks again.
+const zipChecked = new WeakMap<AbortSignal, "ok" | string>();
+async function walmartUseZip(ctx: StoreContext, url: string): Promise<void> {
+  const want = ctx.zip;
+  const key = ctx.signal;
+  if (!want || zipChecked.has(key)) return;
+  let shown = walmartZip(await ctx.page.content().catch(() => ""));
+  if (!shown || shown === want) { zipChecked.set(key, "ok"); return; }
+  const typed = await typeZip(ctx.page, want, {
+    opener: ["[data-testid=\"gic-wrapper\"]", "button:has-text(\"Pickup or delivery\")", "[data-automation-id=\"fulfillment-banner\"]"],
+    submit: ["[role=\"dialog\"] button:has-text(\"Save\")", "[role=\"dialog\"] button:has-text(\"Update\")", "[role=\"dialog\"] button:has-text(\"Apply\")"],
+  }).catch(() => false);
+  if (typed) {
+    await gotoWalmart(ctx, url);
+    shown = walmartZip(await ctx.page.content().catch(() => "")) ?? shown;
+    if (shown === want) { zipChecked.set(key, "ok"); ctx.log(`Walmart: delivery ZIP set to ${want}`); return; }
+  }
+  const note = zipNotTaken("Walmart", want, shown);
+  zipChecked.set(key, note);
+  ctx.log(note);
+}
+
 async function readWalmartCart(ctx: StoreContext): Promise<Cart> {
   await gotoWalmart(ctx, `${WM}/cart`);
+  await walmartUseZip(ctx, `${WM}/cart`);
   await ctx.page.waitForSelector("[data-testid=\"productName\"], [data-automation-id=\"checkout\"]", { timeout: 15_000 }).catch(() => undefined);
   await ctx.page.waitForTimeout(800);
   let cart = parseWalmartCart(await ctx.page.content());
@@ -291,6 +330,8 @@ async function readWalmartCart(ctx: StoreContext): Promise<Cart> {
     await ctx.page.waitForTimeout(1000);
     cart = parseWalmartCart(await ctx.page.content());
   }
+  const zipNote = ctx.zip ? zipChecked.get(ctx.signal) : undefined;
+  if (zipNote && zipNote !== "ok") cart.warnings.push(zipNote);
   return cart;
 }
 
@@ -319,7 +360,12 @@ async function walmartCheckoutReview(ctx: StoreContext): Promise<CheckoutReview>
     ctx.log(`Walmart checkout: ${state}`);
     switch (state) {
       case "signin": return stop("sign_in", "Walmart asks you to sign in or create an account. Open the live link, sign in, then run checkout again.");
-      case "captcha": await passBotCheck(ctx, "Walmart", () => walmartBlocked(page)); continue;
+      case "captcha":
+        try { await passBotCheck(ctx, "Walmart", () => walmartBlocked(page)); } catch (e) {
+          if (e instanceof CaptchaHandoffError) return { store: "walmart", storeDomain: DOMAIN, ...base, needsUser: e.handoff, reviewedAt: nowIso() };
+          throw e;
+        }
+        continue;
       case "membership_offer":
         if (declined++ < 3 && await declineOffer(page, ["button:has-text(\"No thanks\")", "button:has-text(\"Not now\")", "button:has-text(\"Maybe later\")"])) continue;
         return stop("other", "Walmart shows a Walmart+ offer that could not be declined safely. Open the live link and decline it.");
@@ -349,6 +395,7 @@ const adapter: StoreAdapter = {
     const url = this.searchUrl(item.query, DOMAIN);
     await gotoWalmart(ctx, url);
     await ctx.page.waitForSelector("#__NEXT_DATA__", { state: "attached", timeout: 15_000 }).catch(() => undefined);
+    await walmartUseZip(ctx, url);
     let offers = parseWalmartSearch(await ctx.page.content(), item.id);
     if (!offers.length) {
       // Sometimes the page comes back without its data; load it once more before the AI fallback.

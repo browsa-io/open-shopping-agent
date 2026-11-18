@@ -10,8 +10,9 @@
 import type { Approval, Cart, CartLine, CheckoutReview, Money, Offer, OrderResult } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
 import {
-  attr, clean, elementAt, elementsWith, firstWith, jsonAfterMarker as jsonAfter, jsonLd, moneyFromNumeric as moneyFromNumber,
+  attr, browsaSolves, clean, elementAt, elementsWith, firstWith, jsonAfterMarker as jsonAfter, jsonLd, moneyFromNumeric as moneyFromNumber,
   isDeadPageError, needsUser, nowIso, pageIsDead, parseCount, parseMoney, parseStars, replacePage, sameOption, textLines, textOfHtml as textOf,
+  typeZip, zipNotTaken,
 } from "./util.js";
 
 const DOMAIN = "bestbuy.com";
@@ -265,6 +266,25 @@ export function parseCart(html: string): { store: "bestbuy"; storeDomain: string
   };
 }
 
+/** The ZIP the cart ships to ("Shipping to 96939"), when it shows one. */
+export function cartShipZip(html: string): string | undefined {
+  for (const l of textLines(html)) {
+    const m = /\bShipping to\s+(\d{5})\b/i.exec(l);
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
+/** True while the browser is still on the cart (the Checkout click did not leave it). */
+export function isCartUrl(url: string): boolean {
+  return /bestbuy\.com\/cart(?:[/?#]|$)/.test(url);
+}
+
+/** Why the cart blocks checkout, from its alerts ("Shipping unavailable to 96939."), if it says so. */
+export function cartBlocker(html: string): string | undefined {
+  return textLines(html).map((l) => clean(l) ?? "").find((l) => l.length < 200 && /(unavailable|no longer available|not available)( to| for| in)\b|cannot be shipped|can't be shipped/i.test(l));
+}
+
 /** Best Buy's sign-in page that checkout opens for signed-out visitors. */
 export function isSignInPage(html: string, url: string): boolean {
   return /\/identity\/(signin|global\/signin)/.test(url) || /cia-guest-content__continue|Continue as Guest/.test(html) && /Sign In to Best Buy|Returning Customers/i.test(html);
@@ -275,7 +295,14 @@ export interface BbReview { total?: Money; subtotal?: Money; shipping?: Money; t
 /** The signed-in checkout review page (fast-track). Best effort: read the summary and the button. */
 export function parseReview(html: string): BbReview {
   const lines = textLines(firstWith(html, `class="order-summary`) ?? html);
-  const after = (re: RegExp) => { const i = lines.findIndex((l) => re.test(l)); if (i < 0) return undefined; const v = lines.slice(i + 1, i + 3).join(" "); return parseMoney(v) ?? (/free/i.test(v) ? { cents: 0, currency: "USD" } : undefined); };
+  // Only a dollar amount or "free" counts: "Shipping to 96939" on the cart page is a ZIP, not a price.
+  const after = (re: RegExp) => {
+    const i = lines.findIndex((l) => re.test(l));
+    if (i < 0) return undefined;
+    const v = lines.slice(i + 1, i + 3).find((l) => /\$\s?\d|^\s*free\b/i.test(l));
+    if (v === undefined) return undefined;
+    return /\$\s?\d/.test(v) ? parseMoney(v.slice(v.indexOf("$"))) : { cents: 0, currency: "USD" };
+  };
   const btn = /<button[^>]*>(?:\s*<[^>]+>)*\s*Place Your Order/i.exec(html)?.[0];
   const placeEnabled = !!btn && !/disabled/.test(btn);
   let needs: BbReview["needs"];
@@ -321,6 +348,13 @@ async function load(ctx: StoreContext, url: string, waitMs = 2500): Promise<stri
   let wall = p.error && /ERR_HTTP2|ERR_EMPTY_RESPONSE|ERR_CONNECTION_RESET/.test(p.error) ? "denied" : detectWall(p.html, p.title);
   if (!wall && !p.error) return p.html;
   if (p.error && !wall) throw new Error(`Best Buy did not load ${url}: ${p.error}`);
+  if (wall === "captcha" && await browsaSolves(ctx, "Best Buy", async () => {
+    const s = await snapshot(ctx);
+    return detectWall(s.html, s.title) === "captcha";
+  })) {
+    const s = await snapshot(ctx);
+    if (!detectWall(s.html, s.title)) return s.html;
+  }
   ctx.log(`Best Buy showed ${wall === "queue" ? "a queue" : "its bot wall"}; waiting and retrying once`);
   if (wall === "queue") {
     const until = Date.now() + 90_000;
@@ -398,8 +432,59 @@ function readCartFrom(html: string, warnings: string[]): Cart & { lines: BbCartL
 }
 
 async function readCartNow(ctx: StoreContext, warnings: string[] = []) {
-  const html = await load(ctx, CART_URL, 3500);
+  const html = await cartZip(ctx, await load(ctx, CART_URL, 3500), warnings);
   return readCartFrom(html, warnings);
+}
+
+// --zip: Best Buy guesses a location from the exit address (a non-US one gave ZIP 96939 and "no
+// longer available for shipping"). A guest can give a ZIP in the results' "Delivery Location" box
+// and in the cart's "Change" next to "Shipping to". Each step runs once per browser; the cart's
+// "Shipping to" says whether Best Buy took it, and the run notes say so when it did not.
+// Keyed by the store context's stop signal: one per store and run, so a later run tries again.
+const zipSteps = new WeakMap<AbortSignal, Set<string>>();
+function firstTime(ctx: StoreContext, step: string): boolean {
+  const done = zipSteps.get(ctx.signal) ?? new Set<string>();
+  zipSteps.set(ctx.signal, done);
+  if (done.has(step)) return false;
+  done.add(step);
+  return true;
+}
+
+/** Ask for the run's ZIP in the results page's "Delivery Location" box, then load the plain search again. */
+async function searchZip(ctx: StoreContext, searchUrl: string): Promise<void> {
+  if (!ctx.zip || !firstTime(ctx, "search")) return;
+  const typed = await typeZip(ctx.page, ctx.zip, {
+    input: ["#delivery-input"],
+    submit: ["form:has(#delivery-input) button:has-text(\"Go!\")"],
+  }).catch(() => false);
+  if (!typed) return;
+  ctx.log(`Best Buy: delivery location set to ZIP ${ctx.zip} on the results page`);
+  await load(ctx, searchUrl, 3500); // the box can also filter the results
+}
+
+/** On the cart: when it ships to another ZIP, change it once; else say so in the notes and the cart. */
+export async function cartZip(ctx: StoreContext, html: string, warnings: string[]): Promise<string> {
+  const want = ctx.zip;
+  let shown = cartShipZip(html);
+  if (!want || !shown || shown === want) return html;
+  if (firstTime(ctx, "cart")) {
+    const typed = await typeZip(ctx.page, want, {
+      opener: ["button[aria-label=\"Update location\"]"],
+      submit: ["#item-availability-links button:has-text(\"Update\")", "#item-availability-links button:has-text(\"Go\")", "[role=\"dialog\"] button:has-text(\"Update\")"],
+    }).catch(() => false);
+    if (typed) {
+      html = await load(ctx, CART_URL, 3500);
+      shown = cartShipZip(html);
+      if (!shown || shown === want) {
+        ctx.log(`Best Buy: cart ships to ZIP ${want}`);
+        return html;
+      }
+    }
+  }
+  const note = zipNotTaken("Best Buy", want, shown);
+  if (!warnings.includes(note)) warnings.push(note);
+  if (firstTime(ctx, "note")) ctx.log(note);
+  return html;
 }
 
 function skuOf(offer: Offer): string {
@@ -413,6 +498,70 @@ async function openProduct(ctx: StoreContext, sku: string, url?: string): Promis
   const target = url && new RegExp(`/sku/${sku}|skuId=${sku}`).test(url) ? url : url && !/\/sku\/\d+|skuId=/.test(url) ? url : skuUrl(sku);
   const html = await load(ctx, target, 3000);
   return { html, prod: parseProduct(html) };
+}
+
+/** Browsers (agent ids) whose product pages Best Buy refused: later steps skip them. */
+const pdpBlocked = new Set<string>();
+
+/** Read the cart and set the line's quantity there when it differs. */
+async function cartWithQuantity(ctx: StoreContext, sku: string, quantity: number, warnings: string[]): Promise<{ cart: Cart & { lines: BbCartLine[] }; line?: BbCartLine }> {
+  let cart = await readCartNow(ctx, warnings);
+  let line = cart.lines.find((l) => l.productId === sku);
+  if (!line) { warnings.push(`Best Buy cart does not show SKU ${sku} after Add to cart`); return { cart }; }
+  if (line.quantity !== quantity) {
+    const sel = ctx.page.locator(`section[data-test-sku="${sku}"] [data-testid="cart-item-quantity__native-select"]`).first();
+    if (await sel.count()) {
+      await sel.selectOption(String(quantity)).catch(() => {});
+      await ctx.page.waitForTimeout(3000);
+      cart = readCartFrom(await ctx.page.content(), warnings);
+      line = cart.lines.find((l) => l.productId === sku);
+    }
+    if (line && line.quantity !== quantity) warnings.push(`Quantity ${quantity} did not stick, cart shows ${line.quantity}`);
+  }
+  return { cart, line };
+}
+
+/** True when a refused product page may be skipped by adding from the results: no option asked, and the page was refused or reset. */
+export function canAddFromResults(options: Record<string, string> | undefined, error: string): boolean {
+  const wantsOptions = Object.keys(options ?? {}).some((k) => k.toLowerCase() !== "condition");
+  return !wantsOptions && /refused the browser|did not load .*ERR_(HTTP2|EMPTY_RESPONSE|CONNECTION_RESET)/.test(error);
+}
+
+/** Search text that finds an offer again: the first words of its title. */
+export function requeryFor(offer: Pick<Offer, "title">): string {
+  return offer.title.replace(/[^\p{L}\p{N} ]+/gu, " ").split(/\s+/).filter(Boolean).slice(0, 7).join(" ");
+}
+
+/**
+ * Add a SKU with the Add to cart button of its search results card (no product page), then read
+ * the cart back. Uses the offer's own search, else a search for its title.
+ */
+async function addFromResults(ctx: StoreContext, offer: Offer, sku: string, quantity: number, warnings: string[]): Promise<Cart> {
+  const urls = [typeof offer.raw?.searchUrl === "string" ? offer.raw.searchUrl : undefined, adapter.searchUrl(requeryFor(offer), DOMAIN)].filter((u): u is string => !!u);
+  let pressed = false;
+  for (const url of urls) {
+    await load(ctx, url, 3500);
+    const btn = ctx.page.locator(`[data-testid="plp-add-to-cart-${sku}"]`).first();
+    for (let i = 0; i < 6 && !(await btn.count().catch(() => 0)); i++) {
+      await ctx.page.mouse.wheel(0, 1400).catch(() => {});
+      await ctx.page.waitForTimeout(900);
+    }
+    if (!(await btn.count().catch(() => 0))) { ctx.log(`Best Buy: no Add to cart button for SKU ${sku} on ${url}`); continue; }
+    if (await btn.isDisabled().catch(() => false)) throw new Error(`Best Buy SKU ${sku} cannot be added from the results (button disabled)`);
+    await btn.scrollIntoViewIfNeeded({ timeout: 5000 }).catch(() => {});
+    // A click that times out on a slow page may still have added the item: the cart decides.
+    await btn.click({ timeout: 15_000, noWaitAfter: true }).catch((e: Error) => ctx.log(`Best Buy results Add to cart: ${e.message.split("\n")[0]}`));
+    pressed = true;
+    await ctx.page.waitForTimeout(3500);
+    const declined = await declineAddOns(ctx);
+    if (declined.length) ctx.log(`declined: ${declined.join(", ")}`);
+    const got = await cartWithQuantity(ctx, sku, quantity, []);
+    ctx.log(got.line ? `Best Buy cart shows SKU ${sku} after the results Add to cart` : `Best Buy cart does not show SKU ${sku} yet`);
+    if (got.line) { got.cart.warnings.push(...warnings); return got.cart; }
+  }
+  if (!pressed) throw new Error(`Best Buy product page is blocked for this exit and SKU ${sku} has no Add to cart button in the results`);
+  const { cart } = await cartWithQuantity(ctx, sku, quantity, warnings);
+  return cart;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -431,10 +580,12 @@ export const adapter: StoreAdapter = {
   async search(ctx, item, limit) {
     let offers: Offer[] = [];
     try {
-      await load(ctx, adapter.searchUrl(item.query, DOMAIN), 3500);
+      const searchUrl = adapter.searchUrl(item.query, DOMAIN);
+      await load(ctx, searchUrl, 3500);
+      await searchZip(ctx, searchUrl);
       const html = await hydrateResults(ctx, limit);
       const missing = searchSkus(html).filter((s) => !s.priced).map((s) => s.sku).slice(0, limit + 4);
-      offers = parseSearch(html, item.id, missing.length ? await fetchPrices(ctx, missing) : {});
+      offers = parseSearch(html, item.id, missing.length ? await fetchPrices(ctx, missing) : {}).map((o) => ({ ...o, raw: { ...o.raw, searchUrl } }));
     } catch (e) {
       if (/refused the browser|queue/.test((e as Error).message)) throw e;
       ctx.log(`Best Buy search direct path failed: ${(e as Error).message}`);
@@ -457,7 +608,15 @@ export const adapter: StoreAdapter = {
 
   async details(ctx, offer) {
     const sku = skuOf(offer);
-    const { prod } = await openProduct(ctx, sku, offer.url);
+    // Once this browser's product pages are refused, do not spend a minute per offer on them.
+    if (pdpBlocked.has(ctx.agentId)) return offer;
+    let prod: BbProduct;
+    try {
+      ({ prod } = await openProduct(ctx, sku, offer.url));
+    } catch (e) {
+      if (/refused the browser/.test((e as Error).message)) pdpBlocked.add(ctx.agentId);
+      throw e;
+    }
     const delivery = [
       prod.shippingDaysOut !== undefined ? `Shipping: ${prod.shippingDaysOut === 0 ? "today" : prod.shippingDaysOut === 1 ? "tomorrow" : `in ${prod.shippingDaysOut} days`}` : "",
       prod.pickupDaysOut !== undefined ? `Pickup: ${prod.pickupDaysOut === 0 ? "today" : prod.pickupDaysOut === 1 ? "tomorrow" : `in ${prod.pickupDaysOut} days`}` : "",
@@ -482,7 +641,17 @@ export const adapter: StoreAdapter = {
   async addToCart(ctx, offer, quantity, options) {
     const warnings: string[] = [];
     let sku = skuOf(offer);
-    let { prod } = await openProduct(ctx, sku, offer.url);
+    let prod: BbProduct;
+    try {
+      if (pdpBlocked.has(ctx.agentId) && canAddFromResults(options, "refused the browser")) throw new Error("Best Buy refused the browser on product pages earlier in this run");
+      ({ prod } = await openProduct(ctx, sku, offer.url));
+    } catch (e) {
+      // Best Buy's edge resets product pages for some exit addresses (seen live 2026-11-18) while
+      // search pages load: add from the search results card instead, when no option is asked.
+      if (!canAddFromResults(options, (e as Error).message)) throw e;
+      ctx.log(`Best Buy product page refused (${(e as Error).message.split("\n")[0].slice(0, 100)}); adding from the search results`);
+      return addFromResults(ctx, offer, sku, quantity, warnings);
+    }
     if (prod.sku) sku = prod.sku;
 
     const pick = chooseVariation(prod, options);
@@ -508,7 +677,7 @@ export const adapter: StoreAdapter = {
     const btn = ctx.page.locator(`[data-testid="pdp-add-to-cart-${sku}"]`).first();
     let clicked = false;
     if (await btn.count()) {
-      await btn.click({ timeout: 15_000 }).then(() => { clicked = true; }).catch((e: Error) => ctx.log(`Add to cart click: ${e.message.split("\n")[0]}`));
+      await btn.click({ timeout: 15_000, noWaitAfter: true }).then(() => { clicked = true; }).catch((e: Error) => ctx.log(`Add to cart click: ${e.message.split("\n")[0]}`));
     }
     if (!clicked) {
       ctx.log("Best Buy Add to cart button not usable; asking the AI fallback once");
@@ -519,19 +688,8 @@ export const adapter: StoreAdapter = {
     const declined = await declineAddOns(ctx);
     if (declined.length) ctx.log(`declined: ${declined.join(", ")}`);
 
-    let cart = await readCartNow(ctx, warnings);
-    let line = cart.lines.find((l) => l.productId === sku);
-    if (!line) { warnings.push(`Best Buy cart does not show SKU ${sku} after Add to cart`); return cart; }
-    if (line.quantity !== quantity) {
-      const sel = ctx.page.locator(`section[data-test-sku="${sku}"] [data-testid="cart-item-quantity__native-select"]`).first();
-      if (await sel.count()) {
-        await sel.selectOption(String(quantity)).catch(() => {});
-        await ctx.page.waitForTimeout(3000);
-        cart = readCartFrom(await ctx.page.content(), warnings);
-        line = cart.lines.find((l) => l.productId === sku);
-      }
-      if (line && line.quantity !== quantity) warnings.push(`Quantity ${quantity} did not stick, cart shows ${line.quantity}`);
-    }
+    const { cart, line } = await cartWithQuantity(ctx, sku, quantity, warnings);
+    if (!line) return cart;
     for (const [k, v] of Object.entries(pick.expected)) {
       const shown = line?.options?.[k] ?? Object.values(line?.options ?? {}).join(", ");
       if (shown && !sameOption(shown, v) && !shown.toLowerCase().includes(v.toLowerCase())) warnings.push(`Option ${k} '${v}' did not stick, cart shows '${shown}'`);
@@ -555,7 +713,7 @@ export const adapter: StoreAdapter = {
 
   async reviewCheckout(ctx) {
     const warnings: string[] = [];
-    const html = await load(ctx, CART_URL, 3500);
+    const html = await cartZip(ctx, await load(ctx, CART_URL, 3500), warnings);
     let cart = parseCart(html);
     if (!cart.lines.length) throw new Error("Best Buy cart is empty");
     // Prefer shipping over store pickup (pickup is Best Buy's default for the nearest store).
@@ -576,6 +734,13 @@ export const adapter: StoreAdapter = {
     if (wall) throw new Error(`Best Buy showed ${wall === "queue" ? "a queue" : "its bot wall"} at checkout`);
     if (isSignInPage(s.html, ctx.page.url())) {
       const nu = await needsUser(ctx, "sign_in", "Best Buy asks you to sign in or continue as guest. Open the live browser to choose; the agent does not sign in or type your details.");
+      return { ...base, needsUser: nu, reviewedAt: nowIso() } satisfies CheckoutReview;
+    }
+    // Still on the cart: Best Buy did not open checkout (for example "Shipping unavailable to 96939"
+    // for the location it guessed). The cart's summary is not an order review, so no Buy question.
+    if (isCartUrl(ctx.page.url())) {
+      const why = cartBlocker(s.html);
+      const nu = await needsUser(ctx, "other", `Best Buy stayed on the cart${why ? ` (${why.replace(/\.$/, "")})` : ""}. Open the browser to choose shipping or pickup, then review the checkout again.`);
       return { ...base, needsUser: nu, reviewedAt: nowIso() } satisfies CheckoutReview;
     }
     const r = parseReview(s.html);

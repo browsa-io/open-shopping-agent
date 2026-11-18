@@ -13,7 +13,7 @@ import type {
   Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, Rating,
 } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
-import { clean, evalWithRenew, isDeadPageError, needsUser, nowIso, pageIsDead, parseMoney, replacePage } from "./util.js";
+import { browsaSolves, clean, evalWithRenew, isDeadPageError, needsUser, nowIso, pageIsDead, parseMoney, replacePage } from "./util.js";
 
 type J = Record<string, any>;
 
@@ -376,6 +376,7 @@ function sameShop(url: string, origin: string): boolean {
 async function waitOutChallenge(ctx: StoreContext): Promise<void> {
   const title = async () => `${await ctx.page.title().catch(() => "")} ${await evalIn(ctx, () => document.body?.innerText?.slice(0, 300) ?? "").catch(() => "")}`;
   if (!CHALLENGE.test(await title())) return;
+  if (await browsaSolves(ctx, ctx.domain, async () => CHALLENGE.test(await title()))) return;
   ctx.log("Store shows a bot check; waiting for Phantom to pass it");
   for (let i = 0; i < 2; i++) {
     const deadline = Date.now() + 20_000;

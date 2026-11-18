@@ -2,6 +2,8 @@
 
 import type { Money, StoreId } from "../core/types.js";
 import { dollarsToMoney } from "../web/format.js";
+import { parseProviderId } from "../core/providers/select.js";
+import type { ProviderId } from "../core/providers/types.js";
 
 export type Command = "run" | "watch" | "runs" | "web" | "mcp" | "help" | "version";
 
@@ -14,6 +16,8 @@ export interface CliArgs {
   budget?: Money;
   json: boolean;
   noCart: boolean;
+  /** --every-store: a cart at every store with every item. */
+  everyStore: boolean;
   demo: boolean;
   watch?: string;
   below?: Money;
@@ -21,6 +25,10 @@ export interface CliArgs {
   port?: number;
   host?: string;
   limit?: number;
+  /** --browser browsa|local|cdp (added with browser providers). */
+  browser?: ProviderId;
+  /** --headless: the local browser runs without a window. */
+  headless?: boolean;
 }
 
 export class CliError extends Error {}
@@ -55,7 +63,7 @@ function money(flag: string, v: string | undefined): Money {
 }
 
 export function parseArgs(argv: string[]): CliArgs {
-  const out: CliArgs = { command: "run", json: false, noCart: false, demo: false, backInStock: false };
+  const out: CliArgs = { command: "run", json: false, noCart: false, everyStore: false, demo: false, backInStock: false };
   const words: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -72,6 +80,7 @@ export function parseArgs(argv: string[]): CliArgs {
       case "-v": case "--version": out.command = "version"; break;
       case "--json": out.json = true; break;
       case "--no-cart": out.noCart = true; break;
+      case "--every-store": out.everyStore = true; break;
       case "--demo": out.demo = true; break;
       case "--back-in-stock": out.backInStock = true; break;
       case "--stores": case "--store": {
@@ -96,6 +105,11 @@ export function parseArgs(argv: string[]): CliArgs {
         break;
       }
       case "--host": out.host = next(); break;
+      case "--browser": {
+        try { out.browser = parseProviderId(next(), "--browser"); } catch (e) { throw new CliError((e as Error).message); }
+        break;
+      }
+      case "--headless": out.headless = true; break;
       case "--limit": out.limit = Math.max(1, Math.min(500, Number(next()) || 20)); break;
       default:
         if (a.startsWith("--")) throw new CliError(`Unknown option ${a}. Run osa --help.`);
@@ -139,15 +153,25 @@ Options
   --zip 82001                                 delivery ZIP
   --budget 60                                 total budget in dollars
   --no-cart                                   compare only, do not fill carts
+  --every-store                               a cart at every store with every item (compare real totals)
   --json                                      print JSON (compare only)
   --demo                                      use made-up demo data
+  --browser browsa|local|cdp                  where the browsers run (default: browsa with a key, else your Chrome)
+  --headless                                  run your local Chrome without a window
 
 Environment
   BROWSA_API_KEY     Browsa key (Phantom browsers)
-  OSA_LLM            model: browsa (default), anthropic, openai, google
-  OSA_LLM_API_KEY    key for your own model
+  OSA_BROWSER        browsa, local (your Chrome or Edge) or cdp
+  OSA_CHROME_PATH    browser binary for local (default: the installed Chrome)
+  OSA_HEADLESS=1     local browser without a window
+  OSA_CDP_URL        ws:// or http:// address of any DevTools browser (cdp); OSA_CDP_HEADERS as JSON
+  OSA_LLM            your own model: anthropic:<model>, openai:<model>, openrouter:<model>, google:<model>
+  OSA_LLM_API_KEY    key for your own model (parsing, and the AI fallback on every browser)
+  OSA_LLM_BASE_URL   any OpenAI-compatible API
   OSA_HOME           settings and history folder (default ./.osa)
   OSA_PROXY          your own proxy for every store: http://user:pass@host:port (free on Browsa)
+  OSA_PROXY_AMAZON   a proxy for one store (also WALMART, EBAY, BESTBUY, TARGET, SHOPIFY)
+  OSA_PROXIES        a pool rotated per store and run: host1:port,host2:port or @proxies.txt
   OSA_US_EXIT=0      no Browsa residential US exit for Amazon, Target and Best Buy
   OSA_MAX_CREDITS    Browsa credits cap per run (default 40)
 `;

@@ -3,6 +3,9 @@
 import type { Page } from "playwright-core";
 import type { Approval, CartLine, ItemRequest, Money, NeedsUser, Offer, StoreId } from "../core/types.js";
 import type { StoreContext } from "./adapter.js";
+import { BotCheckError, CaptchaHandoffError, captchaWords, solveWithBrowsa, type CaptchaOutcome } from "./captcha.js";
+
+export { BotCheckError, CaptchaHandoffError } from "./captcha.js";
 
 const SYMBOLS: Record<string, string> = { "$": "USD", "US$": "USD", "£": "GBP", "€": "EUR", "C$": "CAD", "CA$": "CAD" };
 
@@ -68,6 +71,8 @@ export function clean(text: string | null | undefined): string | undefined {
 export async function needsUser(ctx: StoreContext, reason: NeedsUser["reason"], message: string): Promise<NeedsUser> {
   let liveUrl: string | undefined;
   try { liveUrl = await ctx.liveLink(); } catch (e) { ctx.log(`live link failed: ${(e as Error).message}`); }
+  // Your own Chrome or a CDP browser has no Phantom Live link: liveLink() says where to take over.
+  if (liveUrl && !/^https?:\/\//i.test(liveUrl)) return { reason, message: `${message} ${liveUrl}`, liveUrl: undefined };
   return { reason, message, liveUrl };
 }
 
@@ -86,8 +91,13 @@ export async function firstVisible(ctx: StoreContext, selectors: string[], timeo
 export const nowIso = () => new Date().toISOString();
 
 /** Network errors of the exit itself (a proxy tunnel that failed, a reset): worth a retry. */
+/** True when the exit (proxy) could not open a tunnel to the site: a fresh browser gets a new address. */
+export function isExitError(e: unknown): boolean {
+  return /ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_SOCKS_CONNECTION_FAILED/i.test(String((e as Error)?.message ?? e));
+}
+
 export function isTransientNetError(e: unknown): boolean {
-  return /ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_SOCKS_CONNECTION_FAILED|ERR_NETWORK_CHANGED|ERR_CONNECTION_CLOSED|ERR_TIMED_OUT/i.test(String((e as Error)?.message ?? e));
+  return /ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_SOCKS_CONNECTION_FAILED|ERR_NETWORK_CHANGED|ERR_CONNECTION_CLOSED|ERR_TIMED_OUT|is interrupted by another navigation/i.test(String((e as Error)?.message ?? e));
 }
 
 /**
@@ -540,17 +550,19 @@ export function approvalMatches(total: Money | undefined, approval: Approval): b
   return !!total && total.currency === approval.approvedTotal.currency && total.cents === approval.approvedTotal.cents;
 }
 
-export class BotCheckError extends Error {}
-
 /**
- * When a store shows a bot check (captcha, press and hold), wait for Phantom to pass it
- * (Browsa solves many in-session), retry once, else throw a clear error.
+ * When a store shows a bot check (captcha, press and hold): on Browsa, ask Browsa to solve it in
+ * the session first. When Browsa does not handle this check, wait for Phantom to pass it, retry
+ * once, else throw a clear error. When Browsa tried and failed, hand the browser to the person
+ * (CaptchaHandoffError with a Phantom Live link).
  */
 export async function passBotCheck(
   ctx: StoreContext, store: string, isBlocked: () => Promise<boolean>,
   opts: { waitMs?: number; retry?: () => Promise<unknown> } = {},
 ): Promise<void> {
   if (!(await isBlocked())) return;
+  if (ctx.capabilities && !ctx.capabilities.captchaSolving) return handOffBotCheck(ctx, store, isBlocked);
+  if (await browsaSolves(ctx, store, isBlocked)) return;
   ctx.log(`${store}: bot check shown, waiting for Phantom to pass it`);
   for (let round = 0; round < 2; round++) {
     const deadline = Date.now() + (round === 0 ? opts.waitMs ?? 30_000 : 20_000);
@@ -565,6 +577,52 @@ export async function passBotCheck(
     }
   }
   throw new BotCheckError(`${store} shows a bot check that did not clear. Try again later, or open the browser with a live link and solve it.`);
+}
+
+/**
+ * The one entry for a check the adapter found on the page. On Browsa: ask Browsa to solve it in
+ * the session (src/stores/captcha.ts). Returns true when it was solved and the page no longer
+ * shows it; false when the caller should run its own steps (not on Browsa, or Browsa does not
+ * handle this check). Throws CaptchaHandoffError (with a Phantom Live link) when Browsa tried
+ * and failed.
+ */
+export async function browsaSolves(
+  ctx: StoreContext, store: string, isBlocked: () => Promise<boolean>, o: { check?: string; kind?: string; timeoutMs?: number } = {},
+): Promise<boolean> {
+  const r = await solveWithBrowsa(ctx, { store, isBlocked, check: o.check, timeoutMs: o.timeoutMs });
+  if (r.status === "solved") return true;
+  if (r.status === "failed") throw await captchaHandoff(ctx, store, { ...r, kind: r.kind ?? o.kind });
+  return false;
+}
+
+/** The hand-off after Browsa tried and failed: a Phantom Live link for the person, as an error to throw. */
+export async function captchaHandoff(ctx: StoreContext, store: string, outcome: Extract<CaptchaOutcome, { status: "failed" }>): Promise<CaptchaHandoffError> {
+  const message = `${store} shows ${captchaWords(outcome.kind)} that Browsa could not solve. Solve it in the live browser, then retry.`;
+  const needs = await needsUser(ctx, "captcha_handoff", message);
+  ctx.log(`${store}: handing the check to you${needs.liveUrl ? " in Phantom Live" : ""}`);
+  return new CaptchaHandoffError(message, needs);
+}
+
+/**
+ * A bot check on a browser that does not solve them (your own Chrome, a CDP browser): in a window
+ * the person can see, wait for them to solve it (OSA_HANDOFF_WAIT_MS, default 2 minutes); else
+ * wait briefly. Throws BotCheckError when it stays; the engine turns that into needs_user
+ * (captcha_handoff).
+ */
+async function handOffBotCheck(ctx: StoreContext, store: string, isBlocked: () => Promise<boolean>): Promise<void> {
+  const window = ctx.capabilities?.liveLink === "window";
+  const waitMs = window ? Number(process.env.OSA_HANDOFF_WAIT_MS) || 120_000 : 15_000;
+  ctx.log(window
+    ? `${store} shows a bot check. Solve it in the browser window; waiting up to ${Math.round(waitMs / 1000)} s`
+    : `${store} shows a bot check; this browser does not solve them`);
+  if (window) await ctx.page.bringToFront().catch(() => {});
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    if (ctx.signal.aborted) throw new Error("aborted");
+    await ctx.page.waitForTimeout(1500);
+    if (!(await isBlocked().catch(() => true))) { ctx.log(`${store}: bot check passed`); return; }
+  }
+  throw new BotCheckError(`${store} shows a bot check that did not clear on this browser.`);
 }
 
 export function sumLines(lines: CartLine[], currency = "USD"): Money {
@@ -684,12 +742,16 @@ export async function aiSearchFallback(
  * it with real mouse events until the check clears (up to about 20 s). Returns true when a check
  * was found. `name` goes into the log lines.
  */
-export async function pressAndHold(ctx: StoreContext, o: { name: string; selector?: string }): Promise<boolean> {
+export async function pressAndHold(ctx: StoreContext, o: { name: string; selector?: string; waitMs?: number }): Promise<boolean> {
   const page = ctx.page;
   const sel = o.selector ?? "#px-captcha";
   // count() does not wait; boundingBox() would wait up to 30 s for an element that is usually absent.
   const holder = page.locator(sel).first();
-  if (!(await page.locator(sel).count().catch(() => 0))) return false;
+  // The challenge can take a few seconds to draw on a slow exit: look for it for up to `waitMs`.
+  for (let until = Date.now() + (o.waitMs ?? 0); !(await page.locator(sel).count().catch(() => 0)); ) {
+    if (Date.now() >= until) return false;
+    await page.waitForTimeout(1000);
+  }
   // Hold only once the challenge has drawn its button (an iframe inside #px-captcha); holding
   // earlier does not count (measured live: an early hold failed, a hold after the frame passed).
   await page.locator(`${sel} iframe`).first().waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
@@ -715,6 +777,27 @@ export async function pressAndHold(ctx: StoreContext, o: { name: string; selecto
   await page.waitForLoadState("domcontentloaded", { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(2000);
   return true;
+}
+
+/**
+ * PerimeterX's "Press & hold" check (Target, Walmart). On Browsa, Browsa solves it in the session
+ * (kind press_hold); when Browsa does not handle it, OSA holds it itself (pressAndHold). When
+ * Browsa tried and failed, throws CaptchaHandoffError with a Phantom Live link. Returns true when
+ * a check was found.
+ */
+export async function passPressAndHold(ctx: StoreContext, o: { name: string; selector?: string; waitMs?: number; timeoutMs?: number }): Promise<boolean> {
+  const sel = o.selector ?? "#px-captcha";
+  const shown = async () => (await ctx.page.locator(sel).count().catch(() => 0)) > 0;
+  for (let until = Date.now() + (o.waitMs ?? 0); !(await shown()); ) {
+    if (Date.now() >= until) return false;
+    await ctx.page.waitForTimeout(1000);
+  }
+  // Ask once the challenge has drawn its button (an iframe inside #px-captcha), as pressAndHold does.
+  await ctx.page.locator(`${sel} iframe`).first().waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+  // After a pass PerimeterX reloads the page; a leftover empty #px-captcha does not count.
+  const blocked = async () => ctx.page.locator(sel).first().isVisible().catch(() => false);
+  if (await browsaSolves(ctx, o.name, blocked, { check: "a press-and-hold check", kind: "press_hold", timeoutMs: o.timeoutMs })) return true;
+  return pressAndHold(ctx, { name: o.name, selector: sel });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -843,4 +926,48 @@ export function moneyFromNumeric(v: unknown, currency = "USD"): Money | undefine
 export function sameOption(a: string, b: string): boolean {
   const n = (s: string) => s.toLowerCase().replace(/\bfeet\b|\bfoot\b/g, "ft").replace(/\binch(es)?\b/g, "in").replace(/[^a-z0-9.]/g, "");
   return n(a) === n(b);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Delivery ZIP (--zip) on stores that keep it per visitor (Best Buy, Walmart)
+// ---------------------------------------------------------------------------------------------
+
+/** A US ZIP from text: the first 5 digits ("10001-1234" -> "10001"). */
+export function zip5(text: string | undefined | null): string | undefined {
+  return /\b(\d{5})(?:-\d{4})?\b/.exec(String(text ?? ""))?.[1];
+}
+
+/** The run note when a store keeps another ZIP than the one asked for. */
+export function zipNotTaken(store: string, want: string, shown: string | undefined): string {
+  return shown
+    ? `${store} did not take ZIP ${want} without an account; its prices, shipping and delivery are for ZIP ${shown}`
+    : `${store} showed no way to set ZIP ${want} without an account; its prices, shipping and delivery may be for another place`;
+}
+
+/**
+ * Type a ZIP into a store's own location box: click `opener` (when given) to show it, fill the first
+ * visible input that asks for a ZIP, then press the box's own button (or Enter). Never signs in and
+ * types nothing but the ZIP. True when a box was found and submitted (the caller checks the result).
+ */
+export async function typeZip(page: Page, zip: string, o: { opener?: string[]; input?: string[]; submit?: string[] } = {}): Promise<boolean> {
+  if (o.opener?.length) {
+    if (!(await clickFirstVisible(page, o.opener))) return false;
+    await page.waitForTimeout(1500);
+  }
+  const inputs = [...(o.input ?? []), "input[placeholder*=\"ZIP\" i]", "input[aria-label*=\"ZIP\" i]", "input[name*=\"zip\" i]", "input[id*=\"zip\" i]", "input[autocomplete=\"postal-code\"]"];
+  for (const s of inputs) {
+    const loc = page.locator(s);
+    const n = await loc.count().catch(() => 0);
+    for (let i = 0; i < Math.min(n, 6); i++) {
+      const box = loc.nth(i);
+      if (!(await box.isVisible().catch(() => false))) continue;
+      const kind = `${(await box.getAttribute("type").catch(() => "")) ?? ""} ${(await box.getAttribute("autocomplete").catch(() => "")) ?? ""}`;
+      if (/password|email|tel|cc-/.test(kind)) continue;
+      await box.fill(zip, { timeout: 5000 }).catch(() => undefined);
+      if (!(await clickFirstVisible(page, o.submit ?? []))) await box.press("Enter").catch(() => undefined);
+      await page.waitForTimeout(3000);
+      return true;
+    }
+  }
+  return false;
 }
