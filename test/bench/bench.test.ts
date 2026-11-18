@@ -12,6 +12,7 @@ import {
 } from "../../bench/lib.js";
 import { defaultLoader } from "../../bench/adapters.js";
 import { runBench, guard } from "../../bench/run.js";
+import { CreditMeter } from "../../src/core/credits.js";
 import type { ContextFactory } from "../../bench/browser.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -81,13 +82,16 @@ test("judgeDetails, lineMatches, judgeCart and judgeCheckout", () => {
   assert.deepEqual(judgeCheckout(review({ needsUser: { reason: "sign_in", message: "Sign in or continue as guest" } })), { pass: true, note: "sign-in or guest page" });
   assert.equal(judgeCheckout(review({ total: { cents: 1299, currency: "USD" } })).pass, true);
   assert.equal(judgeCheckout(review({ needsUser: { reason: "captcha_handoff", message: "" } })).pass, false);
+  assert.deepEqual(judgeCheckout(review({ needsUser: { reason: "address", message: "guest checkout needs your address" } })), { pass: true, note: "guest checkout (asks for an address)" });
+  assert.equal(judgeCheckout(review({ needsUser: { reason: "other", message: "out of stock" } })).pass, false);
   assert.equal(judgeCheckout(review({})).pass, false);
 });
 
-test("renderTable says pending first run before any results, and never invents numbers", () => {
+test("renderTable says not measured yet before any results, and never invents marks", () => {
   const t = renderTable();
-  assert.equal(t.split("\n").filter((l) => l.includes("pending first run")).length, 6);
-  assert.ok(!/\d+%/.test(t));
+  assert.equal(t.split("\n").filter((l) => l.includes("not measured yet")).length, 6);
+  assert.ok(!/✓|✗|\d+%/.test(t));
+  assert.ok(!/daily/i.test(t), "claims no schedule");
   const readme = `# x\n${BENCH_START}\nold\n${BENCH_END}\nrest\n`;
   const next = replaceBetweenMarkers(readme, t);
   assert.ok(next.startsWith(`# x\n${BENCH_START}\n| Store |`));
@@ -161,9 +165,11 @@ test("runBench runs stages, skips missing adapters, closes browsers and never pl
   assert.deepEqual(summarize(w).search, { pass: 1, total: 2 });
 
   const table = renderTable(results);
-  assert.match(table, /\| Walmart \| 50% \(1\/2\) \| 100% \(1\/1\) \| 100% \(1\/1\) \| 100% \(1\/1\) \|/);
+  assert.match(table, /\| Walmart \| partial, 1 of 2 \| ✓ \| ✓ \|/);
   assert.match(table, /\| Amazon \| not installed \|/);
-  assert.match(table, /\| Target \| pending first run \|/);
+  assert.match(table, /\| Target \| not measured yet \|/);
+  assert.match(table, /Measured \d+ \w+ \d{4} on Phantom \(Browsa\) by \[the bench\]\(bench\/\), stopped before buying/);
+  assert.ok(!/daily/i.test(table));
 });
 
 test("guard blocks placeOrder", async () => {
@@ -186,19 +192,57 @@ test("runBench dry run loads adapters but opens no browser; failures in a stage 
 });
 
 test("runBench stops at the credit cap", async () => {
-  let balance = 100;
+  let used = 0;
   const adapter = fakeAdapter("walmart", []);
   const search = adapter.search;
-  adapter.search = async (...args) => { balance -= 6; return search(...args); };
+  adapter.search = async (...args) => { used += 6; return search(...args); };
   const r = await runBench({
-    tasks: smallTasks, maxCredits: 5, credits: async () => balance,
+    tasks: smallTasks, maxCredits: 5, credits: async () => ({ credits: used, exact: true }),
     loader: async (s) => (s === "walmart" ? adapter : fakeAdapter(s, [])), factory: fakeFactory([], []),
   });
   assert.equal(r.stores[0].tasks.length, 1, "second task not run after the cap");
   assert.equal(r.creditsUsed, 6);
+  assert.equal(r.creditsEstimated, undefined);
   assert.equal(r.stores[0].credits, 6);
   assert.match(r.stopped!, /credit cap/);
   assert.equal(r.stores[1].status, "skipped");
+});
+
+test("runBench counts only its own browsers: the CreditMeter's ledger rows, not the account balance", async () => {
+  // The account loses 40 credits to other runs during the bench; this run's one browser costs 2.
+  const ledger = [
+    { agent_id: "agt_mine", reason: "debit:agent:agt_mine", delta: -5, created_at: new Date().toISOString() },
+    { agent_id: "agt_mine", reason: "refund:agent:agt_mine", delta: 4, created_at: new Date().toISOString() },
+    { agent_id: "agt_mine", reason: "debit:proxy:agt_mine", delta: -1, created_at: new Date().toISOString() },
+    { agent_id: "agt_someone_else", reason: "debit:agent:agt_someone_else", delta: -40, created_at: new Date().toISOString() },
+  ];
+  const meter = new CreditMeter({ ledger: async () => ({ entries: ledger }) }, 60);
+  await meter.begin();
+  const adapter = fakeAdapter("walmart", []);
+  const search = adapter.search;
+  adapter.search = async (...args) => {
+    await meter.spend(1, "walmart browser");
+    meter.track({ type: "browser", id: "agt_mine", mode: "burner", reserved: 1, created: true });
+    meter.track({ type: "browser_closed", id: "agt_mine" });
+    return search(...args);
+  };
+  let settled = false;
+  const r = await runBench({
+    tasks: smallTasks, stores: ["walmart"], maxCredits: 60, credits: () => meter.measure(), settle: async () => { settled = true; },
+    loader: async () => adapter, factory: fakeFactory([], []),
+  });
+  assert.equal(settled, true);
+  assert.equal(r.creditsUsed, 2);
+  assert.equal(r.stores[0].credits, 2);
+});
+
+test("runBench marks an estimated figure", async () => {
+  const r = await runBench({
+    tasks: smallTasks, stores: ["walmart"], credits: async () => ({ credits: 3, exact: false }),
+    loader: async () => fakeAdapter("walmart", []), factory: fakeFactory([], []),
+  });
+  assert.equal(r.creditsUsed, 3);
+  assert.equal(r.creditsEstimated, true);
 });
 
 test("mergeResults keeps earlier stores for a partial run", () => {

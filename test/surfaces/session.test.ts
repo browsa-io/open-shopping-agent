@@ -6,6 +6,19 @@ import { RunHub } from "../../src/web/session.js";
 
 const hubOf = (o: ConstructorParameters<typeof MockEngine>[0] = {}) => new RunHub(new MockEngine({ speed: 0, ...o }));
 
+test("cancelAll stops every running run and waits until each has ended (server shutdown)", async () => {
+  const hub = new RunHub(new MockEngine({ speed: 1 }));
+  const a = hub.start("usb-c hub and hdmi cable");
+  const b = hub.start("aa batteries");
+  assert.equal(a.status, "running");
+  const n = await hub.cancelAll(10_000);
+  assert.equal(n, 2);
+  assert.equal(a.status, "cancelled");
+  assert.equal(b.status, "cancelled");
+  assert.ok(a.summary && b.summary, "both runs ended (browsers closed) before cancelAll returned");
+  assert.equal(await hub.cancelAll(), 0, "nothing left to stop");
+});
+
 test("demo parser splits items, quantity and budget", () => {
   const r = parseDemoPrompt("usb-c hub and 6 ft hdmi under $60", ["amazon"]);
   assert.equal(r.items.length, 2);

@@ -41,6 +41,8 @@ export interface RunListItem {
   finishedAt?: string;
   status: RunStatus;
   stores: StoreId[];
+  /** The Shopify shops the run searched (for their icons). */
+  shopifyDomains?: string[];
   picksTotal?: Money;
   orders: number;          // orders placed
 }

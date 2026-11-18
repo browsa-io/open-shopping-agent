@@ -17,6 +17,7 @@ import type { EnginePort } from "./engine-port.js";
 import { STORE_IDS, dollarsToMoney } from "./format.js";
 import { parseChoices } from "./plan.js";
 import { HubError, RunHub, type HubMessage } from "./session.js";
+import { IconCache, IconError, iconHeaders } from "./icons.js";
 
 export const VERSION = "0.1.0";
 
@@ -36,6 +37,8 @@ export interface AppOptions {
   token?: string;
   /** Called after settings change: the engine for new runs (real once a key is saved). */
   reloadEngine?: () => Promise<EnginePort>;
+  /** Store icons, fetched once from each store's own site. Default: icons/ next to the config file. */
+  icons?: IconCache;
 }
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -100,6 +103,7 @@ function tokenOk(req: IncomingMessage, token: string): boolean {
 export function createApp(opts: AppOptions): Server {
   const { hub, alerts, config } = opts;
   const root = opts.webRoot ?? WEB_ROOT;
+  const icons = opts.icons ?? new IconCache(join(dirname(config.file), "icons"));
 
   async function serveStatic(res: ServerResponse, pathname: string) {
     const rel = pathname === "/" ? "index.html" : decodeURIComponent(pathname).replace(/^\/+/, "");
@@ -161,6 +165,19 @@ export function createApp(opts: AppOptions): Server {
     if (p === "/api/meta" && m === "GET") {
       const c = await config.effective();
       return send(res, 200, { version: VERSION, demo: hub.engine.demo, alertsDemo: alerts.demo, canCheckWatches: !!alerts.check && !!checkFor(c), hasBrowsaApiKey: !!c.browsaApiKey, stores: STORE_IDS, ...browserMeta(c) });
+    }
+    if (p === "/api/icon" && (m === "GET" || m === "HEAD")) {
+      let icon;
+      try {
+        icon = await icons.forStore(url.searchParams.get("store") ?? "", url.searchParams.get("domain") || undefined);
+      } catch (e) {
+        if (e instanceof IconError) throw new HubError(e.status, e.message);
+        throw e;
+      }
+      // No icon (offline, a bot wall): the page shows the store's initial instead.
+      if (!icon) return send(res, 404, { error: "No icon" }, { "Cache-Control": "private, max-age=600" });
+      res.writeHead(200, { ...SECURITY_HEADERS, ...iconHeaders(icon) });
+      return res.end(m === "HEAD" ? undefined : icon.body);
     }
     if (p === "/api/settings" && m === "GET") return send(res, 200, await config.publicView());
     if (p === "/api/settings/test-key" && m === "POST") return send(res, 200, await testModelKey(await readJson(req), await config.effective()));
@@ -263,6 +280,11 @@ export function createApp(opts: AppOptions): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     try {
+      // Without a token the server trusts this machine only. A page on another site that points its own
+      // name at 127.0.0.1 (DNS rebinding) sends its own Host, so anything but a loopback name is refused.
+      if (!opts.token && !loopbackHostHeader(req.headers.host)) {
+        return send(res, 403, url.pathname.startsWith("/api/") ? { error: "Open the agent at http://localhost" } : "Open the agent at http://localhost.");
+      }
       if (opts.token) {
         const q = url.searchParams.get("token");
         if (q && q === opts.token) {
@@ -303,8 +325,14 @@ export interface StartWebOptions {
 }
 
 const isLoopback = (h: string) => h === "127.0.0.1" || h === "localhost" || h === "::1";
+/** True when a Host header names this machine: localhost, 127.0.0.1 or [::1], with any port. */
+export function loopbackHostHeader(host: string | undefined): boolean {
+  if (!host) return false;
+  const name = host.startsWith("[") ? host.slice(1, host.indexOf("]")) : host.replace(/:\d+$/, "");
+  return isLoopback(name.toLowerCase());
+}
 
-export async function startWebServer(o: StartWebOptions = {}): Promise<{ server: Server; url: string }> {
+export async function startWebServer(o: StartWebOptions = {}): Promise<{ server: Server; url: string; hub: RunHub }> {
   const config = new ConfigStore();
   const choice = { demo: o.demo, demoLiveBase: "/demo-live.html" };
   const engine = await createEngine(await config.effective(), choice);
@@ -320,9 +348,26 @@ export async function startWebServer(o: StartWebOptions = {}): Promise<{ server:
   await new Promise<void>((r) => server.listen(port, host, r));
   const shown = isLoopback(host) || host === "0.0.0.0" || host === "::" ? `http://localhost:${port}` : `http://${host}:${port}`;
   const url = token ? `${shown}/?token=${token}` : shown;
-  return { server, url };
+  return { server, url, hub };
+}
+
+/**
+ * Ctrl-C or SIGTERM: cancel the runs still going so their browsers are destroyed, then exit.
+ * Without this the Phantom browsers of a running search stay open until their time limit.
+ */
+export function stopRunsOnExit(hub: RunHub, write: (s: string) => void = (s) => process.stderr.write(s)): void {
+  let stopping = false;
+  const stop = (code: number) => {
+    if (stopping) process.exit(code); // a second Ctrl-C quits at once
+    stopping = true;
+    hub.cancelAll().then((n) => {
+      if (n) write(`Stopped ${n} running search${n === 1 ? "" : "es"} and closed its browsers.\n`);
+    }, () => {}).finally(() => process.exit(code));
+  };
+  process.once("SIGINT", () => { write("\nStopping...\n"); stop(130); });
+  process.once("SIGTERM", () => stop(143));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  startWebServer().then(({ url }) => console.log(`Open Shopping Agent web app: ${url}`));
+  startWebServer().then(({ url, hub }) => { stopRunsOnExit(hub); console.log(`Open Shopping Agent web app: ${url}`); });
 }

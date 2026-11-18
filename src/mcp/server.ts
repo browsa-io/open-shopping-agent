@@ -13,6 +13,11 @@ import { RunHub, type LiveRun } from "../web/session.js";
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 const SERVER_INFO = { name: "open-shopping-agent", version: "0.1.0" };
 
+/** OSA_MCP_ALLOW_ORDERS=1 (or true/on/yes) lets place_order spend money; off by default. */
+export function mcpOrdersAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  return /^(1|true|on|yes)$/i.test((env.OSA_MCP_ALLOW_ORDERS ?? "").trim());
+}
+
 const storeEnum = { type: "string", enum: STORE_IDS };
 
 export const TOOLS = [
@@ -65,7 +70,7 @@ export const TOOLS = [
   {
     name: "place_order",
     description:
-      "Place a real order at one store. Spends the user's money. ALWAYS ask the human first: show them the store, items and the exact total from review_checkout " +
+      "Place a real order at one store. Off unless the server was started with OSA_MCP_ALLOW_ORDERS=1. Spends the user's money. ALWAYS ask the human first: show them the store, items and the exact total from review_checkout " +
       "and wait for an explicit yes. Pass approved_total equal to that review total; the order is refused if it differs, and the agent re-checks the total on the store before clicking.",
     inputSchema: {
       type: "object",
@@ -214,6 +219,13 @@ export function createMcpHandler(hub: RunHub, alerts: AlertsPort, config: Config
         });
       }
       case "place_order": {
+        // Spending money from an AI client is off unless the person who set up the server turned it on:
+        // the tool's "ask the human first" is only an instruction to the model, and a page the agent read
+        // could talk it into calling this.
+        if (!mcpOrdersAllowed()) {
+          throw new ToolError("Placing orders from MCP is off. Finish the order in the web app (open-shopping-agent web) or the CLI, " +
+            "or set OSA_MCP_ALLOW_ORDERS=1 in this MCP server's env to let your AI client place orders you approve in the chat.");
+        }
         const run = getRun(a.run_id);
         const store = storesArg([a.store])![0];
         const approved = typeof a.approved_total === "number" || typeof a.approved_total === "string" ? dollarsToMoney(a.approved_total) : undefined;

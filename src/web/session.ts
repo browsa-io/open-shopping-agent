@@ -208,6 +208,21 @@ export class RunHub {
     await run.engine.cancel(runId, store);
   }
 
+  /**
+   * Stop every run that has not ended and wait until each has closed its browsers (at most
+   * `timeoutMs`). For shutting the server down: Phantom browsers left open keep their credits held.
+   */
+  async cancelAll(timeoutMs = 20_000): Promise<number> {
+    const open = [...this.runs.values()].filter((r) => !r.summary);
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([
+      Promise.allSettled(open.map(async (r) => { await this.cancel(r.runId).catch(() => {}); await r.done; })),
+      new Promise<void>((res) => { timer = setTimeout(res, timeoutMs); }),
+    ]);
+    if (timer) clearTimeout(timer);
+    return open.length;
+  }
+
   /** Live runs merged with the engine's history, newest first. */
   async list(limit = 50): Promise<RunListItem[]> {
     const fromEngine = await this.engine.listRuns(limit).catch(() => [] as RunListItem[]);

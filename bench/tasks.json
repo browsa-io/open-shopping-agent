@@ -65,7 +65,7 @@
     ] },
     { "store": "shopify", "domain": "*", "tasks": [
       {"id": "shopify-01", "query": "wool runners", "domain": "allbirds.com", "stages": ["search", "details", "cart", "checkout"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["runner"], "minRelevant": 2}},
-      {"id": "shopify-02", "query": "leggings", "domain": "gymshark.com", "stages": ["search", "details", "cart"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["legging"], "minRelevant": 2}},
+      {"id": "shopify-02", "query": "usb-c hub", "domain": "satechi.com", "stages": ["search", "details", "cart"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["hub"], "minRelevant": 2}},
       {"id": "shopify-03", "query": "sheet set", "domain": "brooklinen.com", "stages": ["search", "details"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["sheet"], "minRelevant": 2}},
       {"id": "shopify-04", "query": "ankle socks", "domain": "bombas.com", "stages": ["search", "details"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["sock"], "minRelevant": 2}},
       {"id": "shopify-05", "query": "hoodie", "domain": "kith.com", "stages": ["search", "details"], "expect": {"minOffers": 3, "minPriced": 3, "minRated": 0, "titleAny": ["hoodie"], "minRelevant": 2}},

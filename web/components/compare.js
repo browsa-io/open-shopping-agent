@@ -6,6 +6,7 @@ import { NOT_SHOWN, formatCents, money, storeName } from "../lib/wording.js";
 import {
   SORTS, conditionOf, deliveryShort, filterOffers, isSponsored, offerKey, pickWhy, shippingKnown, shippingShort, sortOffers, totalCents,
 } from "../lib/model.js";
+import { storeIcon, storeLabel } from "../lib/store-icon.js";
 
 const PAGE = { wide: 8, narrow: 4 };
 
@@ -87,6 +88,8 @@ function qtyStepper(item, qty, ctx) {
     h("button", { type: "button", class: "qbtn", "aria-label": "One more", disabled: dis || qty >= 99, "data-key": `qp-${item.id}`, onclick: () => set(qty + 1) }, icon("plus")));
 }
 
+const domainOf = (offers, s) => offers.find((o) => o.store === s)?.storeDomain;
+
 function storeChips(item, offers, planItem, ctx) {
   const stores = [...new Set(offers.map((o) => o.store))];
   if (stores.length < 2 && !planItem.excluded.length) return null;
@@ -97,7 +100,7 @@ function storeChips(item, offers, planItem, ctx) {
       type: "button", class: "chip toggle sm", "aria-pressed": ex.has(s) ? "false" : "true", disabled: ctx.locked, "data-key": `ex-${item.id}-${s}`,
       title: ex.has(s) ? `Include ${storeName(s)} for this item` : `Exclude ${storeName(s)} for this item`,
       onclick: () => ctx.actions.toggleItemStore(item.id, s),
-    }, ex.has(s) ? null : icon("check"), storeName(s))));
+    }, ex.has(s) ? null : icon("check"), storeIcon(s, domainOf(offers, s), "sm"), storeName(s, domainOf(offers, s)))));
 }
 
 const SOURCE = { engine: ["green", "Best pick"], you: ["blue", "Your choice"], next: ["amber", "Next best"] };
@@ -130,7 +133,7 @@ function pickPanel(item, planItem, ctx, offers) {
   return h("div", { class: "pick" },
     thumb(o, "lg"),
     h("div", { class: "pick-main" },
-      h("div", { class: "pick-top" }, h("span", { class: `badge ${tone}` }, label), h("span", { class: "pick-store" }, storeName(o.store, o.storeDomain))),
+      h("div", { class: "pick-top" }, h("span", { class: `badge ${tone}` }, label), storeLabel(o.store, o.storeDomain, "sm", "pick-store")),
       h("a", { class: "pick-title clamp2", href: o.url, target: "_blank", rel: "noopener noreferrer", title: cleanTitle(o.title) }, cleanTitle(o.title)),
       priceBlock("inline"),
       h("p", { class: "why", title: pick?.reason || "" }, why),
@@ -167,7 +170,7 @@ function offerRow(item, o, planItem, ctx) {
           h("a", { href: o.url, target: "_blank", rel: "noopener noreferrer", class: "clamp2", title: cleanTitle(o.title) }, cleanTitle(o.title)),
           h("div", { class: "seller" }, o.seller ? o.seller : ""),
           tags(o, chosen)))),
-    h("td", { class: "c-store" }, storeName(o.store, o.storeDomain)),
+    h("td", { class: "c-store" }, storeLabel(o.store, o.storeDomain, "sm")),
     h("td", { class: "c-price num" }, priceCell(o)),
     h("td", { class: "c-ship num" }, shippingKnown(o) ? shippingShort(o) : h("span", { class: "none" }, NOT_SHOWN)),
     h("td", { class: "c-total num" }, totalCell(o, 1)),

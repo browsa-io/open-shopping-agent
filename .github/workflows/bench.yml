@@ -1,6 +1,6 @@
 name: bench
 
-# Daily success rates per store. Runs the fixed tasks in bench/tasks.json on Phantom browsers,
+# Success rates per store, on a daily schedule once the BROWSA_API_KEY secret is set. Runs the fixed tasks in bench/tasks.json on Phantom browsers,
 # writes bench/results/<date>.json and updates the table in README.md. Never places an order.
 
 on:

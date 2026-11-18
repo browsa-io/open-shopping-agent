@@ -1,0 +1,414 @@
+{
+  "date": "2026-11-18",
+  "startedAt": "2026-11-18T17:09:58.774Z",
+  "finishedAt": "2026-11-18T17:15:19.787Z",
+  "stores": [
+    {
+      "store": "amazon",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "amazon-01",
+          "query": "AA batteries 24 pack",
+          "stages": {
+            "search": {
+              "ms": 19078,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 11615,
+              "pass": true
+            },
+            "cart": {
+              "ms": 48897,
+              "pass": true
+            },
+            "checkout": {
+              "ms": 34415,
+              "pass": false,
+              "note": "stopped: other"
+            }
+          }
+        },
+        {
+          "id": "amazon-02",
+          "query": "USB-C hub 7 in 1",
+          "stages": {
+            "search": {
+              "ms": 9383,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 14862,
+              "pass": true
+            },
+            "cart": {
+              "ms": 58192,
+              "pass": true
+            }
+          }
+        },
+        {
+          "id": "amazon-03",
+          "query": "stainless steel water bottle 32 oz",
+          "stages": {
+            "search": {
+              "ms": 12763,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 14812,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 268307,
+      "date": "2026-11-18",
+      "credits": 2
+    },
+    {
+      "store": "walmart",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "walmart-01",
+          "query": "AA batteries",
+          "stages": {
+            "search": {
+              "ms": 16332,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 6959,
+              "pass": true
+            },
+            "cart": {
+              "ms": 29146,
+              "pass": true,
+              "note": "warnings: Walmart did not take ZIP 10001 without an account; its prices, shipping and delivery are for ZIP 95829"
+            },
+            "checkout": {
+              "ms": 12778,
+              "pass": true,
+              "note": "sign-in or guest page"
+            }
+          }
+        },
+        {
+          "id": "walmart-02",
+          "query": "dish soap",
+          "stages": {
+            "search": {
+              "ms": 7573,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 7338,
+              "pass": true
+            },
+            "cart": {
+              "ms": 28365,
+              "pass": true,
+              "note": "warnings: Walmart did not take ZIP 10001 without an account; its prices, shipping and delivery are for ZIP 95829"
+            }
+          }
+        },
+        {
+          "id": "walmart-03",
+          "query": "air fryer",
+          "stages": {
+            "search": {
+              "ms": 6656,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 6547,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 153257,
+      "date": "2026-11-18",
+      "credits": 1
+    },
+    {
+      "store": "ebay",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "ebay-01",
+          "query": "USB flash drive 64GB",
+          "stages": {
+            "search": {
+              "ms": 32252,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 12512,
+              "pass": true
+            },
+            "cart": {
+              "ms": 23772,
+              "pass": true
+            },
+            "checkout": {
+              "ms": 28287,
+              "pass": true,
+              "note": "guest checkout (asks for an address)"
+            }
+          }
+        },
+        {
+          "id": "ebay-02",
+          "query": "iPhone 13 case",
+          "stages": {
+            "search": {
+              "ms": 29639,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 13828,
+              "pass": true
+            },
+            "cart": {
+              "ms": 39104,
+              "pass": true
+            }
+          }
+        },
+        {
+          "id": "ebay-03",
+          "query": "mechanical keyboard",
+          "stages": {
+            "search": {
+              "ms": 32819,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 12579,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 252781,
+      "date": "2026-11-18",
+      "credits": 1
+    },
+    {
+      "store": "bestbuy",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "bestbuy-01",
+          "query": "HDMI cable",
+          "stages": {
+            "search": {
+              "ms": 48351,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 15531,
+              "pass": true
+            },
+            "cart": {
+              "ms": 42049,
+              "pass": true
+            },
+            "checkout": {
+              "ms": 21783,
+              "pass": true,
+              "note": "sign-in or guest page"
+            }
+          }
+        },
+        {
+          "id": "bestbuy-02",
+          "query": "wireless mouse",
+          "stages": {
+            "search": {
+              "ms": 13128,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 13591,
+              "pass": true
+            },
+            "cart": {
+              "ms": 35515,
+              "pass": true
+            }
+          }
+        },
+        {
+          "id": "bestbuy-03",
+          "query": "USB-C charger",
+          "stages": {
+            "search": {
+              "ms": 13405,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 9489,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 258685,
+      "date": "2026-11-18",
+      "credits": 5
+    },
+    {
+      "store": "target",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "target-01",
+          "query": "toothpaste",
+          "stages": {
+            "search": {
+              "ms": 59566,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 2266,
+              "pass": true
+            },
+            "cart": {
+              "ms": 41709,
+              "pass": true
+            },
+            "checkout": {
+              "ms": 32799,
+              "pass": true,
+              "note": "sign-in or guest page"
+            }
+          }
+        },
+        {
+          "id": "target-02",
+          "query": "paper towels",
+          "stages": {
+            "search": {
+              "ms": 3471,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 2576,
+              "pass": true
+            },
+            "cart": {
+              "ms": 38888,
+              "pass": true
+            }
+          }
+        },
+        {
+          "id": "target-03",
+          "query": "storage bins",
+          "stages": {
+            "search": {
+              "ms": 3484,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 2143,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 203983,
+      "date": "2026-11-18",
+      "credits": 3
+    },
+    {
+      "store": "shopify",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "shopify-01",
+          "query": "wool runners",
+          "stages": {
+            "search": {
+              "ms": 4349,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 1339,
+              "pass": true
+            },
+            "cart": {
+              "ms": 2460,
+              "pass": true
+            },
+            "checkout": {
+              "ms": 7521,
+              "pass": true,
+              "note": "guest checkout (asks for an address)"
+            }
+          }
+        },
+        {
+          "id": "shopify-02",
+          "query": "usb-c hub",
+          "stages": {
+            "search": {
+              "ms": 8257,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 1140,
+              "pass": true
+            },
+            "cart": {
+              "ms": 2224,
+              "pass": true
+            }
+          }
+        },
+        {
+          "id": "shopify-03",
+          "query": "sheet set",
+          "stages": {
+            "search": {
+              "ms": 27681,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 3143,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 66801,
+      "date": "2026-11-18",
+      "credits": 1
+    }
+  ],
+  "maxCredits": 15,
+  "creditsUsed": 2,
+  "commit": "de6c249"
+}

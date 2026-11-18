@@ -3,6 +3,12 @@
 import { ago, api, h, icon } from "../lib/dom.js";
 import { money, storeName } from "../lib/wording.js";
 import { searchRuns } from "../lib/model.js";
+import { storeIcon } from "../lib/store-icon.js";
+
+/** [store, domain] pairs: each Shopify shop the run searched gets its own icon. */
+function storeList(r) {
+  return r.stores.flatMap((s) => (s === "shopify" && r.shopifyDomains?.length ? r.shopifyDomains.map((d) => [s, d]) : [[s, undefined]]));
+}
 
 const STATUS = { running: ["green", "Running"], cancelled: ["red", "Cancelled"], failed: ["red", "Did not finish"] };
 
@@ -21,7 +27,10 @@ export async function historyView(main) {
         h("a", { class: "rowlink", href: `#/run/${encodeURIComponent(r.runId)}` },
           h("div", { class: "grow" },
             h("div", { class: "title" }, r.prompt),
-            h("div", { class: "sub" }, [ago(r.startedAt), r.stores?.length ? r.stores.map((s) => storeName(s)).join(", ") : null].filter(Boolean).join(". "))),
+            h("div", { class: "sub" }, ago(r.startedAt),
+              r.stores?.length ? h("span", { class: "sicons", title: storeList(r).map(([s, d]) => storeName(s, d)).join(", ") },
+                h("span", { class: "sr" }, `. ${storeList(r).map(([s, d]) => storeName(s, d)).join(", ")}`),
+                storeList(r).map(([s, d]) => storeIcon(s, d, "sm"))) : null)),
           r.orders ? h("span", { class: "badge green" }, `${r.orders} order${r.orders > 1 ? "s" : ""}`) : null,
           label ? h("span", { class: `badge ${tone}` }, r.status === "running" ? h("span", { class: "dot pulse" }) : null, label) : null,
           h("span", { class: "amt" }, r.picksTotal ? money(r.picksTotal) : h("span", { class: "faint" }, "No picks"))));

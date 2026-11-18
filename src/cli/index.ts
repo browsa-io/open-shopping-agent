@@ -49,8 +49,9 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 async function web(args: CliArgs): Promise<number> {
-  const { startWebServer } = await import("../web/server.js");
-  const { url } = await startWebServer({ port: args.port, host: args.host, demo: args.demo });
+  const { startWebServer, stopRunsOnExit } = await import("../web/server.js");
+  const { url, hub } = await startWebServer({ port: args.port, host: args.host, demo: args.demo });
+  stopRunsOnExit(hub);
   process.stdout.write(`Open Shopping Agent web app: ${url}\n`);
   return -1;
 }

@@ -3,6 +3,7 @@
 
 import { h, icon, mount } from "../lib/dom.js";
 import { formatCents, friendlyError, money, shortRaw, storeName } from "../lib/wording.js";
+import { storeLabel } from "../lib/store-icon.js";
 
 function linesList(lines, priced = true) {
   return h("ul", { class: "lines" }, lines.map((l) => h("li", {},
@@ -103,7 +104,7 @@ function panel(ctx, store, planStore) {
 
   const sum = planStore ? h("span", { class: "co-sum" }, formatCents(planStore.cents), planStore.shippingUnknown ? h("small", {}, " plus shipping") : null) : null;
   return h("section", { class: "card co", "aria-label": `Checkout at ${name}` },
-    h("div", { class: "co-head" }, h("h3", {}, name), sum), steps(stepN), body);
+    h("div", { class: "co-head" }, h("h3", {}, storeLabel(store, st.domain || planStore?.domain, "lg")), sum), steps(stepN), body);
 }
 
 /** Stores shown: the plan's stores, plus any store with cart or checkout activity. */

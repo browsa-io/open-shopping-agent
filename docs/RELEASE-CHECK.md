@@ -118,6 +118,24 @@ Walmart and eBay blocked it. A US home connection may do better; that was not me
 4. **CDP runs left their tabs open.** The tabs a run opened, and the tabs those opened, are closed
    when the run ends or is stopped. Your other tabs are not touched.
 
+## Later the same day: README recording and the first bench run
+
+- **Bench** (`npm run bench -- --tasks 3 --max-credits 40`, Phantom, one browser at a time): 6
+  stores, 18 tasks, 20 min, 13 credits from the ledger rows of its own browsers. Every search,
+  product page and cart passed except one task file error (gymshark.com is not a Shopify store any
+  more; replaced with satechi.com). Checkout reached sign-in or guest on Walmart, Best Buy and
+  Target; Amazon's checkout said an item was out of stock and handed off. eBay and Shopify stopped
+  at their guest checkout (address), which the bench counted as a fail although its own README
+  calls that page reached; the rule was fixed and both stores re-run (2 credits, both reached).
+- **Web app recording** (`osa web`, `OSA_MAX_BROWSERS=2`, 6 stores with satechi.com, ZIP 10001):
+  96 offers in 4 min 3 s, both picks at eBay ($6.88), Fill cart at eBay, cart read back with 2
+  lines, Review checkout stopped at eBay's guest checkout (email and address). 7 min 10 s, 7
+  browsers, 11 credits (ledger and each browser's own totals agree). This is the README GIF.
+- **Bug found and fixed:** an earlier attempt's recorder crashed and stopped `osa web` with SIGINT
+  mid-search; its 2 browsers kept running (destroyed by hand, 3 credits). `osa web` now cancels
+  running searches and closes their browsers on Ctrl-C and SIGTERM.
+- Every browser of these runs was checked afterwards: destroyed. No order, sign-in, card or address.
+
 ## Bugs left
 
 1. "under $60" after the last item is that item's price limit for the rule parser and a total

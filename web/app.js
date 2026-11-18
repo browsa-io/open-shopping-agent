@@ -4,6 +4,7 @@
 
 import { api, h, toast } from "./lib/dom.js";
 import { ALL_STORES, STORE_NAMES } from "./lib/wording.js";
+import { storeIcon } from "./lib/store-icon.js";
 import { runView } from "./components/run.js";
 import { summaryView } from "./components/summary.js";
 import { historyView } from "./components/history.js";
@@ -111,7 +112,7 @@ async function homeView() {
       h("div", { class: "body stack" },
         h("fieldset", {}, h("legend", {}, "Stores"),
           h("div", { class: "checks" }, ALL_STORES.map((s) =>
-            h("label", { class: "check" }, h("input", { type: "checkbox", name: "store", value: s, checked: stores.includes(s) }), STORE_NAMES[s])))),
+            h("label", { class: "check" }, h("input", { type: "checkbox", name: "store", value: s, checked: stores.includes(s) }), storeIcon(s, undefined, "sm"), STORE_NAMES[s])))),
         h("div", { class: "grid2" },
           h("div", { class: "field" }, h("label", { for: "zip" }, "Delivery ZIP (optional)"), zip),
           h("div", { class: "field" }, h("label", { for: "budget" }, "Budget for everything, $ (optional)"), budget)),
@@ -242,7 +243,7 @@ async function settingsView() {
         h("div", { class: "field" }, h("label", { for: "s-zip" }, "Delivery ZIP"), zip),
         h("div", { class: "field" }, h("label", { for: "s-budget" }, "Budget per run ($)"), budget)),
       h("fieldset", {}, h("legend", {}, "Allowed stores"),
-        h("div", { class: "checks" }, ALL_STORES.map((st) => h("label", { class: "check" }, h("input", { type: "checkbox", name: "sstore", value: st, checked: s.allowedStores.includes(st) }), STORE_NAMES[st])))),
+        h("div", { class: "checks" }, ALL_STORES.map((st) => h("label", { class: "check" }, h("input", { type: "checkbox", name: "sstore", value: st, checked: s.allowedStores.includes(st) }), storeIcon(st, undefined, "sm"), STORE_NAMES[st])))),
       h("div", { class: "field" }, h("label", { for: "s-shop" }, "Shopify stores"), shop, h("p", { class: "hint", id: "s-shop-hint" }, "Domains, comma separated.")),
       h("fieldset", {}, h("legend", {}, "Browsers"),
         h("div", { class: "checks col" }, BROWSER_MODES.map(([v, label]) => h("label", { class: "check" },

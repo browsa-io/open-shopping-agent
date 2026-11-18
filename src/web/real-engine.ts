@@ -325,7 +325,7 @@ export class RealEngine implements EnginePort {
       const parsed = st.events.find((e): e is Extract<RunEvent, { type: "parsed" }> => e.type === "parsed");
       return {
         runId, prompt: st.prompt, startedAt: st.startedAt, finishedAt: st.summary?.finishedAt, status: st.status,
-        stores: parsed?.request.stores ?? [], picksTotal: picksTotal(st.events),
+        stores: parsed?.request.stores ?? [], shopifyDomains: shopifyDomains(st.events), picksTotal: picksTotal(st.events),
         orders: st.events.filter((e) => e.type === "order" && e.result.placed).length,
         events: [...st.events], summary: st.summary,
       };
@@ -342,6 +342,7 @@ export class RealEngine implements EnginePort {
       finishedAt: done ? saved.summary?.finishedAt : undefined,
       status: cancelled ? "cancelled" : done ? "done" : "failed",
       stores: saved.request?.stores ?? [],
+      shopifyDomains: shopifyDomains(events),
       picksTotal: picksTotal(events),
       orders: saved.summary?.orders.filter((o) => o.placed).length ?? 0,
       events,
@@ -359,6 +360,17 @@ export class RealEngine implements EnginePort {
     this.emit(st, { type: "done", summary });
     return summary;
   }
+}
+
+/** The Shopify shops a run searched, from its events. */
+export function shopifyDomains(events: RunEvent[]): string[] | undefined {
+  const out = new Set<string>();
+  for (const e of events) {
+    if (!("store" in e) || e.store !== "shopify") continue;
+    if ((e.type === "store_started" || e.type === "store_failed") && e.domain) out.add(e.domain);
+    if (e.type === "offers") for (const o of e.offers) if (o.storeDomain) out.add(o.storeDomain);
+  }
+  return out.size ? [...out] : undefined;
 }
 
 function picksTotal(events: RunEvent[]): Money | undefined {

@@ -70,7 +70,8 @@ export interface BenchResults {
   startedAt: string;
   finishedAt: string;
   commit?: string;
-  creditsUsed?: number;
+  creditsUsed?: number; // this run's own browsers and AI tasks (ledger), never the account balance
+  creditsEstimated?: boolean;
   maxCredits?: number;
   stopped?: string;     // set when the run stopped early (credit cap)
   stores: StoreResult[];
@@ -168,6 +169,9 @@ export function judgeCart(offer: Offer, added: Cart, readBack: Cart): { pass: bo
 export function judgeCheckout(review: CheckoutReview): { pass: boolean; note?: string } {
   if (review.needsUser) {
     if (review.needsUser.reason === "sign_in") return { pass: true, note: "sign-in or guest page" };
+    // A guest checkout that asks for the address or a payment method is the checkout page itself.
+    if (review.needsUser.reason === "address") return { pass: true, note: "guest checkout (asks for an address)" };
+    if (review.needsUser.reason === "payment") return { pass: true, note: "checkout (asks for a payment method)" };
     return { pass: false, note: `stopped: ${review.needsUser.reason}` };
   }
   if (review.total && review.total.cents > 0) return { pass: true, note: "order review page" };
@@ -189,34 +193,44 @@ export function summarize(r: StoreResult): Record<BenchStage, StageSummary> {
   return out;
 }
 
+/** A plain mark: ✓ every task passed, ✗ none, "partial, 2 of 3" in between. */
 function cell(s: StageSummary): string {
-  if (!s.total) return "n/a";
-  return `${Math.round((100 * s.pass) / s.total)}% (${s.pass}/${s.total})`;
+  if (!s.total) return "not run";
+  if (s.pass === s.total) return "✓";
+  if (!s.pass) return "✗";
+  return `partial, ${s.pass} of ${s.total}`;
 }
 
 export const BENCH_START = "<!-- bench:start -->";
 export const BENCH_END = "<!-- bench:end -->";
 
-/** The supported-stores table. With no results every cell says "pending first run". */
+const day = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/**
+ * The supported-stores table: one row per store, plain marks for what the bench measured on
+ * Phantom (Browsa). It gives the date of the run and claims no schedule.
+ */
 export function renderTable(results?: BenchResults): string {
-  const head = [
-    "| Store | Search | Product page | Cart | Checkout reached | Last run |",
-    "|---|---|---|---|---|---|",
-  ];
+  const head = ["| Store | Search | Cart | Reaches checkout |", "|---|---|---|---|"];
   const rows = STORE_IDS.map((id) => {
     const r = results?.stores.find((s) => s.store === id);
-    if (!r || !results) return `| ${STORE_NAMES[id]} | pending first run | pending first run | pending first run | pending first run | pending first run |`;
+    if (!r || !results) return `| ${STORE_NAMES[id]} | not measured yet | not measured yet | not measured yet |`;
     if (r.status !== "ran") {
-      const why = r.status === "not_installed" ? "not installed" : r.status === "skipped" ? "skipped" : "run failed";
-      return `| ${STORE_NAMES[id]} | ${why} | ${why} | ${why} | ${why} | ${results.date} |`;
+      const why = r.status === "not_installed" ? "not installed" : r.status === "skipped" ? "not run" : "run failed";
+      return `| ${STORE_NAMES[id]} | ${why} | ${why} | ${why} |`;
     }
     const s = summarize(r);
-    return `| ${STORE_NAMES[id]} | ${cell(s.search)} | ${cell(s.details)} | ${cell(s.cart)} | ${cell(s.checkout)} | ${r.date ?? results.date} |`;
+    return `| ${STORE_NAMES[id]} | ${cell(s.search)} | ${cell(s.cart)} | ${cell(s.checkout)} |`;
   });
-  const foot = results
-    ? `\nMeasured daily by [the bench](bench/). Latest results: [bench/results/${results.date}.json](bench/results/${results.date}.json)` +
-      `${results.creditsUsed !== undefined ? `, ${results.creditsUsed} Browsa credits for the whole run` : ""}.`
-    : "\nMeasured daily by [the bench](bench/). No results yet.";
+  if (!results) return [...head, ...rows].join("\n") + "\n\nNot measured yet. Run [the bench](bench/) to fill this table.";
+  const dates = [...new Set(results.stores.filter((s) => s.status === "ran").map((s) => s.date ?? results.date))].sort();
+  const when = dates.length > 1 ? `${day(dates[0])} to ${day(dates[dates.length - 1])}` : day(dates[0] ?? results.date);
+  // The stores shown may come from more than one run (a partial re-run keeps the others): add up each store's own credits.
+  const ran = results.stores.filter((s) => s.status === "ran");
+  const sum = ran.every((s) => typeof s.credits === "number") ? ran.reduce((n, s) => n + (s.credits ?? 0), 0) : results.creditsUsed;
+  const credits = sum !== undefined ? `, ${results.creditsEstimated ? "about " : ""}${sum} Browsa credits` : "";
+  const foot = `\nMeasured ${when} on Phantom (Browsa) by [the bench](bench/), stopped before buying` +
+    ` ([results](bench/results/latest.json)${credits}). Your own Chrome: see the browser table above.`;
   return [...head, ...rows].join("\n") + "\n" + foot;
 }
 

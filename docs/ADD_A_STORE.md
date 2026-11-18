@@ -89,7 +89,7 @@ Add a block for your store to `bench/tasks.json`, with about 10 tasks:
 
 - Every task starts with `search`. `cart` adds the first in-stock, new, non-sponsored offer and reads the cart back. `checkout` passes when it reaches the sign-in, guest or review page.
 - Pick everyday products that stay in stock, so a failure means the adapter broke and not that the product is gone.
-- Put `details` on about half the tasks, `cart` on two and `checkout` on one, to keep the daily run cheap.
+- Put `details` on about half the tasks, `cart` on two and `checkout` on one, to keep a bench run cheap.
 
 Check your tasks without a browser, then run a few for real:
 
@@ -100,6 +100,6 @@ BROWSA_API_KEY=... npm run bench -- --stores mystore --tasks 3 --max-credits 10 
 
 ## 6. Open a pull request
 
-Include the bench output for your store. The supported-stores table in the README is filled in by the daily bench, not by hand.
+Include the bench output for your store. The supported-stores table in the README is written by the bench, not by hand.
 
 Before you add a store, read its terms. If a store forbids automated access, or only allows it through an official API, say so in your pull request.

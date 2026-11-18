@@ -1,0 +1,172 @@
+{
+  "date": "2026-11-18",
+  "startedAt": "2026-11-18T17:09:58.774Z",
+  "finishedAt": "2026-11-18T17:15:19.787Z",
+  "stores": [
+    {
+      "store": "amazon",
+      "status": "skipped",
+      "tasks": [],
+      "ms": 0,
+      "note": "not selected"
+    },
+    {
+      "store": "walmart",
+      "status": "skipped",
+      "tasks": [],
+      "ms": 0,
+      "note": "not selected"
+    },
+    {
+      "store": "ebay",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "ebay-01",
+          "query": "USB flash drive 64GB",
+          "stages": {
+            "search": {
+              "ms": 32252,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 12512,
+              "pass": true
+            },
+            "cart": {
+              "ms": 23772,
+              "pass": true
+            },
+            "checkout": {
+              "ms": 28287,
+              "pass": true,
+              "note": "guest checkout (asks for an address)"
+            }
+          }
+        },
+        {
+          "id": "ebay-02",
+          "query": "iPhone 13 case",
+          "stages": {
+            "search": {
+              "ms": 29639,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 13828,
+              "pass": true
+            },
+            "cart": {
+              "ms": 39104,
+              "pass": true
+            }
+          }
+        },
+        {
+          "id": "ebay-03",
+          "query": "mechanical keyboard",
+          "stages": {
+            "search": {
+              "ms": 32819,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 12579,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 252781,
+      "date": "2026-11-18",
+      "credits": 1
+    },
+    {
+      "store": "bestbuy",
+      "status": "skipped",
+      "tasks": [],
+      "ms": 0,
+      "note": "not selected"
+    },
+    {
+      "store": "target",
+      "status": "skipped",
+      "tasks": [],
+      "ms": 0,
+      "note": "not selected"
+    },
+    {
+      "store": "shopify",
+      "status": "ran",
+      "tasks": [
+        {
+          "id": "shopify-01",
+          "query": "wool runners",
+          "stages": {
+            "search": {
+              "ms": 4349,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 1339,
+              "pass": true
+            },
+            "cart": {
+              "ms": 2460,
+              "pass": true
+            },
+            "checkout": {
+              "ms": 7521,
+              "pass": true,
+              "note": "guest checkout (asks for an address)"
+            }
+          }
+        },
+        {
+          "id": "shopify-02",
+          "query": "usb-c hub",
+          "stages": {
+            "search": {
+              "ms": 8257,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 1140,
+              "pass": true
+            },
+            "cart": {
+              "ms": 2224,
+              "pass": true
+            }
+          }
+        },
+        {
+          "id": "shopify-03",
+          "query": "sheet set",
+          "stages": {
+            "search": {
+              "ms": 27681,
+              "pass": true,
+              "note": "10 offers"
+            },
+            "details": {
+              "ms": 3143,
+              "pass": true
+            }
+          }
+        }
+      ],
+      "ms": 66801,
+      "date": "2026-11-18",
+      "credits": 1
+    }
+  ],
+  "maxCredits": 15,
+  "creditsUsed": 2,
+  "commit": "de6c249"
+}

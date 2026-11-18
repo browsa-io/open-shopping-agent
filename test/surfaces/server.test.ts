@@ -251,3 +251,30 @@ test("token mode: 401 without it, cookie after ?token=", async () => {
     await app.close();
   }
 });
+
+function rawGet(url: string, host: string, path = "/api/settings"): Promise<number> {
+  const u = new URL(url);
+  return new Promise((resolve, reject) => {
+    const r = httpRequest({ host: u.hostname, port: u.port, path, method: "GET", headers: { Host: host } }, (res) => { res.resume(); resolve(res.statusCode ?? 0); });
+    r.on("error", reject);
+    r.end();
+  });
+}
+
+test("without a token only loopback Host names are served (DNS rebinding)", async () => {
+  const port = new URL(base).port;
+  assert.equal(await rawGet(base, `127.0.0.1:${port}`), 200);
+  assert.equal(await rawGet(base, `localhost:${port}`), 200);
+  assert.equal(await rawGet(base, `[::1]:${port}`), 200);
+  assert.equal(await rawGet(base, `evil.example:${port}`), 403);
+  assert.equal(await rawGet(base, `127.0.0.1.evil.example:${port}`), 403);
+  assert.equal(await rawGet(base, `evil.example:${port}`, "/"), 403);
+});
+
+test("with a token any Host is allowed once the token is given", async () => {
+  const app = await startApp("t0ken-for-test");
+  try {
+    const port = new URL(app.url).port;
+    assert.equal(await rawGet(app.url, `my-box.lan:${port}`), 401);
+  } finally { await app.close(); }
+});

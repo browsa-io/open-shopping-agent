@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { createMcpHandler } from "../../src/mcp/server.js";
+import { createMcpHandler, mcpOrdersAllowed } from "../../src/mcp/server.js";
 import { FileAlerts } from "../../src/web/alerts-port.js";
 import { ConfigStore } from "../../src/web/config.js";
 import { MockEngine } from "../../src/web/mock-engine.js";
@@ -43,6 +43,7 @@ test("initialize and tools/list", async () => {
 });
 
 test("find, fill, review, then place_order only with the exact total", async () => {
+  process.env.OSA_MCP_ALLOW_ORDERS = "1";
   const found = await call("find_and_compare", { request: "usb-c hub", stores: ["amazon", "walmart"], zip: "82001" });
   assert.ok(!found.isError, found.content?.[0]?.text);
   assert.match(found.content[0].text, /DEMO DATA/);
@@ -119,4 +120,20 @@ test("stdio server answers initialize and tools/list", async () => {
   assert.equal(lines[0].id, 1);
   assert.equal(lines[0].result.protocolVersion, "2024-11-05");
   assert.equal(lines[1].result.tools.length, 6);
+});
+
+test("place_order is off unless OSA_MCP_ALLOW_ORDERS is set", async () => {
+  assert.equal(mcpOrdersAllowed({}), false);
+  assert.equal(mcpOrdersAllowed({ OSA_MCP_ALLOW_ORDERS: "0" }), false);
+  assert.equal(mcpOrdersAllowed({ OSA_MCP_ALLOW_ORDERS: "1" }), true);
+  assert.equal(mcpOrdersAllowed({ OSA_MCP_ALLOW_ORDERS: "on" }), true);
+  const saved = process.env.OSA_MCP_ALLOW_ORDERS;
+  delete process.env.OSA_MCP_ALLOW_ORDERS;
+  try {
+    const r = await call("place_order", { run_id: "nope", store: "amazon", approved_total: 10 });
+    assert.equal(r.isError, true);
+    assert.match(r.content[0].text, /OSA_MCP_ALLOW_ORDERS/);
+  } finally {
+    if (saved !== undefined) process.env.OSA_MCP_ALLOW_ORDERS = saved;
+  }
 });

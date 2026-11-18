@@ -3,6 +3,7 @@
 
 import { api, copyText, h, icon, store } from "../lib/dom.js";
 import { formatCents, money, storeName } from "../lib/wording.js";
+import { storeIcon } from "../lib/store-icon.js";
 import { computePlan, deliveryShort, runModel, shippingKnown, summaryText, totalCents } from "../lib/model.js";
 
 export async function summaryView(main, id) {
@@ -33,7 +34,7 @@ export async function summaryView(main, id) {
         h("div", { class: "sum-main" },
           h("div", { class: "sum-label" }, it.label, it.quantity > 1 ? ` (x${it.quantity})` : ""),
           h("a", { class: "clamp2 sum-title", href: o.url, target: "_blank", rel: "noopener noreferrer", title: o.title }, o.title),
-          h("p", { class: "faint small" }, [storeName(o.store, o.storeDomain), o.rating ? `${o.rating.stars.toFixed(1)} stars (${o.rating.count.toLocaleString("en-US")})` : null,
+          h("p", { class: "faint small" }, storeIcon(o.store, o.storeDomain, "sm"), " ", [storeName(o.store, o.storeDomain), o.rating ? `${o.rating.stars.toFixed(1)} stars (${o.rating.count.toLocaleString("en-US")})` : null,
             deliveryShort(o, rec.startedAt) ? `Delivery ${deliveryShort(o, rec.startedAt)}` : null].filter(Boolean).join(". "))),
         h("div", { class: "sum-price" },
           h("div", { class: "amt strong" }, formatCents(totalCents(o, it.quantity), o.price.currency)),

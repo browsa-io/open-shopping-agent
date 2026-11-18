@@ -5,6 +5,8 @@
   "license": "MIT",
   "author": "Browsa <support@browsa.io>",
   "homepage": "https://github.com/browsa-io/open-shopping-agent",
+  "repository": { "type": "git", "url": "git+https://github.com/browsa-io/open-shopping-agent.git" },
+  "bugs": { "url": "https://github.com/browsa-io/open-shopping-agent/issues" },
   "type": "module",
   "engines": { "node": ">=20" },
   "bin": { "open-shopping-agent": "dist/cli/index.js", "osa": "dist/cli/index.js" },
@@ -16,7 +18,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p bench/tsconfig.json",
     "test": "node --import tsx --test $(find test -name '*.test.ts' -not -path '*/fixtures/*' | sort)",
     "dev:web": "tsx src/web/server.ts",
-    "bench": "tsx bench/run.ts"
+    "bench": "tsx bench/run.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "browsa": "^0.3.1",

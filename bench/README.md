@@ -1,6 +1,6 @@
 # Bench
 
-Fixed shopping tasks, run on every store adapter every day, so the success rates in the README are measured and not claimed.
+Fixed shopping tasks, run on every store adapter, so the store table in the README is measured and not claimed. The table gives the date of the run it comes from.
 
 ## Stages
 
@@ -26,7 +26,7 @@ BROWSA_API_KEY=... npm run bench -- --stores amazon,ebay --tasks 3 --max-credits
 | `--stores a,b` | only these stores (others keep their last results in the README) |
 | `--tasks N` | first N tasks per store |
 | `--stages search,details` | only these stages |
-| `--max-credits N` | stop starting new tasks once N credits are used (default 60) |
+| `--max-credits N` | stop starting new tasks once N credits are used, and refuse a browser or AI task that would pass N (default 60). Counts only the bench's own browsers and tasks (the credit ledger), never the account balance |
 | `--no-ai` | turn off the AI fallback, to measure direct code alone |
 | `--no-readme` | do not touch README.md |
 | `--file path` | another task file |
@@ -36,7 +36,7 @@ A store whose adapter is missing is recorded as "not installed".
 ## Files
 
 - `tasks.json`: the tasks, about 10 per store.
-- `results/<date>.json`: one file per run, with every stage's pass or fail, time in ms and the reason for a failure, plus the credits used per store and in total.
+- `results/<date>.json`: one file per run, with every stage's pass or fail, time in ms and the reason for a failure, plus the credits the run's own browsers and tasks used, per store and in total.
 - `results/latest.json`: the latest result per store, used for the README table.
 
-The daily run is [.github/workflows/bench.yml](../.github/workflows/bench.yml). It commits the results and the README table.
+[.github/workflows/bench.yml](../.github/workflows/bench.yml) runs it on a daily schedule once the repository has a `BROWSA_API_KEY` secret (without one it only checks the tasks) and commits the results and the README table.

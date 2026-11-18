@@ -24,7 +24,7 @@ Node 20 or later. Unit tests need no network and no Browsa key.
 | `src/stores/<id>.ts` | one file per store |
 | `src/alerts/` | price and stock watches, notifiers |
 | `src/web/`, `src/cli/`, `src/mcp/` | web app, command line, MCP server |
-| `bench/` | daily success rates per store |
+| `bench/` | measured results per store (the README store table) |
 | `test/` | unit tests, with saved pages in `test/fixtures/<store>/` |
 
 ## Rules

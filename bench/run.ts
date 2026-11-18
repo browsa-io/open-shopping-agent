@@ -16,7 +16,7 @@ import { execFileSync } from "node:child_process";
 import type { StoreAdapter, StoreContext } from "../src/stores/adapter.js";
 import type { ItemRequest, Offer, StoreId } from "../src/core/types.js";
 import { defaultLoader, type AdapterLoader } from "./adapters.js";
-import { browsaClient, browsaFactory, creditBalance, type ContextFactory } from "./browser.js";
+import { benchMeter, browsaClient, browsaFactory, type ContextFactory } from "./browser.js";
 import {
   judgeCart, judgeCheckout, judgeDetails, judgeSearch, loadTasks, mergeResults, pickForCart, updateReadme, STORE_IDS,
   type BenchResults, type BenchStage, type StageResult, type StoreResult, type TaskFile, type TaskResult,
@@ -32,8 +32,14 @@ export interface RunOptions {
   maxTasksPerStore?: number;
   stages?: BenchStage[];
   maxCredits?: number;
-  /** Credits used so far, for the cap. */
-  credits?: () => Promise<number | undefined>;
+  /**
+   * Credits this bench run has used so far: only its own browsers and AI tasks (the CreditMeter
+   * of src/core/credits.ts), never the account's balance, so other runs on the account do not count.
+   * `exact` false means part of it is estimated from browser time.
+   */
+  credits?: () => Promise<{ credits: number; exact: boolean } | number | undefined>;
+  /** Waits for late data charges (residential exit) before the final figure. */
+  settle?: () => Promise<void>;
   stageTimeoutMs?: number;
   /** Set by runBench: true once the credit cap is reached. */
   overCap?: () => Promise<boolean>;
@@ -124,13 +130,15 @@ async function runStoreTasks(adapter: StoreAdapter, ctx: StoreContext, tasks: Ta
 export async function runBench(o: RunOptions): Promise<BenchResults> {
   const now = o.now ?? (() => new Date());
   const startedAt = now().toISOString();
-  const startCredits = o.credits ? await o.credits() : undefined;
   const results: BenchResults = { date: startedAt.slice(0, 10), startedAt, finishedAt: startedAt, stores: [] };
   if (o.maxCredits !== undefined) results.maxCredits = o.maxCredits;
+  let estimated = false;
   const used = async () => {
-    if (startCredits === undefined || !o.credits) return undefined;
-    const b = await o.credits();
-    return b === undefined ? undefined : startCredits - b;
+    const r = await o.credits?.().catch(() => undefined);
+    if (r === undefined) return undefined;
+    if (typeof r === "number") return r;
+    if (!r.exact) estimated = true;
+    return r.credits;
   };
   const overCap = async () => {
     if (o.maxCredits === undefined) return false;
@@ -176,8 +184,13 @@ export async function runBench(o: RunOptions): Promise<BenchResults> {
     }
   }
 
+  await o.settle?.().catch(() => undefined);
+  estimated = false;
   const total = await used();
-  if (total !== undefined) results.creditsUsed = total;
+  if (total !== undefined) {
+    results.creditsUsed = total;
+    if (estimated) results.creditsEstimated = true;
+  }
   results.finishedAt = now().toISOString();
   return results;
 }
@@ -201,17 +214,21 @@ async function main() {
   const dry = values["dry-run"] || !apiKey;
   if (!values["dry-run"] && !apiKey) console.log("BROWSA_API_KEY is not set: dry run only (get a free key at https://browsa.io).");
   const maxCredits = values["max-credits"] ? Number(values["max-credits"]) : 60;
-  const client = apiKey && !dry ? browsaClient(apiKey, process.env.BROWSA_BASE_URL) : undefined;
+  // The run's own meter: the ledger rows of the browsers and tasks this bench creates, nothing else.
+  const meter = apiKey && !dry ? benchMeter(browsaClient(apiKey, process.env.BROWSA_BASE_URL), maxCredits) : undefined;
+  await meter?.begin();
 
   const results = await runBench({
     tasks,
     loader: defaultLoader(),
-    factory: dry ? undefined : browsaFactory({ apiKey: apiKey!, baseUrl: process.env.BROWSA_BASE_URL, ai: !values["no-ai"] }),
+    factory: dry ? undefined : browsaFactory({ apiKey: apiKey!, baseUrl: process.env.BROWSA_BASE_URL, ai: !values["no-ai"], meter }),
     stores,
     maxTasksPerStore: values.tasks ? Number(values.tasks) : undefined,
     stages: values.stages ? (values.stages.split(",").map((s) => s.trim()) as BenchStage[]) : undefined,
     maxCredits,
-    credits: client ? () => creditBalance(client) : undefined,
+    credits: meter ? () => meter.measure() : undefined,
+    // Residential exit data reaches the ledger a few seconds after a browser stops.
+    settle: meter ? async () => { if (meter.dataBilled) await new Promise((r) => setTimeout(r, 16_000)); } : undefined,
     log: (m) => console.log(m),
   });
   const commit = gitCommit();
@@ -223,14 +240,16 @@ async function main() {
   }
   const outDir = values.out ?? join(here, "results");
   await mkdir(outDir, { recursive: true });
-  const file = join(outDir, `${results.date}.json`);
+  // A second run on the same day gets its own file: earlier results are never overwritten.
+  let file = join(outDir, `${results.date}.json`);
+  if (await readFile(file).then(() => true, () => false)) file = join(outDir, `${results.date}-${results.startedAt.slice(11, 19).replace(/:/g, "")}.json`);
   await writeFile(file, JSON.stringify(results, null, 2) + "\n");
   // latest.json and the README combine this run with earlier results of stores not run today.
   let previous: BenchResults | undefined;
   try { previous = JSON.parse(await readFile(join(outDir, "latest.json"), "utf8")) as BenchResults; } catch { /* first run */ }
   const merged = mergeResults(previous, results);
   await writeFile(join(outDir, "latest.json"), JSON.stringify(merged, null, 2) + "\n");
-  console.log(`wrote ${file}${results.creditsUsed !== undefined ? `, ${results.creditsUsed} credits` : ""}`);
+  console.log(`wrote ${file}${results.creditsUsed !== undefined ? `, ${results.creditsEstimated ? "about " : ""}${results.creditsUsed} credits (this run's own browsers and tasks)` : ""}`);
   if (!values["no-readme"]) await updateReadme(join(here, "..", "README.md"), merged);
 }
 
