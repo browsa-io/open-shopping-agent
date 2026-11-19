@@ -3,12 +3,22 @@
 // are invented. No real people, no real stores are contacted, no credits are spent.
 
 import type {
-  Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, Pick, RunEvent,
+  Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, OrderState, Pick, ProductIds, RunEvent,
   RunSummary, ShoppingRequest, Stage, StoreId,
 } from "../core/types.js";
+import { labelSameItem } from "../core/identity.js";
+import { withUnits } from "../core/units.js";
 import type { EnginePort, PlanChoice, RunHandle, RunListItem, RunOptions, RunRecord, RunStatus } from "./engine-port.js";
+import { ordersFromEvents, type OrderEntry, type TrackingRecord } from "../core/orders.js";
+import { orderPages } from "../orders/index.js";
+import { unknownMessage } from "../core/order-state.js";
+import { approvalProblem, mandateApprovalFor, resolveLimits } from "../core/limits.js";
+import { boughtUnderMandateText, invalidMandate, mandateLimits, mandateText } from "../core/mandate.js";
+
 import { applyChoices } from "./plan.js";
 import { STORE_IDS, deliveredCents } from "./format.js";
+
+const storeNameOf = (s: StoreId, domain: string) => (s === "shopify" ? domain : ({ amazon: "Amazon", walmart: "Walmart", ebay: "eBay", bestbuy: "Best Buy", target: "Target" } as Record<string, string>)[s] ?? s);
 
 export interface MockEngineOptions {
   /** Delay multiplier: 1 is a realistic pace (a run takes about 10 s), 0 replays instantly (tests). */
@@ -19,6 +29,8 @@ export interface MockEngineOptions {
   signInStore?: StoreId | null;
   /** Base path for demo Phantom Live links (the web app serves a placeholder there); null for none. */
   liveBase?: string | null;
+  /** Store whose demo order ends "unknown" (no order number shown) instead of placed; default none. */
+  unknownStore?: StoreId | null;
 }
 
 const DOMAINS: Record<StoreId, string> = {
@@ -45,7 +57,26 @@ const CATALOG: Template[] = [
     "Wireless Keyboard, low profile, multi-device", "Mechanical Keyboard 75%, hot-swap", "Compact Bluetooth Keyboard"] },
   { match: /headphone|earbud/i, base: 4999, spread: 4000, titles: [
     "Wireless Earbuds, ANC, 30 h battery", "Over-Ear Headphones, Bluetooth 5.3", "Open-Ear Sport Earbuds"] },
+  { match: /batter/i, base: 1299, spread: 900, titles: [
+    "AA Alkaline Batteries, Pack of 24", "AA Batteries, 48 Count", "AA Batteries, 12 Count (Pack of 2)", "Rechargeable AA Batteries, 8 Pack"] },
 ];
+
+/**
+ * Demo identifiers, the same for one demo model at every store so the demo shows exact matches.
+ * GTINs use the GS1 restricted-circulation prefix 04, which is never a real product's number.
+ */
+function demoIds(model: string, withGtin: boolean): ProductIds {
+  let h = 0;
+  for (let i = 0; i < model.length; i++) h = (Math.imul(h, 31) + model.charCodeAt(i)) >>> 0;
+  const body = `04${String(h % 1e10).padStart(10, "0")}`;
+  let sum = 0;
+  for (let i = body.length - 1, w = 3; i >= 0; i--, w = w === 3 ? 1 : 3) sum += Number(body[i]) * w;
+  const gtin = `0${body}${(10 - (sum % 10)) % 10}`;
+  const [brand] = model.split("|");
+  const ids: ProductIds = { brand: brand.toLowerCase().replace(/[^a-z0-9]/g, ""), mpn: `DM${String(h % 1e6).padStart(6, "0")}` };
+  if (withGtin) ids.gtin = gtin;
+  return ids;
+}
 
 const STORE_FACTOR: Record<StoreId, number[]> = {
   // price multiplier per item index; picks land on different stores so the demo shows two checkouts
@@ -111,7 +142,10 @@ function makeOffers(store: StoreId, domain: string, item: ItemRequest, itemIndex
   const count = 3 + Math.floor(r() * 2);
   const out: Offer[] = [];
   for (let i = 0; i < count; i++) {
-    const title = `${BRANDS[Math.floor(r() * BRANDS.length)]} ${titles[(i + itemIndex) % titles.length]}`;
+    r(); // keeps the demo's random sequence (prices, ratings) as before the brands became per model
+    const t = (i + itemIndex) % titles.length;
+    const brand = BRANDS[(t * 2 + itemIndex) % BRANDS.length];
+    const title = `${brand} ${titles[t]}`;
     const price = round99((base + (i === 0 ? 0 : r() * spread)) * factor);
     const freeOver = store === "walmart" || store === "target" ? 3500 : 0;
     const shipping = store === "ebay" ? (i === 0 || r() < 0.5 ? 0 : 399) : store === "shopify" ? 599 : price >= freeOver ? 0 : 599;
@@ -123,7 +157,9 @@ function makeOffers(store: StoreId, domain: string, item: ItemRequest, itemIndex
       store === "walmart" ? (r() < 0.5 ? "Walmart.com" : "Marketplace seller") :
       store === "ebay" ? `demo-seller-${100 + Math.floor(r() * 800)} (99.${Math.floor(r() * 9)}% positive)` :
       store === "bestbuy" ? "Best Buy" : store === "target" ? "Target" : domain;
-    out.push({
+    out.push(withUnits({
+      // eBay listings often name only the brand and part number, no GTIN.
+      ids: demoIds(`${brand}|${titles[t]}`, store !== "ebay"),
       store, storeDomain: domain, itemId: item.id, title,
       url: `https://${domain}/demo/${item.id}-${i + 1}`,
       productId: `DEMO-${store.toUpperCase()}-${itemIndex + 1}${i + 1}`,
@@ -139,7 +175,7 @@ function makeOffers(store: StoreId, domain: string, item: ItemRequest, itemIndex
       sponsored: i === 1 && (store === "amazon" || store === "walmart"),
       variants: tpl?.options,
       raw: { demo: true },
-    });
+    }));
   }
   return out;
 }
@@ -179,6 +215,10 @@ interface MockRun {
   all: Offer[];
   flows: Map<StoreId, Promise<void>>;
   flowing: boolean;
+  /** Stores with an order under the up-front approval (placing, placed or unknown). */
+  mandateOrders: Set<StoreId>;
+  /** Totals of orders placing, placed or unknown, by store. */
+  committed: Map<StoreId, Money>;
 }
 
 export class MockEngine implements EnginePort {
@@ -189,8 +229,11 @@ export class MockEngine implements EnginePort {
   private failStore: StoreId | null;
   private signInStore: StoreId | null;
   private liveBase: string | null;
+  private unknownStore: StoreId | null;
+  private tracking = new Map<string, TrackingRecord>();
 
   constructor(opts: MockEngineOptions = {}) {
+    this.unknownStore = opts.unknownStore ?? null;
     this.speed = opts.speed ?? 1;
     this.failStore = opts.failStore === undefined ? "target" : opts.failStore;
     this.signInStore = opts.signInStore === undefined ? "ebay" : opts.signInStore;
@@ -213,6 +256,7 @@ export class MockEngine implements EnginePort {
     const run: MockRun = {
       record, opts, picks: [], carts: [], reviews: [], orders: [], failures: [], approvals: new Map(),
       cancelled: new Set(), cancelledAll: false, liveUrls: new Map(), all: [], flows: new Map(), flowing: false,
+      mandateOrders: new Set(), committed: new Map(),
     };
     this.runs.set(runId, run);
     const done = this.drive(run, prompt, stores).catch((e) => {
@@ -233,6 +277,7 @@ export class MockEngine implements EnginePort {
       runId: run.record.runId, startedAt: run.record.startedAt, finishedAt: new Date().toISOString(),
       picks: run.picks, carts: run.carts, reviews: run.reviews, orders: run.orders, failures: run.failures,
       creditsUsed: 0,
+      ...(run.opts.mandate && !invalidMandate(run.opts.mandate) ? { mandate: mandateLimits(run.opts.mandate) } : {}),
     };
     run.record.status = run.cancelledAll ? "cancelled" : status;
     run.record.finishedAt = summary.finishedAt;
@@ -257,6 +302,8 @@ export class MockEngine implements EnginePort {
     run.request = request;
     this.emit(run, { type: "parsed", request });
     this.emit(run, { type: "log", message: "Demo engine: made-up products and prices, no store is contacted." });
+    const mandate = opts.mandate && !invalidMandate(opts.mandate) ? opts.mandate : undefined;
+    if (mandate) this.emit(run, { type: "log", message: `Up-front approval: buy without asking, ${mandateText(mandateLimits(mandate))}. Anything else waits for your OK.` });
 
     const domainOf = (s: StoreId) => (s === "shopify" ? opts.shopifyDomains?.[0] ?? DOMAINS.shopify : DOMAINS[s]);
     const all: Offer[] = [];
@@ -292,7 +339,7 @@ export class MockEngine implements EnginePort {
       total += deliveredCents(best) * item.quantity;
       run.picks.push({
         itemId: item.id, offer: best, score: Math.round(1000 - deliveredCents(best) / 10) / 1000,
-        reason: reasonFor(best, mine.filter((o) => o.inStock)), alternatives: ranked.slice(1, 5),
+        reason: reasonFor(best, mine.filter((o) => o.inStock)), alternatives: labelSameItem(best, ranked.slice(1, 5)),
       });
     }
     const overBudget = !!request.budget && total > request.budget.cents;
@@ -378,28 +425,98 @@ export class MockEngine implements EnginePort {
       return;
     }
     run.reviews.push(base);
+    const dom = store === "shopify" ? { domain } : {};
+    const state = (s: OrderState, extra: Partial<Extract<RunEvent, { type: "order_state" }>> = {}) =>
+      this.emit(run, { type: "order_state", store, ...dom, state: s, at: new Date().toISOString(), ...extra });
     this.emit(run, { type: "checkout_review", review: base });
-    this.emit(run, { type: "awaiting_approval", store, review: base });
-    const approval = await new Promise<Approval | null>((resolve) => run.approvals.set(store, resolve));
-    run.approvals.delete(store);
+    state("proposed", { total: base.total });
+    state("awaiting_approval", { total: base.total });
+    // Up-front approval: the same gate as the real engine (core/limits.ts approvalProblem).
+    const mandate = run.opts.mandate && !invalidMandate(run.opts.mandate) ? run.opts.mandate : undefined;
+    let approval: Approval | null = null;
+    let declined: string | undefined;
+    if (mandate) {
+      const candidate = mandateApprovalFor(base, mandate);
+      const placedCents = [...run.committed.values()].reduce((s, m) => s + m.cents, 0);
+      declined = approvalProblem({
+        store, storeDomain: store === "shopify" ? domain : undefined, review: base, approval: candidate, limits: resolveLimits(run.opts.limits),
+        budget: run.opts.limits?.budget ?? request.budget, placed: usd(placedCents), ordered: new Set(run.committed.keys()),
+        mandate, mandateOrders: run.mandateOrders.size,
+      });
+      if (!declined) {
+        approval = candidate;
+        run.mandateOrders.add(store);
+        this.emit(run, { type: "log", store, message: `Buying without asking: $${(base.total.cents / 100).toFixed(2)} is within your up-front approval (${mandateText(mandateLimits(mandate))})` });
+      } else {
+        this.emit(run, { type: "log", store, message: `Not bought without asking: ${declined}. It waits for your OK of the exact total.` });
+      }
+    }
+    if (!approval) {
+      this.emit(run, { type: "awaiting_approval", store, review: base, ...(declined ? { mandateDeclined: declined } : {}) });
+      approval = await new Promise<Approval | null>((resolve) => run.approvals.set(store, resolve));
+      run.approvals.delete(store);
+    }
     if (!approval) {
       this.emit(run, { type: "log", store, message: "Not bought; the cart stays filled" });
       return;
     }
+    const how = approval.source === "mandate" && mandate
+      ? { approval_source: "mandate" as const, mandate: mandateLimits(mandate) } : { approval_source: "user" as const };
+    const ordersUrl = orderPages(store).ordersUrl(domain);
+    run.committed.set(store, base.total);
+    state("placing", { total: base.total, ...how });
     if (approval.approvedTotal.cents !== base.total.cents) {
-      const result: OrderResult = { store, placed: false, confirmationText: "Approved total does not match the review total, order not placed" };
+      const error = "Approved total does not match the review total, order not placed";
+      const result: OrderResult = { store, placed: false, state: "failed", error, confirmationText: error, ordersUrl, ...how };
+      run.committed.delete(store);
+      run.mandateOrders.delete(store);
       run.orders.push(result);
+      state("failed", { message: error, ...how });
       this.emit(run, { type: "order", result });
       return;
     }
     this.emit(run, { type: "log", store, message: "Total re-checked, placing the order" });
     await this.wait(1800, run);
+    if (store === this.unknownStore) {
+      const checkMessage = `Demo: ${unknownMessage(storeNameOf(store, domain), ordersUrl)}`;
+      const result: OrderResult = { store, placed: false, state: "unknown", submitted: true, total: base.total, error: "Demo: the store showed no order number", checkMessage, ordersUrl, ...how };
+      run.orders.push(result);
+      state("unknown", { total: base.total, message: checkMessage, ...how });
+      this.emit(run, { type: "log", store, message: `Order state unknown. ${checkMessage}` });
+      this.emit(run, { type: "order", result });
+      return;
+    }
     const result: OrderResult = {
-      store, placed: true, orderId: `DEMO-${Math.floor(100000 + Math.random() * 900000)}`, total: base.total,
-      confirmationText: "Demo order: nothing was bought", placedAt: new Date().toISOString(),
+      store, placed: true, state: "placed", orderId: `DEMO-${Math.floor(100000 + Math.random() * 900000)}`, total: base.total,
+      confirmationText: "Demo order: nothing was bought", placedAt: new Date().toISOString(), ordersUrl, ...how,
     };
     run.orders.push(result);
+    if (how.approval_source === "mandate" && mandate) this.emit(run, { type: "log", store, message: `${boughtUnderMandateText(mandate)}: $${(base.total.cents / 100).toFixed(2)} (demo, nothing was bought)` });
+    state("placed", { orderId: result.orderId, total: base.total, ...how });
     this.emit(run, { type: "order", result });
+  }
+
+  async listOrders(o: { limit?: number; all?: boolean } = {}): Promise<OrderEntry[]> {
+    const out: OrderEntry[] = [];
+    for (const r of this.runs.values()) {
+      for (const x of ordersFromEvents(r.record.runId, r.record.prompt, r.record.events, { live: r.record.status === "running" })) {
+        const t = this.tracking.get(`${x.runId}|${x.shop}`);
+        if (t) x.tracking = t;
+        out.push(x);
+      }
+    }
+    return (o.all ? out : out.filter((x) => x.state !== "failed")).sort((a, b) => b.at.localeCompare(a.at)).slice(0, o.limit ?? 200);
+  }
+
+  /** Demo: made-up shipping status for placed demo orders. No store is contacted. */
+  async refreshOrders(filter: { runId?: string; store?: StoreId; limit?: number } = {}): Promise<OrderEntry[]> {
+    const placed = (await this.listOrders()).filter((x) => x.state === "placed" && (!filter.runId || x.runId === filter.runId) && (!filter.store || x.store === filter.store))
+      .slice(0, filter.limit ?? 10);
+    for (const x of placed) {
+      x.tracking = { status: "Shipped", deliveryText: "Arriving Friday", carrier: "Demo carrier", trackingNumber: "DEMO000000", checkedAt: new Date().toISOString() };
+      this.tracking.set(`${x.runId}|${x.shop}`, x.tracking);
+    }
+    return placed;
   }
 
   async approve(runId: string, approval: Approval): Promise<void> {
@@ -407,6 +524,7 @@ export class MockEngine implements EnginePort {
     const resolve = run?.approvals.get(approval.store);
     if (!run || !resolve) throw new Error(`No checkout waiting for approval at ${approval.store} in run ${runId}`);
     if (approval.by !== "user") throw new Error("Approval must come from the user");
+    if (approval.source === "mandate") throw new Error("An up-front approval is applied by the engine itself; approve the exact total instead");
     resolve(approval);
   }
 
@@ -426,7 +544,8 @@ export class MockEngine implements EnginePort {
     return [...this.runs.values()].reverse().slice(0, limit).map(({ record }) => {
       const { events: _e, summary: _s, ...item } = record;
       const picks = [...record.events].reverse().find((e) => e.type === "picks");
-      return { ...item, picksTotal: picks && picks.type === "picks" ? picks.total : undefined };
+      const unknown = ordersFromEvents(record.runId, undefined, record.events, { live: record.status === "running" }).filter((o) => o.state === "unknown").length;
+      return { ...item, picksTotal: picks && picks.type === "picks" ? picks.total : undefined, ...(unknown ? { unknownOrders: unknown } : {}) };
     });
   }
 

@@ -3,7 +3,7 @@
 // surfaces run against MockEngine (src/web/mock-engine.ts), which replays made-up demo data.
 
 import type {
-  Approval, Limits, Money, RunEvent, RunSummary, StoreId,
+  Approval, Limits, Mandate, Money, RunEvent, RunSummary, StoreId,
 } from "../core/types.js";
 
 /** A step the engine asks the person about before doing it, per store. */
@@ -24,6 +24,12 @@ export interface RunOptions {
    * Several stores may ask at once. If omitted, the engine stops after the comparison ("picks").
    */
   confirm?: (step: GateStep, store: StoreId) => Promise<boolean>;
+  /**
+   * Added in 0.2.0: the person's up-front approval (core/mandate.ts). A checkout review within it is
+   * bought without an approve() call; others emit "awaiting_approval" with `mandateDeclined`. Only
+   * set from the person's own input, never from a model's tool arguments.
+   */
+  mandate?: Mandate;
 }
 
 export interface RunHandle {
@@ -45,6 +51,8 @@ export interface RunListItem {
   shopifyDomains?: string[];
   picksTotal?: Money;
   orders: number;          // orders placed
+  /** Added with order states: orders that may have gone through but were not confirmed (check the store). */
+  unknownOrders?: number;
 }
 
 export interface RunRecord extends RunListItem {
@@ -86,4 +94,14 @@ export interface EnginePort {
   listRuns(limit?: number): Promise<RunListItem[]>;
   /** One run with all its events, or undefined. */
   getRun(runId: string): Promise<RunRecord | undefined>;
+  /** Optional: orders across runs (placing, placed, unknown; failed with `all`), newest first. */
+  listOrders?(opts?: { limit?: number; all?: boolean }): Promise<OrderEntry[]>;
+  /**
+   * Optional: read placed orders' pages on the store (in the saved store profile) for status,
+   * carrier and tracking. Never clicks, types or signs in. Returns the orders it read.
+   */
+  refreshOrders?(filter?: { runId?: string; store?: StoreId; limit?: number }): Promise<OrderEntry[]>;
 }
+
+export type { OrderEntry } from "../core/orders.js";
+import type { OrderEntry } from "../core/orders.js";

@@ -221,6 +221,49 @@ test("SSE resumes after Last-Event-ID", async () => {
   assert.equal((rest.match(/^event: run$/gm) ?? []).length, 1);
 });
 
+test("orders: GET /api/orders lists states; a second Buy on an unknown order is refused; refresh reads status", async () => {
+  const hub = new RunHub(new MockEngine({ speed: 0, signInStore: null, failStore: null, unknownStore: "walmart" }));
+  const server = createApp({ hub, alerts: new FileAlerts(join(dir, "w-orders.json")), config: new ConfigStore(dir) });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const call = async (path: string, init: RequestInit = {}) => {
+    const res = await fetch(url + path, { ...init, headers: { "Content-Type": "application/json" } });
+    return { status: res.status, body: await res.json().catch(() => null) };
+  };
+  try {
+    for (const store of ["amazon", "walmart"]) {
+      const run = hub.start("usb-c hub", { limits: { allowedStores: [store as "amazon"] } });
+      await hub.waitFor(run.runId, (r) => r.gates.some((g) => g.step === "cart"), 5000);
+      hub.answer(run.runId, "cart", store as "amazon", true);
+      await hub.waitFor(run.runId, (r) => r.gates.some((g) => g.step === "checkout"), 5000);
+      hub.answer(run.runId, "checkout", store as "amazon", true);
+      await hub.waitFor(run.runId, () => !!hub.pendingReview(run.runId, store as "amazon"), 5000);
+      const total = hub.pendingReview(run.runId, store as "amazon")!.total;
+      const buy = await call(`/api/runs/${run.runId}/approve`, { method: "POST", body: JSON.stringify({ store, approvedTotal: total }) });
+      assert.equal(buy.status, 200);
+      await hub.waitFor(run.runId, (r) => r.events.some((e) => e.type === "order"), 5000);
+      if (store === "walmart") {
+        const again = await call(`/api/runs/${run.runId}/approve`, { method: "POST", body: JSON.stringify({ store, approvedTotal: total }) });
+        assert.equal(again.status, 409);
+        assert.match(again.body.error, /may have gone through|Nothing at/);
+      }
+    }
+    const list = await call("/api/orders");
+    assert.equal(list.status, 200);
+    const states = list.body.map((o: { store: string; state: string }) => `${o.store}:${o.state}`).sort();
+    assert.deepEqual(states, ["amazon:placed", "walmart:unknown"]);
+    const walmart = list.body.find((o: { store: string }) => o.store === "walmart");
+    assert.match(walmart.message, /Check your orders on Walmart/);
+    assert.equal(walmart.ordersUrl, "https://www.walmart.com/orders");
+    const refreshed = await call("/api/orders/refresh", { method: "POST", body: "{}" });
+    assert.equal(refreshed.status, 200);
+    assert.equal(refreshed.body.length, 1, "only placed orders are read");
+    assert.equal(refreshed.body[0].tracking.status, "Shipped");
+  } finally {
+    await new Promise<void>((r) => { server.closeAllConnections(); server.close(() => r()); });
+  }
+});
+
 test("watches: create, list, delete", async () => {
   const bad = await json("/api/watches", { method: "POST", body: JSON.stringify({ kind: "price_drop", item: "hdmi" }) });
   assert.equal(bad.status, 400);

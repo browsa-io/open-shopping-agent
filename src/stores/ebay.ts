@@ -6,8 +6,9 @@
 // new condition by default, variations chosen and verified in the cart, never signs in, never types
 // contact, address or card details. Guest checkout stops with `needsUser` and a Phantom Live link.
 
-import type { Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult } from "../core/types.js";
+import type { Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, ProductIds } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
+import { idsFromHtml, idsFromSpecs, mergeIds } from "../core/identity.js";
 import {
   attr, browsaSolves, clean, elementAt, elementsWith, firstWith, jsonAfterMarker as jsonAfter, jsonLd, moneyFromNumeric as moneyFromNumber,
   isDeadPageError, needsUser, nowIso, pageIsDead, parseCount, parseMoney, replacePage, sameOption, textLines, textOfHtml as textOf,
@@ -318,6 +319,25 @@ export interface EbayItem {
   buyItNow: boolean;
   auctionOnly: boolean;
   msku?: Msku;
+}
+
+/**
+ * Identifiers from an item page: JSON-LD (gtin13, mpn, brand; sellers write "Does not apply" for
+ * unbranded items, which counts as none) and the item specifics labels (UPC, EAN, MPN, Brand).
+ */
+export function ebayIds(html: string): ProductIds | undefined {
+  const rows: [string, string][] = [];
+  const mark = "ux-labels-values__labels";
+  for (let i = html.indexOf(mark); i >= 0; i = html.indexOf(mark, i + mark.length)) {
+    const s = html.lastIndexOf("<", i);
+    if (s < 0 || html.indexOf(">", s) < i) continue;
+    const el = elementAt(html, s);
+    const label = textLines(el)[0];
+    const after = s + el.length;
+    const value = textLines(firstWith(html.slice(after, after + 4000), "ux-labels-values__values") ?? "")[0];
+    if (label && value) rows.push([label.replace(/:$/, ""), value]);
+  }
+  return mergeIds(idsFromHtml(html, jsonLd(html)), idsFromSpecs(rows));
 }
 
 export function parseItem(html: string): EbayItem {
@@ -807,6 +827,7 @@ export const adapter: StoreAdapter = {
     const id = itemIdOf(offer);
     const html = await openItem(ctx, offer);
     const it = parseItem(html);
+    const ids = mergeIds(ebayIds(html), offer.ids);
     const variants = it.msku ? Object.fromEntries(it.msku.menus.map((m) => [m.label, m.values.filter((v) => !v.outOfStock).map((v) => v.name)])) : offer.variants;
     return {
       ...offer,
@@ -820,6 +841,7 @@ export const adapter: StoreAdapter = {
       condition: it.condition ?? offer.condition,
       inStock: it.inStock && it.buyItNow,
       variants,
+      ...(ids ? { ids } : {}),
       raw: { ...offer.raw, variationCombos: it.msku ? buyableCombos(it.msku) : undefined, buyItNow: it.buyItNow, auctionOnly: it.auctionOnly, conditionText: it.conditionText, sellerName: it.seller?.name, sellerPositivePercent: it.seller?.positivePercent, sellerFeedbackCount: it.seller?.feedbackCount },
     };
   },
@@ -993,17 +1015,19 @@ export const adapter: StoreAdapter = {
       return { store: "ebay", placed: false, needsUser: await needsUser(ctx, co.needs ?? "payment", "eBay needs your details before the order can be placed. Open the live browser.") };
     }
     await page.locator(`[data-test-id="CONFIRM_AND_PAY_BUTTON"]`).first().click({ timeout: 15_000 });
+    // From here the click was sent: every result says submitted, so the engine never clicks again.
     await page.waitForURL((u) => !/rxo\?action=view|rgxo\?action=view/.test(u.toString()), { timeout: 60_000 }).catch(() => {});
     await sleep(ctx, 4000);
     const html = await page.content();
     const text = textLines(html).join(" ");
     if (/verify|verification code|3-?D Secure|authenticate/i.test(text) && !/order (is )?confirmed|thank you/i.test(text)) {
-      return { store: "ebay", placed: false, needsUser: await needsUser(ctx, "3ds", "Your bank or eBay asks for a verification step. Open the live browser to finish it.") };
+      return { store: "ebay", placed: false, submitted: true, needsUser: await needsUser(ctx, "3ds", "Your bank or eBay asks for a verification step. Open the live browser to finish it.") };
     }
     const placed = /order (is )?confirmed|thank you for your (order|purchase)|you're all set/i.test(text);
     return {
       store: "ebay",
       placed,
+      submitted: true,
       orderId: /order number:?\s*([\d-]{6,})/i.exec(text)?.[1],
       total: co.total,
       confirmationText: clean(/(order (is )?confirmed[^.]*\.?|thank you for your (order|purchase)[^.]*\.?)/i.exec(text)?.[0]),

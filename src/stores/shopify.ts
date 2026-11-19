@@ -10,10 +10,11 @@
 // adapter detects that and fails with a clear error.
 
 import type {
-  Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, Rating,
+  Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, ProductIds, Rating,
 } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
-import { browsaSolves, clean, evalWithRenew, isDeadPageError, needsUser, nowIso, pageIsDead, parseMoney, replacePage } from "./util.js";
+import { browsaSolves, clean, evalWithRenew, isDeadPageError, jsonLd, needsUser, nowIso, pageIsDead, parseMoney, replacePage } from "./util.js";
+import { idsFromHtml, mergeIds, normalizeIds } from "../core/identity.js";
 
 type J = Record<string, any>;
 
@@ -112,7 +113,7 @@ export function parseProductsJson(json: J, query: string, origin: string, itemId
   return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((s) => s.o);
 }
 
-export interface ShopifyVariant { id: string; title: string; options: Record<string, string>; available: boolean; price: Money; compareAt?: Money; requiresSellingPlan: boolean }
+export interface ShopifyVariant { id: string; title: string; options: Record<string, string>; available: boolean; price: Money; compareAt?: Money; requiresSellingPlan: boolean; sku?: string; barcode?: string }
 export interface ShopifyProduct {
   id: string; handle: string; title: string; vendor?: string; available: boolean;
   options: Record<string, string[]>; variants: ShopifyVariant[];
@@ -138,6 +139,8 @@ export function parseProductJs(json: J, currency: string): ShopifyProduct {
       price: shopifyMoney(v.price, currency, "cents") ?? { cents: 0, currency },
       compareAt: shopifyMoney(v.compare_at_price, currency, "cents"),
       requiresSellingPlan: v.requires_selling_plan === true,
+      ...(v.sku ? { sku: String(v.sku) } : {}),
+      ...(v.barcode ? { barcode: String(v.barcode) } : {}),
     };
   });
   return {
@@ -228,6 +231,17 @@ export function parseCheckoutRows(rows: [string, string][], fallbackCurrency = "
     else if (/^total/.test(l)) out.total = m;
   }
   return out;
+}
+
+/**
+ * Identifiers of one variant: its barcode (a GTIN when it is a valid one; many shops put their own
+ * SKU there, which normalizeGtin rejects), the vendor as brand, and the product page's JSON-LD for
+ * the MPN and a GTIN when the barcode is not one.
+ */
+export function shopifyIds(prod: ShopifyProduct, variant: ShopifyVariant | undefined, html?: string): ProductIds | undefined {
+  const own = normalizeIds({ gtin: variant?.barcode, brand: prod.vendor, sku: variant?.sku });
+  const page = html ? idsFromHtml(html, jsonLd(html), variant?.sku) : undefined;
+  return mergeIds(own, page);
 }
 
 /** aggregateRating from a product page's JSON-LD (review apps add it), or undefined. */
@@ -506,10 +520,13 @@ export const shopify: StoreAdapter = {
       out.listPrice = variant.compareAt && variant.compareAt.cents > variant.price.cents ? variant.compareAt : undefined;
     }
     // Ratings live in review apps; most of them put aggregateRating JSON-LD on the product page.
+    let html: string | undefined;
     try {
-      const html = await evalIn(ctx, async (p) => (await fetch(p, { credentials: "same-origin" })).text(), `/products/${encodeURIComponent(handle)}`);
+      html = await evalIn(ctx, async (p) => (await fetch(p, { credentials: "same-origin" })).text(), `/products/${encodeURIComponent(handle)}`);
       out.rating = ratingFromHtml(html) ?? out.rating;
     } catch (e) { ctx.log(`Shopify rating unavailable: ${(e as Error).message}`); }
+    const ids = mergeIds(shopifyIds(prod, variant, html), offer.ids);
+    if (ids) out.ids = ids;
     return out;
   },
 
@@ -609,14 +626,16 @@ export const shopify: StoreAdapter = {
       return { store: "shopify", placed: false, total, needsUser: await needsUser(ctx, "other", "The store's 'Pay now' button was not found. Check the live browser.") };
     }
     await pay.click();
+    // From here the click was sent: every result says submitted, so the engine never clicks again.
     const ok = await ctx.page.waitForURL(/thank[-_]?you|\/orders\//i, { timeout: 90_000 }).then(() => true).catch(() => false);
     const text = await evalIn(ctx, () => document.body?.innerText?.slice(0, 3000) ?? "").catch(() => "");
     if (!ok) {
       const again = await checkoutNeeds(ctx);
-      return { store: "shopify", placed: false, total, needsUser: await needsUser(ctx, again?.reason ?? "3ds", again?.message ?? "The store did not confirm the order (a bank check may be open). Finish it in the live browser.") };
+      return { store: "shopify", placed: false, submitted: true, total, needsUser: await needsUser(ctx, again?.reason ?? "3ds", again?.message ?? "The store did not confirm the order (a bank check may be open). Finish it in the live browser.") };
     }
-    const orderId = (text.match(/(?:order|confirmation)\s*#?\s*([A-Z0-9-]{4,})/i) || [])[1];
-    return { store: "shopify", placed: true, orderId, total, confirmationText: clean(text.match(/thank you[^.\n]*[.!]?/i)?.[0]) ?? "Order placed", placedAt: nowIso() };
+    // An order number has a digit ("Order #1001", "Confirmation #A1B2C3"), so "Order summary" is not one.
+    const orderId = (text.match(/(?:order|confirmation)\s*(?:#|number:?|no\.)\s*([A-Z0-9-]*\d[A-Z0-9-]*)/i) || [])[1];
+    return { store: "shopify", placed: true, submitted: true, orderId, total, confirmationText: clean(text.match(/thank you[^.\n]*[.!]?/i)?.[0]) ?? "Order placed", placedAt: nowIso() };
   },
 };
 

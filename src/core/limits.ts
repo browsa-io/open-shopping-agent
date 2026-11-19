@@ -1,10 +1,12 @@
 // Safety limits and the approval gate. Pure functions (the credit meter is in credits.ts).
-// v1 rules that no option can turn off: approval before every order, no subscriptions, no
+// Rules that no option can turn off: the person's OK before every order (the exact total at
+// checkout, or up front within limits they set: a mandate, see mandate.ts), no subscriptions, no
 // memberships or trials.
 
 import type { Approval, CartLine, CheckoutReview, Limits, Money, ShoppingRequest, StoreId } from "./types.js";
 import { formatMoney } from "../stores/util.js";
 import { STORE_IDS } from "../stores/index.js";
+import { mandateProblem, type Mandate } from "./mandate.js";
 
 export type LimitCode = "budget" | "store_not_allowed" | "credits" | "approval" | "subscription" | "membership";
 
@@ -31,7 +33,7 @@ export function defaultLimits(): Limits {
 /** Fill in defaults. Throws when a caller tries to turn off a v1 safety rule. */
 export function resolveLimits(partial: Partial<Limits> = {}): Limits {
   const p = partial as Partial<Record<keyof Limits, unknown>>;
-  if (p.requireApproval === false) throw new LimitError("approval", "requireApproval cannot be turned off in v1: every order needs the user's approval");
+  if (p.requireApproval === false) throw new LimitError("approval", "requireApproval cannot be turned off: every order needs the user's approval (at checkout, or up front with a mandate the user grants)");
   if (p.allowSubscriptions === true) throw new LimitError("subscription", "subscriptions are not allowed in v1");
   if (p.allowMembershipOffers === true) throw new LimitError("membership", "membership and trial offers are not allowed in v1");
   const d = defaultLimits();
@@ -86,12 +88,18 @@ export interface ApprovalCheck {
   now?: Date;
   /** How old a review may be when approved. Default 20 minutes. */
   maxReviewAgeMs?: number;
+  /** Added in 0.2.0: the run's up-front approval, granted by the person. Needed for an approval with source "mandate". */
+  mandate?: Mandate;
+  /** Orders under the mandate already placing, placed or unknown in this run. */
+  mandateOrders?: number;
 }
 
 /**
  * The approval gate. Returns why placing the order is refused, or undefined when it may go ahead.
  * The order goes ahead only when the user approved exactly the total of this run's review of this
- * store, the review is recent, nothing needs the person, and the limits hold.
+ * store, the review is recent, nothing needs the person, and the limits hold. An approval the
+ * engine made under the person's mandate (source "mandate") passes every one of these checks too,
+ * and then the mandate's own: its stores, expiry, amount per order and per run, and order count.
  */
 export function approvalProblem(c: ApprovalCheck): string | undefined {
   const { store, review, approval, limits } = c;
@@ -125,12 +133,28 @@ export function approvalProblem(c: ApprovalCheck): string | undefined {
     const after = (c.placed?.cents ?? 0) + review.total.cents;
     if (after > c.budget.cents) return `the order would bring the run to ${formatMoney({ cents: after, currency: review.total.currency })}, over the ${formatMoney(c.budget)} budget`;
   }
+  if (approval.source === "mandate") {
+    if (!c.mandate) return "this run has no up-front approval";
+    if (approval.mandateId !== c.mandate.id) return "the approval is for another up-front approval";
+    const why = mandateProblem(c.mandate, {
+      store, storeDomain: c.storeDomain ?? review.storeDomain, total: review.total, now, ordersSoFar: c.mandateOrders ?? 0,
+      runTotal: c.placed ?? { cents: 0, currency: "USD" },
+    });
+    if (why) return why;
+  } else if (approval.source !== undefined && approval.source !== "user") {
+    return "unknown approval source";
+  }
   return undefined;
 }
 
 /** Make an Approval for a review: what front ends send after the user clicks "Approve". */
 export function approvalFor(review: CheckoutReview, now = new Date()): Approval {
   return { store: review.store, storeDomain: review.storeDomain, approvedTotal: { ...review.total }, approvedAt: now.toISOString(), by: "user" };
+}
+
+/** The approval the engine makes from a review under the person's mandate (source "mandate"). */
+export function mandateApprovalFor(review: CheckoutReview, mandate: Mandate, now = new Date()): Approval {
+  return { ...approvalFor(review, now), source: "mandate", mandateId: mandate.id };
 }
 
 // The run's credit meter lives in credits.ts (it counts only this run's own browsers and tasks).

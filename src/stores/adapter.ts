@@ -86,6 +86,9 @@ export interface StoreAdapter {
    * Click "Place order" only if the review total still equals approval.approvedTotal (re-read it
    * first). Read the confirmation page back. The engine calls this only with the user's approval.
    * When the total changed, return `{ placed: false, error: "..." }` without clicking (do not throw).
+   * After the click, set `submitted: true` on every result. The engine counts an order as placed
+   * only with an order number; a throw, a timeout or a submitted result without a number becomes
+   * "unknown" (the engine re-reads the page, and never clicks again).
    */
   placeOrder(ctx: StoreContext, approval: Approval): Promise<OrderResult>;
 }

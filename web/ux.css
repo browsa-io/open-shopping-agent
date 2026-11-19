@@ -114,6 +114,7 @@ table.cmp td.num .amt { display: block; }
 table.cmp td.num .strong { font-weight: 650; }
 table.cmp td .was { display: block; color: var(--faint); font-size: var(--fs-xs); }
 table.cmp td .sub { display: block; color: var(--faint); font-size: var(--fs-xs); }
+table.cmp td .unit-m { display: none; }
 table.cmp td .none { color: var(--faint); }
 table.cmp tr.chosen td { background: var(--green-soft); }
 table.cmp tr.chosen td:first-child { box-shadow: inset 3px 0 0 var(--green); }
@@ -254,6 +255,7 @@ dl.keys dd { margin: 0; color: var(--muted); }
   table.cmp td.c-total { grid-column: 2; grid-row: 2; text-align: right; font-size: var(--fs-base); }
   table.cmp td.c-total .sub { display: inline; margin-left: 4px; }
   table.cmp td.c-total .amt { display: inline; }
+  table.cmp td.c-total .unit-m { display: block; color: var(--faint); font-size: var(--fs-xs); font-weight: 400; }
   table.cmp td.c-price { display: none; }
   table.cmp td.c-ship { grid-column: 1; grid-row: 3; text-align: left; font-size: var(--fs-xs); color: var(--faint); }
   table.cmp td.c-ship::before { content: "Shipping "; }
@@ -298,3 +300,17 @@ dl.keys dd { margin: 0; color: var(--muted); }
 .slabel-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sicons { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .list .sub .sicons { margin-left: var(--s2); vertical-align: -3px; }
+
+/* orders: one row per order, its state, the check-on-store note, tracking and links */
+.orders .order-row { padding-bottom: var(--s3); }
+.orders .rowitem { min-height: 52px; }
+.orders .oid { font-family: var(--mono); color: var(--muted); font-size: var(--fs-sm); }
+.orders .order-note { margin: 0 var(--s4) var(--s2); }
+.orders .order-foot { padding: 0 var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
+.orders .order-foot p { margin: 0; }
+.co-head .badge { flex: none; }
+@media (max-width: 760px) { .orders .rowitem { flex-wrap: wrap; } .orders .rowitem .grow { flex-basis: 60%; } }
+
+/* Buy without asking (0.2.0): the setting on the search form */
+.bwa { margin-top: var(--s3); }
+.bwa .bwa-fields { margin-top: var(--s2); }

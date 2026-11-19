@@ -14,6 +14,7 @@ import { getRun as readRun, listRuns as readRuns, newRunId } from "../core/histo
 import { STORE_NAMES } from "../stores/index.js";
 import type { EnginePort, GateStep, PlanChoice, RunHandle, RunListItem, RunOptions, RunRecord, RunStatus } from "./engine-port.js";
 import { applyChoices } from "./plan.js";
+import { listOrders, ordersFromEvents, saveTracking, type OrderEntry } from "../core/orders.js";
 
 export interface RealEngineOptions extends ShoppingAgentOptions {
   /** An agent to use instead of new ShoppingAgent(options) (tests). */
@@ -117,6 +118,7 @@ export class RealEngine implements EnginePort {
       shopifyDomains: opts.shopifyDomains,
       everyStore: opts.everyStore,
       defaultStores: opts.limits?.allowedStores?.length ? opts.limits.allowedStores : undefined,
+      mandate: opts.mandate,
     });
     st.run = run;
     try {
@@ -230,7 +232,14 @@ export class RealEngine implements EnginePort {
           continue; // reported as store_failed
         }
         if (review.needsUser) needs.push(d);
-        else waits.push(this.awaitApproval(st, run, store, d));
+        // An "awaiting_approval" event opened a slot (the person may even have answered already).
+        else if (st.waiters.has(shopKey(store, d))) waits.push(this.awaitApproval(st, run, store, d));
+        else {
+          // Bought (or tried) under the person's up-front approval, with no question. A bank check
+          // or an order that may have gone through keeps the browser so the person can look.
+          const r = run.orderResult(store, d);
+          if (r && (r.needsUser || r.state === "unknown")) waits.push(this.hold(st, run, store));
+        }
       }
       await Promise.all(waits);
       if (!needs.length || this.stopped(st, store)) return;
@@ -288,7 +297,8 @@ export class RealEngine implements EnginePort {
     const domain = store === "shopify" ? key.slice("shopify:".length) : undefined;
     // Throws LimitError("approval") without touching the store when the approval does not match.
     const result = await st.run.approve(store, domain ? { ...approval, storeDomain: domain } : approval, domain);
-    resolve(result.needsUser ? "hold" : "approved");
+    // A bank check, or an order that may have gone through: keep the browser so the person can look.
+    resolve(result.needsUser || result.state === "unknown" ? "hold" : "approved");
   }
 
   async cancel(runId: string, store?: StoreId): Promise<void> {
@@ -327,6 +337,7 @@ export class RealEngine implements EnginePort {
         runId, prompt: st.prompt, startedAt: st.startedAt, finishedAt: st.summary?.finishedAt, status: st.status,
         stores: parsed?.request.stores ?? [], shopifyDomains: shopifyDomains(st.events), picksTotal: picksTotal(st.events),
         orders: st.events.filter((e) => e.type === "order" && e.result.placed).length,
+        ...unknownCount(runId, st.events, st.status === "running"),
         events: [...st.events], summary: st.summary,
       };
     }
@@ -345,9 +356,54 @@ export class RealEngine implements EnginePort {
       shopifyDomains: shopifyDomains(events),
       picksTotal: picksTotal(events),
       orders: saved.summary?.orders.filter((o) => o.placed).length ?? 0,
+      ...unknownCount(runId, events, false),
       events,
       summary: saved.summary,
     };
+  }
+
+  async listOrders(o: { limit?: number; all?: boolean } = {}): Promise<OrderEntry[]> {
+    return listOrders(this.dataDir, {
+      ...o, liveEvents: (id) => { const st = this.live.get(id); return st && st.status === "running" ? st.events : undefined; },
+    });
+  }
+
+  /**
+   * Read the order page of each placed order (newest first, at most `limit`, default 10) in the
+   * store's saved browser profile: one browser per store, plain page loads, no clicks. Saves what
+   * it read to the run's tracking.json.
+   */
+  async refreshOrders(filter: { runId?: string; store?: StoreId; limit?: number } = {}): Promise<OrderEntry[]> {
+    const all = await this.listOrders({ limit: 1000 });
+    const targets = all.filter((x) => x.state === "placed" && (!filter.runId || x.runId === filter.runId) && (!filter.store || x.store === filter.store))
+      .slice(0, Math.max(1, filter.limit ?? 10));
+    const groups = new Map<string, OrderEntry[]>();
+    for (const x of targets) groups.set(`${x.store}|${x.storeDomain}`, [...(groups.get(`${x.store}|${x.storeDomain}`) ?? []), x]);
+    for (const group of groups.values()) {
+      const now = new Date().toISOString();
+      // Only an order's own page says something sure about it; the orders list could be any order.
+      for (const x of group.filter((g) => !g.orderUrl)) {
+        x.tracking = { checkedAt: now, error: "No order page was saved for this order. Check it on the store." };
+        await saveTracking(this.dataDir, x.runId, x.shop, x.tracking).catch(() => {});
+      }
+      const list = group.filter((g) => g.orderUrl);
+      if (!list.length) continue;
+      const { store, storeDomain } = list[0];
+      try {
+        const run = new ShoppingRun(this.agent, { history: false, close: false });
+        const read = await run.readOrderPages(store, storeDomain, [...new Set(list.map((x) => x.orderUrl!))]);
+        for (const x of list) {
+          x.tracking = { ...(read.find((r) => r.url === x.orderUrl)?.tracking ?? { unreadable: true }), checkedAt: now };
+          await saveTracking(this.dataDir, x.runId, x.shop, x.tracking);
+        }
+      } catch (e) {
+        for (const x of list) {
+          x.tracking = { checkedAt: now, error: errText(e) };
+          await saveTracking(this.dataDir, x.runId, x.shop, x.tracking).catch(() => {});
+        }
+      }
+    }
+    return targets;
   }
 
   private fallbackSummary(st: Live, e: unknown): RunSummary {
@@ -371,6 +427,13 @@ export function shopifyDomains(events: RunEvent[]): string[] | undefined {
     if (e.type === "offers") for (const o of e.offers) if (o.storeDomain) out.add(o.storeDomain);
   }
   return out.size ? [...out] : undefined;
+}
+
+/** { unknownOrders: n } when a run has orders to check on the store, else {}. */
+export function unknownCount(runId: string, events: RunEvent[], live: boolean): { unknownOrders?: number } {
+  if (!events.some((e) => e.type === "order_state")) return {};
+  const n = ordersFromEvents(runId, undefined, events, { live }).filter((o) => o.state === "unknown").length;
+  return n ? { unknownOrders: n } : {};
 }
 
 function picksTotal(events: RunEvent[]): Money | undefined {

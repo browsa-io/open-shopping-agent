@@ -63,7 +63,53 @@ export function pickWhy(pick, offers = []) {
   if (o.rating) bits.push(`${o.rating.stars.toFixed(1)} stars from ${o.rating.count.toLocaleString("en-US")} reviews`);
   else bits.push("no reviews shown");
   if (shippingKnown(o)) bits.push(o.shipping.cents === 0 ? "free shipping" : `${money(o.shipping)} shipping`);
+  if (o.perUnit?.text) bits.push(o.perUnit.text);
   return bits.join(", ");
+}
+
+// ---------- same item and unit price (the engine normalises ids and units; see src/core/identity.ts, units.ts) ----------
+
+const gtinsOf = (o) => new Set([o?.ids?.gtin, ...(o?.ids?.otherGtins || [])].filter(Boolean));
+
+/**
+ * Is `o` the same product as `ref` (the item the person chose)? "exact": a shared GTIN, or the same
+ * brand and MPN when either has no GTIN. "similar": anything else. null when there is no ref or it is the ref.
+ */
+export function sameItemAs(ref, o) {
+  if (!ref || !o || offerKey(ref) === offerKey(o)) return null;
+  const a = gtinsOf(ref);
+  const b = gtinsOf(o);
+  if (a.size && b.size) return [...a].some((g) => b.has(g)) ? { match: "exact", by: "gtin" } : { match: "similar" };
+  if (ref.ids?.brand && ref.ids?.mpn && ref.ids.brand === o.ids?.brand && ref.ids.mpn === o.ids?.mpn) return { match: "exact", by: "brand_mpn" };
+  return { match: "similar" };
+}
+
+export function matchTitle(m) {
+  if (!m) return "";
+  if (m.match === "exact") return m.by === "gtin" ? "Same product as your pick: same GTIN (UPC/EAN)" : "Same product as your pick: same brand and model number";
+  return "Similar: not confirmed as the same product as your pick";
+}
+
+const ML_PER_FL_OZ = 29.5735;
+const G_PER_OZ = 28.3495;
+
+/** Price per `per` unit in cents (decimals kept), or undefined. */
+export function unitCents(o, per) {
+  if (o?.perUnit?.per === per) return o.perUnit.cents;
+  const c = o?.contents;
+  const q = !c ? undefined : per === "count" ? c.count : per === "fl oz" ? (c.ml ? c.ml / ML_PER_FL_OZ : undefined) : (c.g ? c.g / G_PER_OZ : undefined);
+  return q && o.price?.cents > 0 ? o.price.cents / q : undefined;
+}
+
+/** The unit most offers compare in (ties: fl oz, oz, count). */
+export function commonPer(offers) {
+  let best;
+  let n = 0;
+  for (const per of ["fl oz", "oz", "count"]) {
+    const k = offers.filter((o) => unitCents(o, per) !== undefined).length;
+    if (k > n) { best = per; n = k; }
+  }
+  return best;
 }
 
 // ---------- run model from events ----------
@@ -87,9 +133,9 @@ export function runModel(events) {
 
 // ---------- filter and sort ----------
 
-export const DEFAULT_FILTERS = Object.freeze({ hideSponsored: false, condition: "any", inStockOnly: false, hiddenStores: [] });
+export const DEFAULT_FILTERS = Object.freeze({ hideSponsored: false, condition: "any", inStockOnly: false, sameOnly: false, hiddenStores: [] });
 export const SORTS = [
-  ["best", "Best match"], ["total", "Total"], ["price", "Price"], ["rating", "Rating"], ["delivery", "Delivery"], ["store", "Store"],
+  ["best", "Best match"], ["total", "Total"], ["price", "Price"], ["unit", "Unit price"], ["rating", "Rating"], ["delivery", "Delivery"], ["store", "Store"],
 ];
 
 export function isSponsored(o) {
@@ -100,10 +146,12 @@ export function conditionOf(o) {
   return o.condition === "used" || o.condition === "refurbished" ? "used" : "new";
 }
 
-export function filterOffers(offers, f = DEFAULT_FILTERS) {
+/** `ref` (optional): the chosen offer, for "Same item only" (keeps the chosen one and its exact matches). */
+export function filterOffers(offers, f = DEFAULT_FILTERS, ref = null) {
   const hidden = new Set(f.hiddenStores || []);
   return offers.filter((o) => {
     if (hidden.has(o.store)) return false;
+    if (f.sameOnly && ref && offerKey(o) !== offerKey(ref) && sameItemAs(ref, o)?.match !== "exact") return false;
     if (f.hideSponsored && isSponsored(o)) return false;
     if (f.inStockOnly && !o.inStock) return false;
     if (f.condition === "new" && conditionOf(o) !== "new") return false;
@@ -113,9 +161,10 @@ export function filterOffers(offers, f = DEFAULT_FILTERS) {
 }
 
 /** Sort value; undefined means unknown, and unknowns always sort last. */
-function sortValue(o, key) {
+function sortValue(o, key, per) {
   switch (key) {
     case "price": return o.price.cents;
+    case "unit": return per ? unitCents(o, per) : undefined;
     case "total": return totalCents(o);
     case "rating": return o.rating ? o.rating.stars * 1e7 + Math.min(o.rating.count, 9_999_999) : undefined;
     case "delivery": return o.deliveryDate ? Date.parse(o.deliveryDate.slice(0, 10)) : undefined;
@@ -144,9 +193,11 @@ export function sortOffers(offers, sort = { key: "best", dir: 1 }, ctx = {}) {
       return Number(!!a.currencyMismatch) - Number(!!b.currencyMismatch) || Number(b.inStock) - Number(a.inStock) || tie(a, b);
     });
   }
+  // Unit price compares in the unit most offers share; offers without one go last.
+  const per = key === "unit" ? commonPer(offers) : undefined;
   return offers.slice().sort((a, b) => {
-    const va = sortValue(a, key);
-    const vb = sortValue(b, key);
+    const va = sortValue(a, key, per);
+    const vb = sortValue(b, key, per);
     if (va === undefined && vb === undefined) return tie(a, b);
     if (va === undefined) return 1;
     if (vb === undefined) return -1;
@@ -235,7 +286,7 @@ export function planChoices(planResult) {
 
 // ---------- export and share ----------
 
-const CSV_COLUMNS = ["item", "store", "title", "price", "shipping", "total", "delivery", "rating", "reviews", "seller", "condition", "in_stock", "sponsored", "chosen", "url"];
+const CSV_COLUMNS = ["item", "store", "title", "price", "shipping", "total", "unit_price", "same_item", "delivery", "rating", "reviews", "seller", "condition", "in_stock", "sponsored", "chosen", "url"];
 
 function csvCell(v) {
   const s = v === undefined || v === null ? "" : String(v);
@@ -251,10 +302,12 @@ export function toCSV(model, planResult) {
   const chosen = new Set((planResult?.items || []).filter((i) => i.offer).map((i) => `${i.itemId}|${offerKey(i.offer)}`));
   const rows = [CSV_COLUMNS.join(",")];
   for (const item of model.items) {
+    const ref = (planResult?.items || []).find((i) => i.itemId === item.id)?.offer || null;
     for (const o of sortOffers(model.offers[item.id] || [], { key: "total", dir: 1 })) {
       rows.push([
         item.label, storeName(o.store, o.storeDomain), o.title, dollars(o.price.cents),
-        shippingKnown(o) ? dollars(o.shipping.cents) : "", dollars(totalCents(o)), o.deliveryDate || o.deliveryText || "",
+        shippingKnown(o) ? dollars(o.shipping.cents) : "", dollars(totalCents(o)), o.perUnit?.text || "", sameItemAs(ref, o)?.match || "",
+        o.deliveryDate || o.deliveryText || "",
         o.rating ? o.rating.stars : "", o.rating ? o.rating.count : "", o.seller || "", o.condition || "new",
         o.inStock ? "yes" : "no", isSponsored(o) ? "yes" : "no", chosen.has(`${item.id}|${offerKey(o)}`) ? "yes" : "no", o.url,
       ].map(csvCell).join(","));

@@ -3,8 +3,9 @@
 // and "review checkout?" questions as open gates until a person answers, and checks approvals
 // against the review total before passing them to the engine.
 
-import type { CheckoutReview, Limits, Money, RunEvent, RunSummary, StoreId } from "../core/types.js";
-import type { EnginePort, GateStep, PlanChoice, RunListItem, RunRecord, RunStatus } from "./engine-port.js";
+import type { CheckoutReview, Limits, Mandate, Money, OrderState, RunEvent, RunSummary, StoreId } from "../core/types.js";
+import type { EnginePort, GateStep, OrderEntry, PlanChoice, RunListItem, RunRecord, RunStatus } from "./engine-port.js";
+import { mandateCovers, mandateLimits, type MandateLimits } from "../core/mandate.js";
 
 export interface Gate { step: GateStep; store: StoreId }
 
@@ -20,6 +21,16 @@ export interface StartOptions {
   checkout?: boolean;
   /** A cart at every store with every item, instead of the best store per item. */
   everyStore?: boolean;
+  /**
+   * Added in 0.2.0: the person's up-front approval. Set it only from the person's own input (the
+   * CLI's confirmed flags, the web app's confirmed setting, the MCP server's environment).
+   */
+  mandate?: Mandate;
+  /**
+   * With a mandate: steps answered yes without a question at the stores it covers (the CLI: cart
+   * and checkout; the web app: checkout). Filling a cart and opening the review buy nothing.
+   */
+  autoSteps?: GateStep[];
 }
 
 export interface LiveRun {
@@ -31,6 +42,8 @@ export interface LiveRun {
   gates: Gate[];
   summary?: RunSummary;
   done: Promise<RunSummary>;
+  /** Added in 0.2.0: the up-front approval of this run, when it has one. */
+  mandate?: MandateLimits;
 }
 
 type Listener = (m: HubMessage) => void;
@@ -64,16 +77,21 @@ export class RunHub {
         if (!run || run.status !== "running") return resolve(false);
         // After "Fill carts", a store that gained a pick (setPlan) is filled without asking again.
         if (step === "cart" && run.autoCart?.has(store)) return resolve(true);
+        // The person approved up front for this store: no question for the steps they chose.
+        if (opts.mandate && opts.autoSteps?.includes(step) && mandateCovers(opts.mandate, store)) return resolve(true);
         const key = gateKey(step, store);
         run.gates.push({ step, store });
         run.resolvers.set(key, resolve);
         this.notify(run, { kind: "gate", gate: { step, store }, open: true });
       });
     const engine = this.engine;
-    const handle = engine.run(prompt, { onEvent, limits: opts.limits, zip: opts.zip, shopifyDomains: opts.shopifyDomains, everyStore: opts.everyStore, confirm });
+    const handle = engine.run(prompt, {
+      onEvent, limits: opts.limits, zip: opts.zip, shopifyDomains: opts.shopifyDomains, everyStore: opts.everyStore, confirm,
+      ...(opts.mandate ? { mandate: opts.mandate } : {}),
+    });
     run = {
       engine, runId: handle.runId, prompt, startedAt: new Date().toISOString(), status: "running", events: [], gates: [],
-      resolvers: new Map(), listeners: new Set(), done: handle.done,
+      resolvers: new Map(), listeners: new Set(), done: handle.done, ...(opts.mandate ? { mandate: mandateLimits(opts.mandate) } : {}),
     };
     this.runs.set(run.runId, run);
     for (const e of early) this.push(run, e);
@@ -186,18 +204,41 @@ export class RunHub {
    * total of the review awaiting approval, so a changed price is never bought silently.
    */
   async approve(runId: string, store: StoreId, approvedTotal: Money): Promise<CheckoutReview> {
+    const run = this.runs.get(runId);
+    // A second Buy click while the first is placing (or after it ended) never reaches the store.
+    const key = `${runId}|${store}`;
+    if (this.placing.has(key)) throw new HubError(409, "This order is being placed now. Wait for the result.");
     const review = this.pendingReview(runId, store);
+    const last = run ? lastOrderState(run.events, store, review?.storeDomain) : undefined;
+    if (last === "placed") throw new HubError(409, "An order was already placed at this store in this run");
+    if (last === "unknown" || last === "placing") throw new HubError(409, "The last order at this store may have gone through. Check your orders on the store before you try again.");
     if (!review) throw new HubError(409, `Nothing at ${store} is waiting for approval`);
     if (approvedTotal.cents !== review.total.cents || approvedTotal.currency !== review.total.currency) {
       throw new HubError(409, `Approved total ${(approvedTotal.cents / 100).toFixed(2)} does not match the review total ${(review.total.cents / 100).toFixed(2)}`);
     }
-    const run = this.runs.get(runId)!;
+    this.placing.add(key);
     try {
-      await run.engine.approve(runId, { store, approvedTotal: review.total, approvedAt: new Date().toISOString(), by: "user", storeDomain: review.storeDomain });
+      await run!.engine.approve(runId, { store, approvedTotal: review.total, approvedAt: new Date().toISOString(), by: "user", storeDomain: review.storeDomain });
     } catch (e) {
       throw new HubError(409, (e as Error).message);
+    } finally {
+      this.placing.delete(key);
     }
     return review;
+  }
+
+  /** "runId|store" keys with an approval on its way to the engine. */
+  private placing = new Set<string>();
+
+  /** Orders across runs (the engine's history), newest first. */
+  async orders(o: { limit?: number; all?: boolean } = {}): Promise<OrderEntry[]> {
+    return this.engine.listOrders ? this.engine.listOrders(o) : [];
+  }
+
+  /** Read placed orders' pages on the store for status and tracking (see EnginePort.refreshOrders). */
+  async refreshOrders(filter: { runId?: string; store?: StoreId; limit?: number } = {}): Promise<OrderEntry[]> {
+    if (!this.engine.refreshOrders) throw new HubError(409, "This engine cannot read order pages");
+    return this.engine.refreshOrders(filter);
   }
 
   async cancel(runId: string, store?: StoreId): Promise<void> {
@@ -241,9 +282,20 @@ export class RunHub {
     return {
       ...(stored ?? { stores: [], orders: 0 }),
       runId, prompt: live.prompt, startedAt: stored?.startedAt ?? live.startedAt, status: live.status,
-      events: live.events, summary: live.summary, gates: live.gates,
+      events: live.events, summary: live.summary, gates: live.gates, ...(live.mandate ? { mandate: live.mandate } : {}),
     };
   }
+}
+
+/** The last order state of a store in a run's events (order_state events, or a legacy order event). */
+export function lastOrderState(events: RunEvent[], store: StoreId, domain?: string): OrderState | undefined {
+  let s: OrderState | undefined;
+  for (const e of events) {
+    // Shopify: each shop has its own checkout (order results carry no domain, so states decide there).
+    if (e.type === "order_state" && e.store === store && (store !== "shopify" || !domain || !e.domain || e.domain === domain)) s = e.state;
+    else if (e.type === "order" && e.result.store === store && store !== "shopify") s = e.result.state ?? (e.result.placed ? "placed" : s ?? "failed");
+  }
+  return s;
 }
 
 export class HubError extends Error {

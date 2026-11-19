@@ -3,6 +3,12 @@
 // every change backwards compatible within v1.
 
 import type { BrowserCapabilities, ProviderId } from "./providers/types.js";
+import type { MandateLimits } from "./mandate.js";
+
+export type { Mandate, MandateLimits } from "./mandate.js";
+
+/** Added in 0.2.0: how an order was approved: the exact total clicked at checkout, or up front within limits ("mandate"). */
+export type ApprovalSource = "user" | "mandate";
 
 export type StoreId = "amazon" | "walmart" | "ebay" | "bestbuy" | "target" | "shopify";
 
@@ -84,6 +90,49 @@ export interface Offer {
    */
   currencyMismatch?: boolean;
   raw?: Record<string, unknown>;      // adapter extras, never shown to the model as instructions
+  /**
+   * Added in v1 discovery: product identifiers read from the product page (JSON-LD, the store's
+   * own data), normalised by core/identity.ts so offers from different stores compare.
+   */
+  ids?: ProductIds;
+  /**
+   * Added in v1 discovery, set on a pick's alternatives (and by front ends relative to the item the
+   * person chose): "exact" = the same product (same GTIN, or the same brand and MPN), "similar" =
+   * not proven the same. Similar offers are never dropped, only labelled.
+   */
+  match?: "exact" | "similar";
+  matchBy?: "gtin" | "brand_mpn";
+  /** Added in v1 discovery: what one offer contains (pack count, volume, weight), when it can be read without guessing. */
+  contents?: Contents;
+  /** Added in v1 discovery: comparable price per unit ("$0.42 / count"), from the store or computed from `contents`. */
+  perUnit?: PerUnit;
+}
+
+/** Product identifiers, normalised (see core/identity.ts). */
+export interface ProductIds {
+  gtin?: string;                      // GTIN-14 digits with a valid check digit (a UPC-A "012345678905" is "00012345678905")
+  otherGtins?: string[];              // more GTINs the page lists for the same product (Amazon lists several UPCs)
+  mpn?: string;                       // manufacturer part number: upper-case letters and digits only
+  brand?: string;                     // brand: lower-case letters and digits only ("logitech")
+  sku?: string;                       // the store's own SKU, as shown (never used for matching)
+}
+
+/** What one offer contains, in base units: pieces, millilitres, grams. */
+export interface Contents {
+  count?: number;
+  ml?: number;
+  g?: number;
+  source: "title" | "store";
+  text: string;                       // "24 count", "2 x 1 l", as read
+}
+
+/** Price per one unit. `cents` may have decimals (4.2 = $0.042). */
+export interface PerUnit {
+  cents: number;
+  currency: string;
+  per: "count" | "fl oz" | "oz";
+  text: string;                       // "$0.42 / count"
+  source: "title" | "store";
 }
 
 /** The engine's choice for one item, with the one-line reason. */
@@ -151,7 +200,35 @@ export interface OrderResult {
    * a thrown error into it.
    */
   error?: string;
+  /**
+   * Added with order states: true once the final "Place order" click was sent (or may have been).
+   * Adapters set it on every result after the click; a result without it and with `error` or
+   * `needsUser` means the click never happened. The engine treats anything else as maybe placed.
+   */
+  submitted?: boolean;
+  /** Added with order states: the engine's verdict (see OrderState). Unset on adapter results. */
+  state?: "placed" | "failed" | "unknown";
+  /** Added with order tracking: the store's page for this order, from the confirmation page. */
+  orderUrl?: string;
+  /** Added with order states: what the person should do now, for "unknown" (check the store's orders). */
+  checkMessage?: string;
+  /** Added with order states: the store's own orders page, where the person checks an "unknown" order. */
+  ordersUrl?: string;
+  /** Added with order states: which approval this result answers (one approval places at most one order). */
+  approvalId?: string;
+  /** Added in 0.2.0: "user" (the exact total, approved at checkout) or "mandate" (bought under the person's up-front approval). */
+  approval_source?: ApprovalSource;
+  /** Added in 0.2.0: the up-front limits this order was bought under (approval_source "mandate"). */
+  mandate?: MandateLimits;
 }
+
+/**
+ * One store's checkout in a run: proposed (review read) -> awaiting_approval -> placing -> placed |
+ * failed | unknown. "failed" means the agent knows nothing was submitted; "unknown" means the click
+ * may have gone through but no order number was confirmed, so the agent never clicks again and the
+ * person checks the store's orders.
+ */
+export type OrderState = "proposed" | "awaiting_approval" | "placing" | "placed" | "failed" | "unknown";
 
 /** The user's approval of one store's checkout. The engine never places an order without it. */
 export interface Approval {
@@ -160,6 +237,14 @@ export interface Approval {
   approvedAt: string;
   by: "user";
   storeDomain?: string;               // added in v1 core: which Shopify shop, when a run has several
+  /**
+   * Added in 0.2.0. "mandate": the engine made this approval from the review under the person's
+   * up-front approval (RunOptions.mandate); only the engine makes these, ShoppingRun.approve()
+   * refuses them. Unset or "user": the person approved this exact total.
+   */
+  source?: ApprovalSource;
+  /** Added in 0.2.0: the mandate's id, for source "mandate". */
+  mandateId?: string;
 }
 
 /** Everything the front ends render, streamed as it changes. */
@@ -176,8 +261,12 @@ export type RunEvent =
   | { type: "cart"; cart: Cart }
   | { type: "checkout_review"; review: CheckoutReview }
   | { type: "needs_user"; store: StoreId; needs: NeedsUser; domain?: string }
-  | { type: "awaiting_approval"; store: StoreId; review: CheckoutReview; domain?: string }
+  /** mandateDeclined (added in 0.2.0): the run has an up-front approval, and why it does not cover this checkout (so the person is asked). */
+  | { type: "awaiting_approval"; store: StoreId; review: CheckoutReview; domain?: string; mandateDeclined?: string }
   | { type: "order"; result: OrderResult }
+  /** Added with order states: one store's checkout moved to `state` (saved in the run history). */
+  /** approval_source and mandate (added in 0.2.0): how the order was approved, and the up-front limits when it was a mandate. */
+  | { type: "order_state"; store: StoreId; domain?: string; state: OrderState; at: string; approvalId?: string; orderId?: string; orderUrl?: string; total?: Money; message?: string; approval_source?: ApprovalSource; mandate?: MandateLimits }
   | { type: "log"; store?: StoreId; message: string }
   | { type: "done"; summary: RunSummary };
 
@@ -196,6 +285,10 @@ export interface RunSummary {
   creditsEstimated?: boolean;         // true when creditsUsed is partly estimated from browser time ("about")
   /** Added in v1 core: screenshots saved in the run folder (.osa/runs/<runId>/screenshots/). */
   screenshots?: { store: StoreId; label: string; path: string }[];
+  /** Added with order states: the last state of each store's checkout, by shop key ("amazon", "shopify:<domain>"). */
+  orderStates?: Record<string, { store: StoreId; domain?: string; state: OrderState; at: string; orderId?: string; message?: string }>;
+  /** Added in 0.2.0: the up-front approval this run had, when it had one. */
+  mandate?: MandateLimits;
 }
 
 /** Safety limits. Defaults are the safest choice. */
@@ -204,6 +297,6 @@ export interface Limits {
   allowedStores: StoreId[];
   allowSubscriptions: false;          // v1: never
   allowMembershipOffers: false;       // v1: never accept Prime, Walmart+, trials
-  requireApproval: true;              // v1: always
+  requireApproval: true;              // always: an order needs the person's OK (at checkout, or up front: RunOptions.mandate)
   maxCreditsPerRun: number;           // Browsa credits cap, default 40
 }

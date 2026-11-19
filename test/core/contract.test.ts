@@ -75,12 +75,12 @@ class ChangingTotal extends FakeAdapter {
   }
 }
 
-test("OrderResult.error: the engine handles a returned error and a thrown one the same way", async () => {
+test("OrderResult.error: a returned error is a known failure; a throw is an unknown order that is never retried", async () => {
   for (const mode of ["return", "throw"] as const) {
     const events: RunEvent[] = [];
     const agent = new ShoppingAgent({
       llm: false, dataDir: await mkdtemp(join(tmpdir(), "osa-c-")), adapters: { walmart: new ChangingTotal(mode) },
-      openBrowser: fakeBrowsers().open, watchLinks: false,
+      openBrowser: fakeBrowsers().open, watchLinks: false, orderVerifyDelayMs: 0,
     });
     const run = await agent.run("a usb-c hub on walmart", { onEvent: (e) => events.push(e), until: "review" });
     const review = run.reviews.get("walmart")!;
@@ -89,10 +89,18 @@ test("OrderResult.error: the engine handles a returned error and a thrown one th
     assert.match(r.error ?? "", /total is now \$31\.00/);
     const ev = events.find((e) => e.type === "order");
     assert.ok(ev && ev.type === "order" && ev.result.error);
-    assert.ok(events.some((e) => e.type === "log" && /Order not placed: Walmart total is now/.test(e.message)));
     assert.equal(events.some((e) => e.type === "store_failed" && e.stage === "place_order"), mode === "throw");
-    // Not placed and no person needed: the store can be approved again after a new review.
-    await run.reviewCheckout("walmart");
+    if (mode === "return") {
+      // Returned before the click: nothing was submitted, so a new review may be approved again.
+      assert.equal(r.state, "failed");
+      assert.ok(events.some((e) => e.type === "log" && /Order not placed: Walmart total is now/.test(e.message)));
+      await run.reviewCheckout("walmart");
+    } else {
+      // A throw may come after the click: unknown, with a message to check the store, and no new checkout.
+      assert.equal(r.state, "unknown");
+      assert.match(r.checkMessage ?? "", /Check your orders on Walmart/);
+      await assert.rejects(run.reviewCheckout("walmart"), /may have gone through/);
+    }
     await run.close();
   }
 });

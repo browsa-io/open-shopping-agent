@@ -25,7 +25,7 @@ claude mcp add open-shopping-agent -- npx -y open-shopping-agent mcp  # MCP for 
 Stores that block bots (Walmart, eBay and others in the table below) work better on **Browsa cloud browsers**, which are optional: set `BROWSA_API_KEY` and the agent uses them. A free Browsa key comes with 100 credits: [get one at browsa.io](https://browsa.io/?utm_source=github&utm_medium=readme&utm_campaign=osa).
 
 > **Why it's safe**
-> - **Never orders without your approval of the exact total.** It stops on the store's order review page. If the store then asks for more, nothing is placed.
+> - **Never orders without your OK: either on the exact total at checkout, or up front within limits you set.** By default it stops on the store's order review page for your approval. With [Buy without asking](#buy-without-asking) it buys only checkouts within your limit. Either way, if the store asks for more right before the click, nothing is placed.
 > - **Never types card numbers or store passwords.** Sign-in, codes and card checks are handed to you.
 > - **MCP orders are off by default.** An assistant over MCP can search, compare and fill carts, but cannot place an order unless you set `OSA_MCP_ALLOW_ORDERS=1`.
 > - **No subscriptions or memberships.** It picks one-time purchase and declines Prime, Walmart+ and free trials.
@@ -37,7 +37,7 @@ Stores that block bots (Walmart, eBay and others in the table below) work better
 - **Asks once, searches everywhere.** Type what you want in plain words. It searches every store you allow at the same time.
 - **Compares the real total.** Price, shipping, delivery date, rating and seller, side by side, with a one-line reason for each pick.
 - **Fills the carts.** It picks the right size or colour, chooses one-time purchase, and reads the cart back from the store to check it.
-- **Stops before paying.** It goes to checkout and stops on the review page. Nothing is bought until you approve that exact total.
+- **Stops before paying.** It goes to checkout and stops on the review page. Nothing is bought until you approve that exact total, or until you say up front "buy without asking, up to $60".
 - **Hands you the browser when needed.** Sign-in, a code by text message or a card check is yours to do, in the browser window or in Phantom Live.
 - **Watches prices.** Set a target price or a back-in-stock alert and get a terminal line, an email, a Slack message or a webhook.
 
@@ -95,12 +95,22 @@ Measured 18 Nov 2026 on Phantom (Browsa) by [the bench](bench/), stopped before 
 
 | | Searches and compares many stores | Fills carts | Stops for your approval before paying | Runs on your own Chrome | Open source |
 |---|---|---|---|---|---|
-| Open Shopping Agent | yes, built in | yes | yes, tied to the exact total | yes | yes, MIT |
+| Open Shopping Agent | yes, built in | yes | yes, tied to the exact total (or an up-front limit you set) | yes | yes, MIT |
 | Price trackers (changedetection.io, PriceGhost, PriceBuddy) | they watch pages you give them | no | no orders | they fetch the pages, some with a browser | yes |
 | General browser agents (browser-use, Stagehand, Skyvern) | if you write the task | if you write the task | if you build it | yes | yes |
 | Shopping assistants inside one company's app | mostly their own store or partners | yes | yes | no | no |
 
 General browser agents can do anything in a browser, so you write the shopping steps, the checks and the limits yourself. Open Shopping Agent is narrower: store adapters with tests, ranking by delivered total, and an approval gate in the engine. Price trackers are the right tool if you only want alerts.
+
+### Same item, price per unit, Shop catalog
+
+![Compare sorted by unit price: each offer shows its price per count, and is labelled Exact match or Similar relative to the pick (demo data)](docs/screens/same-item-unit-price.png)
+
+**Same item across stores.** Product pages are read for the GTIN (UPC/EAN), brand and manufacturer part number (JSON-LD, the store's own data and spec tables). Relative to the item you chose, each offer is labelled **Exact match** (same GTIN, or same brand and part number) or **Similar** (not proven the same). Similar offers are never dropped; "Same item only" in the web app hides them if you want.
+
+**Price per unit.** When a title or the store says what is in the pack ("Pack of 24", "2 x 1L", "500 ml", "12 Count (Pack of 2)"), the offer shows a comparable unit price such as "$0.42 / count". Titles with two sizes, ranges or unrelated counts get none instead of a guess. It is a sort you pick ("Unit price") and only breaks exact ties in the ranking; the default ranking does not change.
+
+**Shop catalog (opt-in, off by default).** `OSA_SHOP_CATALOG=1`, or the switch in Settings, also finds Shopify stores through Shopify's public catalog API (`mcp.shop.com`, the server the MIT-licensed [`@shopify/shop`](https://github.com/Shopify/shop) CLI uses): an anonymous search, and a lookup by GTIN to find the same item on other Shopify stores. It runs when Shopify is one of the run's stores. Your search words and the GTINs go to Shopify, and [Shopify's API terms](https://www.shopify.com/legal/api-terms) apply. There is no Shop sign-in, cart or checkout: results open on each store's own site with the Shopify adapter, the cart is read back from the store, and the order still needs your approval of the exact total.
 
 ## More ways to run it
 
@@ -141,7 +151,37 @@ Claude Desktop (`claude_desktop_config.json`) and Cursor (`~/.cursor/mcp.json`):
 
 Add `"env": { "BROWSA_API_KEY": "your_key" }` to use Browsa cloud browsers. Claude Code: `claude mcp add open-shopping-agent -- npx -y open-shopping-agent mcp` (add `-e BROWSA_API_KEY=your_key` before `--` for Browsa).
 
-Over MCP the agent searches, compares, fills carts and reviews checkout. It does not place orders unless you add `"OSA_MCP_ALLOW_ORDERS": "1"` to the server's `env`; even then each order needs the exact total you approved in the chat. Without it, finish the order in the web app or the CLI.
+Over MCP the agent searches, compares, fills carts and reviews checkout. It does not place orders unless you add `"OSA_MCP_ALLOW_ORDERS": "1"` to the server's `env`; even then each order needs the exact total you approved in the chat, unless you also set an up-front limit there (`"OSA_MCP_APPROVE_UP_TO": "60"`, see [Buy without asking](#buy-without-asking)). Without it, finish the order in the web app or the CLI.
+
+### Plugin (Claude Code, Cursor, Codex, Gemini CLI)
+
+The repository is also a plugin: the MCP server plus a skill (`skills/open-shopping-agent/SKILL.md`) with the safety rules. Orders stay off in every plugin unless you set `OSA_MCP_ALLOW_ORDERS=1` yourself.
+
+```bash
+claude plugin marketplace add browsa-io/open-shopping-agent      # Claude Code
+claude plugin install open-shopping-agent@open-shopping-agent
+gemini extensions install https://github.com/browsa-io/open-shopping-agent   # Gemini CLI
+```
+
+Claude Code and Gemini CLI ask for an optional Browsa key. Cursor, Codex, VS Code and other clients read the [Agent Plugins](https://agent-plugins.org) files (`plugin.json`, `mcp.json`) or `.cursor-plugin/plugin.json`; set `BROWSA_API_KEY` in your environment there. Without a key the stores open in your own Chrome.
+
+## Buy without asking
+
+> **Not yet tried on a real purchase.** No order has gone through Open Shopping Agent end to end yet. Placing orders, Buy without asking and order tracking are tested against fakes and saved store pages (474 tests), not a live checkout. Try them on a small order first, and report what you see.
+
+
+Off by default. You can approve purchases up front, so the agent buys without stopping at checkout:
+
+```bash
+osa "usb-c hub with hdmi" --approve-up-to 60 --approve-stores walmart,target --approve-expires 2h
+# Buy without asking, up to $60 per order at walmart, target, until ...? [y/N]
+```
+
+- **Your limits:** the most one order may cost (with shipping and tax), and optionally the stores, an expiry (default: this run only), a total for the run (`--approve-run-total`) and a number of orders (`--approve-max-orders`, default one per store).
+- **Outside them it asks**, as without it, and says why ("the total $74.10 is over your up-front limit of $60 per order").
+- **Every other guard stays:** the total is re-read right before the click and any change means no order; no subscriptions or memberships; your budget; never a second click; sign-ins, codes and card checks still come to you; prices in other currencies never count.
+- **Only you can set it.** The CLI asks you once in the terminal (`--yes` skips the question). The web app has a "Buy without asking" setting on the search, off by default, with a confirmation. Over MCP it comes only from the server's environment: `OSA_MCP_ALLOW_ORDERS=1` plus `OSA_MCP_APPROVE_UP_TO=60` (and `OSA_MCP_APPROVE_STORES`, `OSA_MCP_APPROVE_EXPIRES`). No tool call can set or widen it, and the plugins ship without it.
+- Orders bought this way show "Bought under your up-front approval (up to $60)" and are saved in the run history with `approval_source: "mandate"` and your limits.
 
 ## Pick a browser
 
@@ -262,11 +302,50 @@ On Browsa each check uses credits for browser time. On your own Chrome a check c
 
 ## Safety and limits
 
-- **Never buys without your approval.** The approval is tied to the exact total you saw. If the store asks for more, the order is not placed.
+- **Not yet tried on a real purchase.** Every run and test so far stopped before buying or used fakes; order placement, Buy without asking and order tracking still need a first real order.
+
+- **Never buys without your OK.** Either the approval is tied to the exact total you saw at checkout, or you set an up-front limit ([Buy without asking](#buy-without-asking)) and only checkouts within it are bought. If the store asks for more right before the click, the order is not placed.
+- **Never clicks Place order twice.** One approval places at most one order. If the store does not show an order number, the order is marked "check the store" and the agent does not try again.
 - **No subscriptions or memberships.** It picks one-time purchase and declines Prime, Walmart+ and free trials.
 - **Budget caps.** Set a total budget per run, and on Browsa a cap on credits per run (default 40, `OSA_MAX_CREDITS`). The cap and the credits a run prints count only that run's own browsers and AI tasks, read from Browsa's credit ledger. A fresh browser counts 1 credit per started 12 minutes it ran, plus residential exit data. If Browsa's figures cannot be read, the run estimates from browser time and says "about".
 - **Your keys stay local.** Your keys and alert settings stay in your environment or `.osa/`. Store passwords are never typed by the agent: you sign in yourself.
 - **You are responsible for following each store's terms.** Some stores limit automated access. Read [docs/SAFETY.md](docs/SAFETY.md).
+
+## Reference
+
+### Orders and their states
+
+Each store's checkout moves through `proposed` (order review read) → `awaiting_approval` → `placing` → `placed`, `failed` or `unknown`, saved in the run history.
+
+- **placed**: the store's confirmation page showed an order number.
+- **failed**: nothing was submitted (the total changed, the store needed you first).
+- **unknown**: Place order may have gone through, but no order number was read back (a timeout, an error, a page without a number). The agent re-reads the page in the same browser, never clicks Place order again, and asks you to check your orders on the store before you retry.
+
+```bash
+osa orders                      # placed orders and ones to check on the store (--all adds failed)
+osa orders refresh [run-id]     # read each order's page on the store: status, carrier, tracking
+```
+
+`osa orders refresh` opens each placed order's page (from its confirmation) in the store's saved browser profile and reads it. It never clicks, types or signs in. On Browsa it needs saved store profiles (Settings, or `OSA_BROWSERS=persistent`). The web app shows the same list under **Orders**.
+
+### JSON output and exit codes
+
+`--json` prints one reply:
+
+```json
+{ "ok": true, "v": 1, "data": { "runId": "...", "picks": [] }, "next": ["..."] }
+{ "ok": false, "v": 1, "error": { "code": "timeout", "message": "...", "retryable": true, "next": ["..."] } }
+```
+
+| Exit | Meaning | Error codes |
+|---|---|---|
+| 0 | ok | |
+| 1 | user error | `bad_args`, `not_found`, `nothing_to_do` |
+| 2 | store or network problem, try again later | `store_error`, `network`, `timeout`, `blocked`, `no_browser` |
+| 3 | needs you | `needs_sign_in`, `needs_captcha`, `needs_user`, `needs_approval`, `order_unknown` |
+| 4 | safety refusal | `approval_mismatch`, `total_changed`, `over_budget`, `credits_cap`, `already_ordered`, `orders_disabled`, `safety_refusal` |
+
+`--json` compares only (no carts). Order results and order states carry `approval_source`: `"user"` (approved at checkout) or `"mandate"` (bought under your up-front approval, with its limits). `--dry-run` shows what each cart would get and changes no cart (MCP: `fill_carts` with `dry_run: true`). MCP tool results carry the same `ok`, `v` and `next`, and errors carry `structuredContent.error` with the same codes. MCP tools: `find_and_compare`, `fill_carts`, `review_checkout`, `place_order`, `watch_price`, `list_runs`, `list_orders`.
 
 ## FAQ
 
@@ -280,7 +359,7 @@ No. It runs on your own Chrome (the default without a key) or any DevTools brows
 The US stores for now (amazon.com, walmart.com, ebay.com, bestbuy.com, target.com), and Shopify stores that ship to you. `--zip 10001` sets the delivery ZIP the way a guest can on each store, with no sign-in. Adapters for other countries are welcome: see [Add a store](CONTRIBUTING.md#add-a-store).
 
 **Will it buy something by mistake?**
-It cannot place an order without an approval for the exact total. The bench and the tests never place orders.
+It cannot place an order without your OK: an approval of the exact total, or an up-front limit you set yourself (off by default). The bench and the tests never place orders.
 
 **Where is my data?**
 Run history and watches are files in `.osa/` on your machine. See [docs/SAFETY.md](docs/SAFETY.md).

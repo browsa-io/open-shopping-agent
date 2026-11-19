@@ -1,0 +1,39 @@
+{
+  "_fixture": "hand-made lookup_catalog tools/call result in the documented shape (made-up shops on .example domains): one exact variant match, one featured representative",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "isError": false,
+    "structuredContent": {
+      "messages": [{ "type": "info", "code": "not_found", "content": "042100009999" }],
+      "products": [
+        {
+          "id": "gid://shopify/p/EEE555",
+          "title": "Northbay 7-in-1 USB-C Hub",
+          "variants": [
+            {
+              "id": "gid://shopify/ProductVariant/5005",
+              "url": "https://gadget-shop.example/products/northbay-hub?variant=5005",
+              "price": { "amount": 2299, "currency": "USD" },
+              "availability": { "available": true },
+              "seller": { "name": "Gadget Shop", "url": "https://gadget-shop.example" },
+              "inputs": [{ "id": "042100005264", "match": "exact" }]
+            }
+          ]
+        },
+        {
+          "id": "gid://shopify/p/FFF666",
+          "title": "Northbay Hub Bundle",
+          "variants": [
+            {
+              "id": "gid://shopify/ProductVariant/6006",
+              "url": "https://bundle-shop.example/products/northbay-bundle",
+              "price": { "amount": 3999, "currency": "USD" },
+              "inputs": [{ "id": "042100005264", "match": "featured" }]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

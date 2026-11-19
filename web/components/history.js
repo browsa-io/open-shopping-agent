@@ -31,6 +31,7 @@ export async function historyView(main) {
               r.stores?.length ? h("span", { class: "sicons", title: storeList(r).map(([s, d]) => storeName(s, d)).join(", ") },
                 h("span", { class: "sr" }, `. ${storeList(r).map(([s, d]) => storeName(s, d)).join(", ")}`),
                 storeList(r).map(([s, d]) => storeIcon(s, d, "sm"))) : null)),
+          r.unknownOrders ? h("span", { class: "badge amber", title: "An order may have gone through but was not confirmed. Check your orders on the store." }, "Check the store") : null,
           r.orders ? h("span", { class: "badge green" }, `${r.orders} order${r.orders > 1 ? "s" : ""}`) : null,
           label ? h("span", { class: `badge ${tone}` }, r.status === "running" ? h("span", { class: "dot pulse" }) : null, label) : null,
           h("span", { class: "amt" }, r.picksTotal ? money(r.picksTotal) : h("span", { class: "faint" }, "No picks"))));

@@ -34,7 +34,7 @@ test("initialize and tools/list", async () => {
   assert.equal(await handle({ jsonrpc: "2.0", method: "notifications/initialized" }), undefined);
   const { result } = await rpc("tools/list");
   const names = result.tools.map((t: { name: string }) => t.name);
-  assert.deepEqual(names, ["find_and_compare", "fill_carts", "review_checkout", "place_order", "watch_price", "list_runs"]);
+  assert.deepEqual(names, ["find_and_compare", "fill_carts", "review_checkout", "place_order", "watch_price", "list_runs", "list_orders"]);
   const place = result.tools.find((t: { name: string }) => t.name === "place_order");
   assert.match(place.description, /ask the human first/i);
   assert.deepEqual(place.inputSchema.required, ["run_id", "store", "approved_total"]);
@@ -119,7 +119,69 @@ test("stdio server answers initialize and tools/list", async () => {
   }
   assert.equal(lines[0].id, 1);
   assert.equal(lines[0].result.protocolVersion, "2024-11-05");
-  assert.equal(lines[1].result.tools.length, 6);
+  assert.equal(lines[1].result.tools.length, 7);
+});
+
+test("tool results carry the envelope: ok, v, next; errors carry code, retryable, next", async () => {
+  const found = await call("find_and_compare", { request: "usb-c hub", stores: ["amazon"] });
+  assert.equal(found.structuredContent.ok, true);
+  assert.equal(found.structuredContent.v, 1);
+  assert.ok(Array.isArray(found.structuredContent.next));
+  const missing = await call("fill_carts", { run_id: "missing" });
+  assert.equal(missing.isError, true);
+  assert.deepEqual(Object.keys(missing.structuredContent.error).sort(), ["code", "message", "next", "retryable"]);
+  assert.equal(missing.structuredContent.ok, false);
+  assert.equal(missing.structuredContent.error.code, "not_found");
+  assert.equal(missing.structuredContent.error.retryable, false);
+  assert.equal((await call("watch_price", { item: "hub" })).structuredContent.error.code, "bad_args");
+  const saved = process.env.OSA_MCP_ALLOW_ORDERS;
+  delete process.env.OSA_MCP_ALLOW_ORDERS;
+  try {
+    assert.equal((await call("place_order", { run_id: "x", store: "amazon", approved_total: 1 })).structuredContent.error.code, "orders_disabled");
+  } finally {
+    if (saved !== undefined) process.env.OSA_MCP_ALLOW_ORDERS = saved;
+  }
+});
+
+test("fill_carts dry_run says what each cart would get and changes nothing", async () => {
+  const found = await call("find_and_compare", { request: "usb-c hub and 6 ft hdmi cable", stores: ["amazon", "walmart", "ebay"] });
+  const runId = found.structuredContent.run_id;
+  const dry = await call("fill_carts", { run_id: runId, dry_run: true });
+  assert.ok(!dry.isError, dry.content[0].text);
+  assert.match(dry.content[0].text, /DRY RUN: no cart was changed/);
+  assert.equal(dry.structuredContent.dry_run, true);
+  assert.ok(dry.structuredContent.carts.length >= 1);
+  assert.ok(dry.structuredContent.carts.every((c: { lines: unknown[]; subtotal: { cents: number } }) => c.lines.length && c.subtotal.cents > 0));
+  // Still waiting: the real fill_carts works after the dry run, and fills what the dry run said.
+  const filled = await call("fill_carts", { run_id: runId });
+  assert.ok(!filled.isError, filled.content[0].text);
+  assert.deepEqual(filled.structuredContent.carts.map((c: { store: string }) => c.store).sort(), dry.structuredContent.carts.map((c: { store: string }) => c.store).sort());
+});
+
+test("place_order: an order the store did not confirm is order_unknown, never retried, and listed", async () => {
+  const hub = new RunHub(new MockEngine({ speed: 0, signInStore: null, failStore: null, unknownStore: "amazon" }));
+  const h = createMcpHandler(hub, new FileAlerts(join(dir, "w2.json")), new ConfigStore(dir), { waitMs: 10_000 });
+  const c = async (name: string, args: unknown) => ((await h({ jsonrpc: "2.0", id: ++id, method: "tools/call", params: { name, arguments: args } })) as { result: any }).result;
+  process.env.OSA_MCP_ALLOW_ORDERS = "1";
+  const found = await c("find_and_compare", { request: "usb-c hub", stores: ["amazon"] });
+  const runId = found.structuredContent.run_id;
+  await c("fill_carts", { run_id: runId });
+  const reviewed = await c("review_checkout", { run_id: runId });
+  const total = reviewed.structuredContent.reviews[0].total;
+  assert.equal(reviewed.structuredContent.reviews[0].code, "needs_approval");
+  const r = await c("place_order", { run_id: runId, store: "amazon", approved_total: total.cents / 100 });
+  assert.equal(r.isError, true);
+  assert.equal(r.structuredContent.error.code, "order_unknown");
+  assert.equal(r.structuredContent.error.retryable, false);
+  assert.match(r.content[0].text, /Do not call place_order again/);
+  assert.equal(r.structuredContent.data.order.state, "unknown");
+  const again = await c("place_order", { run_id: runId, store: "amazon", approved_total: total.cents / 100 });
+  assert.equal(again.isError, true);
+  assert.match(again.structuredContent.error.code, /order_unknown|already_ordered/);
+  const listed = await c("list_orders", {});
+  assert.equal(listed.structuredContent.orders[0].state, "unknown");
+  assert.match(listed.content[0].text, /UNKNOWN/);
+  assert.ok(listed.structuredContent.next.length);
 });
 
 test("place_order is off unless OSA_MCP_ALLOW_ORDERS is set", async () => {

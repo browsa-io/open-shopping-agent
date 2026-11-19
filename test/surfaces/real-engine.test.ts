@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Offer, RunEvent, StoreId } from "../../src/core/types.js";
 import { LimitError } from "../../src/core/limits.js";
+import { makeMandate } from "../../src/core/mandate.js";
 import { markAdapterMissing, registerAdapter, unregisterAdapter } from "../../src/stores/index.js";
 import { createWatchCheck } from "../../src/core/watch-check.js";
 import { normalizeWatch } from "../../src/alerts/store.js";
@@ -97,6 +98,27 @@ test("real engine: price changed at the store, order not placed", async () => {
   const s = await run.done;
   assert.equal(a.calls.placeOrder, 1);
   assert.equal(s.orders[0].placed, false);
+});
+
+test("real engine: with an up-front approval (CLI-style auto steps), it buys within it with no approve call, and asks outside it", async () => {
+  const a = register(amazon());
+  const w = register(walmart());
+  const { hub } = await engineWith({ approvalTimeoutMs: 300 });
+  const mandate = makeMandate({ maxTotal: 40, stores: "amazon" }, "cli");
+  const run = hub.start("a usb-c hub", { limits: { allowedStores: ["amazon", "walmart"] }, mandate, autoSteps: ["cart", "checkout"], everyStore: true });
+  // Walmart is outside the mandate: its cart question stays open; answer it so its checkout asks for approval.
+  await hub.waitFor(run.runId, (r) => r.gates.some((g) => g.step === "cart" && g.store === "walmart"), 5000);
+  hub.answer(run.runId, "cart", "walmart", true);
+  await hub.waitFor(run.runId, (r) => r.gates.some((g) => g.step === "checkout" && g.store === "walmart"), 5000);
+  hub.answer(run.runId, "checkout", "walmart", true);
+  const s = await run.done; // walmart's approval times out (nobody clicks Buy); the run still ends
+  assert.equal(a.calls.placeOrder, 1);
+  assert.equal(w.calls.placeOrder, 0);
+  assert.equal(s.orders.length, 1);
+  assert.equal(s.orders[0].approval_source, "mandate");
+  assert.ok(run.events.some((e) => e.type === "awaiting_approval" && e.store === "walmart" && /not one of the stores/.test(e.mandateDeclined ?? "")));
+  assert.ok(!run.events.some((e) => e.type === "awaiting_approval" && e.store === "amazon"));
+  assert.equal(run.events.at(-1)?.type, "done");
 });
 
 test("real engine: sign-in at checkout emits needs_user and offers a second review", async () => {

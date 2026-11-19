@@ -10,7 +10,7 @@
 // A failing store never fails the run: it gets a "store_failed" event and the others go on.
 
 import type {
-  Approval, Cart, CheckoutReview, ItemRequest, Limits, Money, NeedsUser, Offer, OrderResult, Pick, RunEvent, RunSummary,
+  Approval, ApprovalSource, Cart, CheckoutReview, ItemRequest, Limits, Money, NeedsUser, Offer, OrderResult, OrderState, Pick, RunEvent, RunSummary,
   ShoppingRequest, Stage, StoreId,
 } from "./types.js";
 import type { StoreAdapter, StoreContext } from "../stores/adapter.js";
@@ -20,13 +20,19 @@ import { parseRequest, ALL_STORES } from "./parse.js";
 import { llmFromEnv, type LLMConfig } from "./llm.js";
 import { BrowserPool, defaultDomain, proxyFromText, type BrowserMode, type BrowsaClient, type StoreBrowser } from "./browsers.js";
 import { deliveredTotal, markCurrency, pickAll, pickEveryStore, scoreOffers } from "./rank.js";
+import { labelSameItem } from "./identity.js";
+import { withUnits } from "./units.js";
+import { SHOP_CATALOG_TERMS, ShopCatalog, ShopCatalogAuthError, shopCatalogEnabled } from "./shop-catalog.js";
 import type { SpendEvent } from "./credits.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 import {
-  allowedStores, approvalProblem, CreditMeter, effectiveBudget, forbiddenLines, LimitError, resolveLimits,
+  allowedStores, approvalProblem, CreditMeter, effectiveBudget, forbiddenLines, LimitError, mandateApprovalFor, resolveLimits,
 } from "./limits.js";
+import { boughtUnderMandateText, invalidMandate, mandateLimits, mandateText, type Mandate, type MandateLimits } from "./mandate.js";
 import { newRunId, RunRecorder } from "./history.js";
+import { OrderStateError, OrderTracker, approvalId, blocksNewOrder, unknownMessage } from "./order-state.js";
+import { extractPage, orderPages, type ConfirmationInfo, type TrackingInfo } from "../orders/index.js";
 import {
   BLOCKY_STORES, BrowsaProvider, CdpProvider, LocalProvider, NON_BROWSA_EXIT_WARNING, ProxyPlan, blockedNote, botCheckMessage,
   browsaTaskLlm, chooseProvider, describeFallback, hasProxies, isBotBlock, proxySettingsFrom, toBrowsaProxy,
@@ -103,10 +109,28 @@ export interface ShoppingAgentOptions {
   /** Most steps of the AI fallback loop on local and CDP browsers (your own model key). Default 8. */
   aiLoopSteps?: number;
   /**
+   * Shop catalog (core/shop-catalog.ts): also find Shopify stores through Shopify's public catalog
+   * (anonymous search and GTIN lookup at mcp.shop.com) when "shopify" is one of the run's stores.
+   * Off by default; OSA_SHOP_CATALOG=1 (or 0) wins over this. Results open on the store's own site
+   * with the Shopify adapter. A ShopCatalog instance (tests) switches it on.
+   */
+  shopCatalog?: boolean | ShopCatalog;
+  /**
    * After the browsers stop, wait this long before counting credits when a browser used an exit
    * billed per GB (its last data charge reaches the ledger a few seconds late). Default 16000.
    */
   creditSettleMs?: number;
+  /**
+   * After "Place order" errored, timed out or showed no order number: how many times the engine
+   * re-reads the page in the same browser for an order number (no reload, no click), and the wait
+   * between reads. Defaults 3 and 5000.
+   */
+  orderVerifyAttempts?: number;
+  orderVerifyDelayMs?: number;
+  /** After placeOrder timed out, how long its late answer is still awaited before reading the page. Default 30000. */
+  orderGraceMs?: number;
+  /** Wait after opening an order page before reading it (order tracking). Default 3000. */
+  orderReadDelayMs?: number;
 }
 
 export interface RunOptions {
@@ -126,6 +150,16 @@ export interface RunOptions {
   defaultStores?: StoreId[];
   /** Pick every item at each store (a cart per store, to compare real delivered totals) instead of the best store per item. */
   everyStore?: boolean;
+  /** Save this run in the run history (default: the agent's `history` option). */
+  history?: boolean;
+  /**
+   * Added in 0.2.0: the person's up-front approval (see core/mandate.ts, made with makeMandate).
+   * With it, a checkout review whose total is within the mandate is bought without a prompt; any
+   * other review waits for approve() as before, with the reason in "awaiting_approval". Front ends
+   * set it only from the person's own input (CLI flags confirmed in a terminal, the web app's
+   * confirmed setting, the MCP server's environment), never from a model's tool call.
+   */
+  mandate?: Mandate;
 }
 
 type StageError = { store: StoreId; stage: Stage; error: string; domain?: string };
@@ -248,6 +282,8 @@ export class ShoppingRun {
   private readonly shops = new Map<string, Shop>();
   private readonly browsers = new Map<StoreId, Promise<StoreBrowser>>();
   private readonly ordered = new Set<string>();
+  /** Order state per shop key: proposed -> awaiting_approval -> placing -> placed | failed | unknown. */
+  readonly orderStates = new OrderTracker();
   private readonly recorder?: RunRecorder;
   private meter!: CreditMeter;
   private pool?: BrowserPool;
@@ -257,11 +293,28 @@ export class ShoppingRun {
   private openFn?: (store: StoreId, domain: string) => Promise<StoreBrowser>;
   private closed = false;
   private readonly runAbort = new AbortController();
+  /** Shop catalog client when the source is on for this run (see ShoppingAgentOptions.shopCatalog). */
+  private catalog?: ShopCatalog;
+  /** The person's up-front approval for this run (RunOptions.mandate), when it is valid. */
+  readonly mandate?: Mandate;
+  /** Why RunOptions.mandate was not used (said once at start). */
+  private readonly mandateRefused?: string;
+  /** Shop keys with an order under the mandate that is placing, placed or unknown. */
+  private readonly mandateOrders = new Set<string>();
+  /** Totals of orders being placed now (counted against the budget and the mandate until they settle). */
+  private readonly placingTotals = new Map<string, Money>();
+  /** The last order result per shop key. */
+  private readonly lastResults = new Map<string, OrderResult>();
 
   constructor(private readonly agent: ShoppingAgent, private readonly opts: RunOptions) {
     this.o = agent.options;
     this.runId = opts.runId ?? newRunId();
-    if (this.o.history !== false) this.recorder = new RunRecorder(this.o.dataDir ?? ".osa", this.runId);
+    if (opts.mandate !== undefined) {
+      const bad = invalidMandate(opts.mandate);
+      if (bad) this.mandateRefused = bad;
+      else this.mandate = { ...opts.mandate, maxTotal: { ...opts.mandate.maxTotal }, ...(opts.mandate.stores ? { stores: [...opts.mandate.stores] } : {}) };
+    }
+    if (this.o.history !== false && opts.history !== false) this.recorder = new RunRecorder(this.o.dataDir ?? ".osa", this.runId);
     if (opts.signal) {
       if (opts.signal.aborted) this.runAbort.abort();
       else opts.signal.addEventListener("abort", () => this.runAbort.abort(), { once: true });
@@ -307,55 +360,34 @@ export class ShoppingRun {
   // start: parse, open, search, pick, then carts and reviews as asked
 
   async start(input: string | ShoppingRequest): Promise<void> {
-    this.limits = resolveLimits(this.opts.limits);
-    let plan: ProxyPlan | undefined;
-    if (!this.o.openBrowser) {
-      const prov = this.agent.provider();
-      this.provider = prov;
-      plan = new ProxyPlan(this.agent.proxySettings(), { log: (m) => this.log(m) });
-      this.emit({ type: "browser", provider: prov.id, label: prov.label, capabilities: prov.capabilities, fallback: this.agent.fallbackText(prov.id) });
-      if (prov.id !== "browsa" || this.o.browser === prov) {
-        if (!prov.capabilities.aiFallback) this.log(this.agent.fallbackText(prov.id));
-        const p = plan;
-        this.openFn = async (store, domain) => prov.open(store, {
-          domain, log: (m) => this.log(m, store),
-          ...(prov.id === "local" ? { proxy: (await p.forStore(store)) ?? null } : {}),
-        });
-      }
+    const plan = this.setupProvider();
+    const sc = this.o.shopCatalog;
+    if (sc instanceof ShopCatalog ? process.env.OSA_SHOP_CATALOG?.trim() !== "0" : shopCatalogEnabled(sc === true)) {
+      this.catalog = sc instanceof ShopCatalog ? sc : new ShopCatalog();
     }
-    this.request = typeof input === "string" ? await this.agent.parse(input, (m) => this.log(m), this.opts.defaultStores, !!this.opts.shopifyDomains?.length) : normalizeRequest(input);
+    // With the Shop catalog on, Shopify stays in the default stores: the catalog names the shops.
+    this.request = typeof input === "string" ? await this.agent.parse(input, (m) => this.log(m), this.opts.defaultStores, !!this.opts.shopifyDomains?.length || !!this.catalog) : normalizeRequest(input);
     if (this.opts.zip && !this.request.zip) this.request.zip = this.opts.zip;
     if (this.opts.shopifyDomains?.length && this.request.stores.includes("shopify")) {
       this.request.shopifyDomains = [...new Set([...(this.request.shopifyDomains ?? []), ...this.opts.shopifyDomains])];
     }
     this.budget = effectiveBudget(this.limits, this.request);
     this.emit({ type: "parsed", request: this.request });
+    if (this.mandate) this.log(`Up-front approval: buy without asking, ${mandateText(mandateLimits(this.mandate))}. Anything else waits for your OK.`);
+    else if (this.mandateRefused) this.log(`Up-front approval not used (${this.mandateRefused}); every order waits for your OK`);
     void this.recorder?.request(this.request);
-
-    const client = this.o.client;
-    // Only this run's own browsers and tasks count (other runs on the account do not).
-    const browsa = (): BrowsaClient | undefined => (this.o.openBrowser || this.openFn ? undefined : client ?? this.pool?.client);
-    this.meter = new CreditMeter(this.o.openBrowser || this.openFn ? undefined : {
-      ledger: async (limit) => {
-        const c = browsa();
-        if (typeof c?.listLedger !== "function") throw new Error("no ledger");
-        return c.listLedger({ limit });
-      },
-      agent: async (id) => {
-        const c = browsa();
-        if (!c) throw new Error("no Browsa client");
-        return c.getAgent(id);
-      },
-    }, this.limits.maxCreditsPerRun);
-    this.pool = this.openFn ? undefined : this.agent.makePool((n, what) => this.meter.spend(n, what), (s, m) => this.log(m, s), plan, this.runAbort.signal, (e) => this.meter.track(e));
-    await this.meter.begin();
+    await this.setupMeter(plan);
 
     const { stores, refused } = allowedStores(this.request, this.limits);
     for (const s of refused) this.fail(s, "search", new LimitError("store_not_allowed", `${STORE_NAMES[s]} is not in the allowed stores`));
     if (!this.request.items.length) this.log("No items found in the request");
 
     try {
-      if (this.request.items.length && stores.length) await this.searchAll(stores);
+      if (this.request.items.length && stores.length) {
+        const useCatalog = !!this.catalog && stores.includes("shopify");
+        await Promise.all([this.searchAll(stores), useCatalog ? this.searchCatalog() : undefined]);
+        if (useCatalog) await this.lookupSameItems();
+      }
       this.pickNow();
       const closeAll = this.opts.close ?? (this.opts.until === "picks");
       if (!closeAll) await this.releaseUnpicked();
@@ -374,12 +406,88 @@ export class ShoppingRun {
     }
   }
 
+  /**
+   * Read order pages of one store in its browser (the saved store profile), for order tracking.
+   * Opens the store's page at each URL with a plain GET and reads it; never clicks, types or signs
+   * in. The browser closes before this returns.
+   */
+  async readOrderPages(store: StoreId, domain: string, urls: string[]): Promise<{ url: string; tracking: TrackingInfo }[]> {
+    const plan = this.setupProvider();
+    this.request = { prompt: "order tracking", items: [], stores: [store], ...(store === "shopify" ? { shopifyDomains: [domain] } : {}) };
+    await this.setupMeter(plan);
+    const out: { url: string; tracking: TrackingInfo }[] = [];
+    try {
+      if (this.pool && (await this.pool.modeFor(store)) === "burner") {
+        throw new Error(`Reading ${STORE_NAMES[store]} orders needs a saved store profile (Settings > Saved store profiles, or OSA_BROWSERS=persistent): a fresh browser is not signed in`);
+      }
+      const shop = await withTimeout(this.openShop(store, domain), this.o.stepTimeoutMs ?? 180_000, `opening ${STORE_NAMES[store]}`);
+      const pages = orderPages(store);
+      for (const url of urls) {
+        if (!/^https:\/\//i.test(url)) continue;
+        try {
+          await shop.ctx.page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+          await shop.ctx.page.waitForTimeout(this.o.orderReadDelayMs ?? 3000).catch(() => {});
+          out.push({ url, tracking: pages.tracking(await extractPage(shop.ctx.page), domain) });
+        } catch (e) {
+          out.push({ url, tracking: { unreadable: true } });
+          this.log(`Order page could not be read: ${errText(e)}`, store);
+        }
+      }
+    } finally {
+      await this.close({ settle: false });
+    }
+    return out;
+  }
+
+  /** Limits, the browser provider and its proxy plan. */
+  private setupProvider(): ProxyPlan | undefined {
+    this.limits = resolveLimits(this.opts.limits);
+    let plan: ProxyPlan | undefined;
+    if (!this.o.openBrowser) {
+      const prov = this.agent.provider();
+      this.provider = prov;
+      plan = new ProxyPlan(this.agent.proxySettings(), { log: (m) => this.log(m) });
+      this.emit({ type: "browser", provider: prov.id, label: prov.label, capabilities: prov.capabilities, fallback: this.agent.fallbackText(prov.id) });
+      if (prov.id !== "browsa" || this.o.browser === prov) {
+        if (!prov.capabilities.aiFallback) this.log(this.agent.fallbackText(prov.id));
+        const p = plan;
+        this.openFn = async (store, domain) => prov.open(store, {
+          domain, log: (m) => this.log(m, store),
+          ...(prov.id === "local" ? { proxy: (await p.forStore(store)) ?? null } : {}),
+        });
+      }
+    }
+    return plan;
+  }
+
+  /** The credit meter (this run's own browsers and tasks only) and the Browsa pool. */
+  private async setupMeter(plan: ProxyPlan | undefined): Promise<void> {
+    const client = this.o.client;
+    // Only this run's own browsers and tasks count (other runs on the account do not).
+    const browsa = (): BrowsaClient | undefined => (this.o.openBrowser || this.openFn ? undefined : client ?? this.pool?.client);
+    this.meter = new CreditMeter(this.o.openBrowser || this.openFn ? undefined : {
+      ledger: async (limit) => {
+        const c = browsa();
+        if (typeof c?.listLedger !== "function") throw new Error("no ledger");
+        return c.listLedger({ limit });
+      },
+      agent: async (id) => {
+        const c = browsa();
+        if (!c) throw new Error("no Browsa client");
+        return c.getAgent(id);
+      },
+    }, this.limits.maxCreditsPerRun);
+    this.pool = this.openFn ? undefined : this.agent.makePool((n, what) => this.meter.spend(n, what), (s, m) => this.log(m, s), plan, this.runAbort.signal, (e) => this.meter.track(e));
+    await this.meter.begin();
+  }
+
   private shopsToOpen(stores: StoreId[]): { store: StoreId; domain: string }[] {
     const out: { store: StoreId; domain: string }[] = [];
     for (const s of stores) {
       if (s === "shopify") {
         const domains = this.request.shopifyDomains ?? [];
-        if (!domains.length) this.fail("shopify", "search", new Error("no Shopify shop domain given (add one like allbirds.com to the request)"));
+        if (!domains.length && this.catalog) this.log("Shopify stores come from Shop's catalog for this run", "shopify");
+        else if (!domains.length) this.fail("shopify", "search", new Error("no Shopify shop domain given (add one like allbirds.com to the request)"));
         for (const d of domains) out.push({ store: s, domain: d });
       } else out.push({ store: s, domain: defaultDomain(s) });
     }
@@ -470,7 +578,7 @@ export class ShoppingRun {
         let offers = await this.step(shop, () => shop.adapter.search(shop.ctx, item, limit), Math.min(left, this.o.stepTimeoutMs ?? 180_000), `searching ${STORE_NAMES[store]}`);
         offers = (Array.isArray(offers) ? offers : []).filter(isOffer).map((o) => ({ ...o, itemId: item.id, store, storeDomain: o.storeDomain || domain }));
         offers = this.checkCurrency(store, domain, offers);
-        offers = this.checkCurrency(store, domain, await this.addDetails(shop, item, offers, deadline));
+        offers = this.checkCurrency(store, domain, await this.addDetails(shop, item, offers, deadline)).map(withUnits);
         this.offers.push(...offers);
         this.emit({ type: "offers", store, itemId: item.id, offers });
       } catch (e) {
@@ -497,6 +605,71 @@ export class ShoppingRun {
       this.log(currencyNote(store === "shopify" ? domain : STORE_NAMES[store], shown.join(", ")), store);
     }
     return out;
+  }
+
+  /** Catalog offers come from many Shopify stores: the same currency rule, noted once per store. */
+  private checkCatalogCurrency(offers: Offer[]): Offer[] {
+    return offers.map((o) => this.checkCurrency("shopify", o.storeDomain || "", [o])[0]!);
+  }
+
+  // ------------------------------------------------------------------------------------------
+  // Shop catalog (opt-in): Shopify offers from Shopify's public catalog, opened later on each
+  // store's own site by the Shopify adapter. Read-only, anonymous; never Shop's carts or checkout.
+
+  /** The catalog said it needs a sign-in (or failed): say so once and stop using it this run. */
+  private catalogFailed(e: unknown): void {
+    if (e instanceof ShopCatalogAuthError) {
+      this.log(`Shop catalog skipped: ${e.message}`, "shopify");
+      this.catalog = undefined;
+    } else {
+      this.log(`Shop catalog search failed: ${errText(e)}`, "shopify");
+    }
+  }
+
+  private async searchCatalog(): Promise<void> {
+    if (!this.catalog) return;
+    this.log(`Searching Shop's catalog of Shopify stores (Shopify's API terms apply: ${SHOP_CATALOG_TERMS})`, "shopify");
+    const limit = this.o.searchLimit ?? 8;
+    for (const item of this.request.items) {
+      if (!this.catalog || this.runAbort.signal.aborted) return;
+      try {
+        const offers = this.checkCatalogCurrency(await this.catalog.search(item, limit, this.request.zip)).map(withUnits);
+        if (!offers.length) continue;
+        this.offers.push(...offers);
+        this.emit({ type: "offers", store: "shopify", itemId: item.id, offers });
+        this.log(`Shop catalog: ${offers.length} offer${offers.length === 1 ? "" : "s"} for "${item.query}" from ${new Set(offers.map((o) => o.storeDomain)).size} Shopify store(s); prices are checked again in the store's own cart`, "shopify");
+      } catch (e) {
+        this.catalogFailed(e);
+      }
+    }
+  }
+
+  /**
+   * GTIN lookup: for each item, the GTINs read from product pages go to Shop's catalog, which names
+   * Shopify stores selling exactly that product. Those offers are added as exact matches.
+   */
+  private async lookupSameItems(): Promise<void> {
+    for (const item of this.request.items) {
+      if (!this.catalog || this.runAbort.signal.aborted) return;
+      const mine = this.offers.filter((o) => o.itemId === item.id);
+      // GTINs from the stores' own product pages (not from the catalog's answers), best first.
+      const ranked = scoreOffers(item, mine.filter((o) => o.raw?.source !== "shop_catalog"), { goal: this.request.goal, currency: this.budget?.currency });
+      const gtins = [...new Set(ranked.flatMap((s) => (s.offer.ids?.gtin ? [s.offer.ids.gtin] : [])))].slice(0, 5);
+      if (!gtins.length) continue;
+      try {
+        // GTIN-14 with leading zeros back to the UPC/EAN the catalog knows.
+        const asked = gtins.map((g) => g.replace(/^0+(?=\d{12,13}$)/, ""));
+        const found = await this.catalog.lookupGtins(asked, item.id);
+        const have = new Set(mine.map((o) => `${o.storeDomain}|${o.url}`));
+        const add = this.checkCatalogCurrency([...found.values()].flat().filter((o) => !have.has(`${o.storeDomain}|${o.url}`))).map(withUnits);
+        if (!add.length) continue;
+        this.offers.push(...add);
+        this.emit({ type: "offers", store: "shopify", itemId: item.id, offers: add });
+        this.log(`Shop catalog: the same product (GTIN) at ${new Set(add.map((o) => o.storeDomain)).size} Shopify store(s) for "${item.query}"`, "shopify");
+      } catch (e) {
+        this.catalogFailed(e);
+      }
+    }
   }
 
   private async addDetails(shop: Shop, item: ItemRequest, offers: Offer[], deadline: number): Promise<Offer[]> {
@@ -611,7 +784,8 @@ export class ShoppingRun {
     const opts = { budget: this.budget, currency: this.budget?.currency ?? "USD" };
     const r = this.opts.everyStore ? pickEveryStore(this.request, this.offers, opts) : pickAll(this.request, this.offers, opts);
     if (this.opts.everyStore) this.log("Every store: each store gets its own cart with every item, to compare real delivered totals");
-    this.picks = r.picks;
+    // Each alternative says whether it is the same product as the pick (GTIN, or brand and MPN).
+    this.picks = r.picks.map((p) => ({ ...p, alternatives: labelSameItem(p.offer, p.alternatives) }));
     this.total = r.total;
     this.overBudget = r.overBudget;
     for (const u of r.unpicked) {
@@ -749,6 +923,14 @@ export class ShoppingRun {
     this.assertOpen();
     const shop = this.findShop(store, domain);
     if (!shop) throw new Error(`${STORE_NAMES[store]} has no cart in this run`);
+    // After an order that is (or may be) placed, or while placing, the checkout is not opened again.
+    const now = this.orderStates.state(shop.key);
+    if (blocksNewOrder(now)) {
+      throw new LimitError("approval", now === "placed"
+        ? `An order was already placed at ${STORE_NAMES[store]} in this run`
+        : now === "placing" ? `An order at ${STORE_NAMES[store]} is being placed now`
+        : `The last order at ${STORE_NAMES[store]} may have gone through; check your orders on the store before you try again`);
+    }
     let review: CheckoutReview;
     try {
       const ms = this.o.stepTimeoutMs ?? 180_000;
@@ -774,6 +956,7 @@ export class ShoppingRun {
       const path = await this.recorder?.screenshot(store, "review", shop.ctx.page);
       if (path) this.log(`Screenshot: ${path}`, store);
     }
+    this.moveOrder(shop, "proposed", { total: review.total });
     if (review.needsUser) {
       this.emit({ type: "needs_user", store, needs: review.needsUser, ...dom });
     } else {
@@ -783,10 +966,51 @@ export class ShoppingRun {
       if (this.budget && this.placedTotal().cents + review.total.cents > this.budget.cents) {
         this.log(`The checkout total ${formatMoney(review.total)} would go over the ${formatMoney(this.budget)} budget; it cannot be approved`, store);
       }
-      this.emit({ type: "awaiting_approval", store, review, ...dom });
+      this.moveOrder(shop, "awaiting_approval", { total: review.total });
+      let declined: string | undefined;
+      if (this.mandate) {
+        // The person approved up front: the engine makes the approval from this review and places
+        // the order through the same gate as a clicked approval. Outside the mandate it asks.
+        const approval = mandateApprovalFor(review, this.mandate);
+        declined = this.gateProblem(shop, review, approval);
+        if (!declined) {
+          this.log(`Buying without asking: ${formatMoney(review.total)} is within your up-front approval (${mandateText(mandateLimits(this.mandate))})`, store);
+          try {
+            await this.placeWith(store, approval, store === "shopify" ? shop.domain : undefined);
+            return review;
+          } catch (e) {
+            // Refused by the gate before anything happened at the store (another order took the room): ask.
+            if (!(e instanceof LimitError) || this.orderStates.state(shop.key) !== "awaiting_approval") throw e;
+            declined = e.message.replace(/^Order not placed: /, "");
+          }
+        }
+        this.log(`Not bought without asking: ${declined}. It waits for your OK of the exact total.`, store);
+      }
+      this.emit({ type: "awaiting_approval", store, review, ...dom, ...(declined ? { mandateDeclined: declined } : {}) });
     }
     await this.writeSummary();
     return review;
+  }
+
+  /** The gate's answer for this approval of this shop's review, with the run's limits and mandate. */
+  private gateProblem(shop: Shop, review: CheckoutReview | undefined, approval: Approval | undefined): string | undefined {
+    return approvalProblem({
+      store: shop.store, storeDomain: shop.store === "shopify" ? shop.domain : undefined, review, approval, limits: this.limits,
+      budget: this.budget, placed: this.committedTotal(), ordered: this.ordered,
+      mandate: this.mandate, mandateOrders: this.mandateOrders.size,
+    });
+  }
+
+  /** The last order result at this store (Shopify: this shop) in the run. */
+  orderResult(store: StoreId, domain?: string): OrderResult | undefined {
+    const shop = this.findShop(store, domain);
+    return shop ? this.lastResults.get(shop.key) : undefined;
+  }
+
+  /** The order state of this store's checkout (Shopify: this shop). */
+  orderStateOf(store: StoreId, domain?: string): OrderState | undefined {
+    const shop = this.findShop(store, domain);
+    return shop ? this.orderStates.state(shop.key) : undefined;
   }
 
   /**
@@ -794,35 +1018,83 @@ export class ShoppingRun {
    * limits hold. Throws LimitError("approval") otherwise, without touching the store.
    */
   async approve(store: StoreId, approval: Approval, domain?: string): Promise<OrderResult> {
+    // An approval under the mandate is made by the engine only (in reviewCheckout), never handed in.
+    if (approval?.source === "mandate") {
+      const msg = "Order not placed: an up-front approval is applied by the engine itself; approve the exact total instead";
+      this.log(msg, store);
+      throw new LimitError("approval", msg);
+    }
+    return this.placeWith(store, approval, domain);
+  }
+
+  /** The approval gate, then the adapter's Place order (it re-reads the total first), then the order state. */
+  private async placeWith(store: StoreId, approval: Approval, domain?: string): Promise<OrderResult> {
     this.assertOpen();
     const shop = this.findShop(store, domain ?? approval?.storeDomain);
     const review = shop ? this.reviews.get(shop.key) : undefined;
-    const problem = approvalProblem({
-      store, storeDomain: shop?.domain && store === "shopify" ? shop.domain : undefined, review, approval, limits: this.limits,
-      budget: this.budget, placed: this.placedTotal(), ordered: this.ordered,
+    let problem = shop ? this.gateProblem(shop, review, approval) : approvalProblem({
+      store, review, approval, limits: this.limits, budget: this.budget, placed: this.committedTotal(), ordered: this.ordered,
+      mandate: this.mandate, mandateOrders: this.mandateOrders.size,
     });
-    if (problem || !shop || !review) {
+    const state = shop ? this.orderStates.state(shop.key) : undefined;
+    if (!problem && shop) {
+      if (state === "placing") problem = "this order is being placed now";
+      else if (state === "placed") problem = "an order was already placed for this store in this run";
+      else if (state === "unknown") problem = "the last order at this store may have gone through; check your orders on the store before you try again";
+      else if (state !== "awaiting_approval") problem = "this checkout is not waiting for approval; review it again";
+    }
+    // One approval places at most one order: the same approval sent twice (a double click) is refused.
+    const id = approval?.approvedTotal ? approvalId(this.runId, approval) : undefined;
+    if (!problem && shop && id && !this.orderStates.useApproval(id)) problem = "this approval was already used";
+    if (problem || !shop || !review || !id) {
       const msg = `Order not placed: ${problem ?? "no store"}`;
       this.log(msg, store);
       throw new LimitError("approval", msg);
     }
     // Mark first so a second approve() for the same store cannot race this one.
-    this.ordered.add(store === "shopify" ? `${store}:${shop.domain}` : store);
-    let result: OrderResult;
+    this.ordered.add(shop.key);
+    const source: ApprovalSource = approval.source === "mandate" ? "mandate" : "user";
+    const how = source === "mandate" && this.mandate ? { approval_source: source, mandate: mandateLimits(this.mandate) } : { approval_source: source };
+    if (source === "mandate") this.mandateOrders.add(shop.key);
+    // Counted against the budget and the mandate while it is placed, so a parallel order cannot pass the gate on the same room.
+    this.placingTotals.set(shop.key, approval.approvedTotal);
+    this.moveOrder(shop, "placing", { approvalId: id, total: approval.approvedTotal, ...how });
+    await this.writeSummary(); // "placing" is in the history before the click
+
+    let raw: OrderResult | undefined;
+    let thrown: unknown;
+    const call = shop.adapter.placeOrder(shop.ctx, approval);
+    call.catch(() => {}); // a late rejection after a timeout is handled below, never unhandled
     try {
-      result = await withTimeout(shop.adapter.placeOrder(shop.ctx, approval), this.o.stepTimeoutMs ?? 180_000, "placing the order");
+      raw = await withTimeout(call, this.o.stepTimeoutMs ?? 180_000, "placing the order");
     } catch (e) {
-      // Adapters return { placed: false, error } on a changed total; a throw is handled the same way.
-      this.fail(store, "place_order", e, shop.domain);
-      result = { store, placed: false, error: errText(e) };
+      thrown = e;
+      // The adapter may still be on the page after a timeout: wait for it before reading the page.
+      if (/timed out after/.test(errText(e))) {
+        const late = await withTimeout(call, this.o.orderGraceMs ?? 30_000, "placing the order").catch(() => undefined);
+        if (late) { raw = late; thrown = undefined; this.log("Placing the order answered after its time limit", store); }
+      }
     }
-    result = { ...result, store };
-    if (!result.placed && result.error) this.log(`Order not placed: ${result.error}`, store);
+    if (thrown) this.fail(store, "place_order", thrown, shop.domain);
+    const result: OrderResult = { ...(await this.settleOrder(shop, approval, id, raw, thrown)), ...how };
+    this.placingTotals.delete(shop.key);
+    this.lastResults.set(shop.key, result);
+
+    if (result.state === "failed" && result.error) this.log(`Order not placed: ${result.error}`, store);
+    if (result.state === "unknown") this.log(`Order state unknown${result.error ? ` (${result.error})` : ""}. ${result.checkMessage}`, store);
     if (result.placed && result.total && result.total.cents > approval.approvedTotal.cents) {
       this.log(`The store charged ${formatMoney(result.total)}, more than the approved ${formatMoney(approval.approvedTotal)}`, store);
     }
+    // Only a failure the agent knows about (nothing submitted, nobody needed) frees the store again.
+    if (result.state === "failed" && !result.needsUser) this.ordered.delete(shop.key);
+    // Nothing was submitted: it does not count as an order under the mandate.
+    if (result.state === "failed") this.mandateOrders.delete(shop.key);
+    if (result.state === "placed" && source === "mandate" && this.mandate) this.log(`${boughtUnderMandateText(this.mandate)}: ${formatMoney(result.total ?? approval.approvedTotal)}`, store);
+    this.moveOrder(shop, result.state!, {
+      approvalId: id, orderId: result.orderId, orderUrl: result.orderUrl, total: result.total ?? approval.approvedTotal,
+      message: result.state === "unknown" ? result.checkMessage : result.state === "failed" ? result.error : undefined, ...how,
+    });
     if (result.needsUser) this.emit({ type: "needs_user", store, needs: result.needsUser, ...(store === "shopify" ? { domain: shop.domain } : {}) });
-    if (!result.placed && !result.needsUser) this.ordered.delete(store === "shopify" ? `${store}:${shop.domain}` : store);
     this.orders.push(result);
     this.emit({ type: "order", result });
     if (this.o.screenshots !== false) {
@@ -833,11 +1105,86 @@ export class ShoppingRun {
     return result;
   }
 
+  /**
+   * Decide placed, failed or unknown from what placeOrder returned (or threw). Only an order number
+   * counts as placed. When the click may have happened and no number came back, the page is read
+   * again in the same browser (no reload, no click) for the store's confirmation.
+   */
+  private async settleOrder(shop: Shop, approval: Approval, id: string, raw: OrderResult | undefined, thrown: unknown): Promise<OrderResult> {
+    const { store } = shop;
+    const pages = orderPages(store);
+    const ordersUrl = pages.ordersUrl(shop.domain);
+    const base = { store, approvalId: id, ordersUrl };
+    // The adapter saw an order number on the confirmation page.
+    if (!thrown && raw?.placed && raw.orderId) {
+      const conf = await this.readConfirmation(shop, 1, 0);
+      return {
+        ...raw, ...base, placed: true, state: "placed", placedAt: raw.placedAt ?? nowIso(),
+        orderUrl: raw.orderUrl ?? (conf?.orderId === raw.orderId ? conf.orderUrl : undefined) ?? pages.orderUrl(raw.orderId, shop.domain),
+      };
+    }
+    // Refused before the click (the total changed, the store needs the person first).
+    if (!thrown && raw && !raw.placed && !raw.submitted && (raw.error || raw.needsUser)) {
+      return { ...raw, ...base, placed: false, state: "failed" };
+    }
+    // The click may have gone through: only the store's confirmation decides.
+    const conf = await this.readConfirmation(shop);
+    if (conf) {
+      this.log(`The store's confirmation page shows order ${conf.orderId}`, store);
+      return {
+        ...(raw ?? {}), ...base, placed: true, state: "placed", orderId: conf.orderId, orderUrl: conf.orderUrl ?? pages.orderUrl(conf.orderId, shop.domain),
+        total: raw?.total ?? conf.total ?? approval.approvedTotal, confirmationText: raw?.confirmationText ?? conf.confirmationText, placedAt: raw?.placedAt ?? nowIso(),
+        error: undefined, needsUser: undefined,
+      };
+    }
+    const why = thrown ? errText(thrown) : raw?.placed ? "the store showed no order number" : raw?.error ?? raw?.needsUser?.message ?? "the store did not confirm the order";
+    return {
+      ...(raw ?? {}), ...base, placed: false, state: "unknown", submitted: raw?.submitted ?? true, error: why,
+      total: raw?.total ?? approval.approvedTotal, checkMessage: unknownMessage(STORE_NAMES[store] === "Shopify" ? shop.domain : STORE_NAMES[store], ordersUrl),
+    };
+  }
+
+  /** Read the page as it is now, a few times, for the store's order confirmation with an order number. */
+  private async readConfirmation(shop: Shop, attempts = this.o.orderVerifyAttempts ?? 3, delayMs = this.o.orderVerifyDelayMs ?? 5000): Promise<ConfirmationInfo | undefined> {
+    const pages = orderPages(shop.store);
+    for (let i = 0; i < Math.max(1, attempts); i++) {
+      if (i > 0 && delayMs > 0) await sleep(delayMs);
+      try {
+        const conf = pages.confirmation(await extractPage(shop.ctx.page, 15_000), shop.domain);
+        if (conf) return conf;
+      } catch { /* a dead or busy tab: try again, then give up */ }
+    }
+    return undefined;
+  }
+
+  /** Move one store's order state and record it (event and history). A move the machine refuses is logged, not thrown. */
+  private moveOrder(shop: Shop, to: OrderState, extra: { approvalId?: string; orderId?: string; orderUrl?: string; total?: Money; message?: string; approval_source?: ApprovalSource; mandate?: MandateLimits } = {}): void {
+    let at: string;
+    try {
+      at = this.orderStates.move(shop.key, to, { store: shop.store, domain: shop.store === "shopify" ? shop.domain : undefined, orderId: extra.orderId, message: extra.message }).at;
+    } catch (e) {
+      if (e instanceof OrderStateError) { this.log(`Order state not changed: ${e.message}`, shop.store); return; }
+      throw e;
+    }
+    const ev: RunEvent = { type: "order_state", store: shop.store, state: to, at, ...(shop.store === "shopify" ? { domain: shop.domain } : {}) };
+    for (const [k, v] of Object.entries(extra)) if (v !== undefined) (ev as Record<string, unknown>)[k] = v;
+    this.emit(ev);
+  }
+
   private placedTotal(): Money {
     const currency = this.budget?.currency ?? "USD";
     let cents = 0;
-    for (const o of this.orders) if (o.placed) cents += o.total?.cents ?? this.reviews.get(o.store)?.total.cents ?? 0;
+    // An order in the "unknown" state may have been charged: it counts against the budget too.
+    for (const o of this.orders) if (o.placed || o.state === "unknown") cents += o.total?.cents ?? this.reviews.get(o.store)?.total.cents ?? 0;
     return { cents, currency };
+  }
+
+  /** Orders placed or unknown, plus the ones being placed right now. */
+  private committedTotal(): Money {
+    const t = this.placedTotal();
+    let cents = t.cents;
+    for (const m of this.placingTotals.values()) if (m.currency === t.currency) cents += m.cents;
+    return { cents, currency: t.currency };
   }
 
   private findShop(store: StoreId, domain?: string): Shop | undefined {
@@ -866,6 +1213,9 @@ export class ShoppingRun {
     if (this.creditsUsed !== undefined) s.creditsUsed = this.creditsUsed;
     if (this.creditsUsed !== undefined && this.creditsEstimated) s.creditsEstimated = true;
     if (this.recorder?.screenshots.length) s.screenshots = [...this.recorder.screenshots];
+    const states = this.orderStates.snapshot();
+    if (Object.keys(states).length) s.orderStates = states;
+    if (this.mandate) s.mandate = mandateLimits(this.mandate);
     return s;
   }
 

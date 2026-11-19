@@ -3,6 +3,7 @@
 //   request.json     the parsed ShoppingRequest
 //   summary.json     the RunSummary, written when the run ends (and after each order)
 //   screenshots/     PNGs, referenced by path from the summary and from "log" events
+//   tracking.json    order status read later from the store's order page (osa orders refresh)
 // Phantom Live links are single use and give control of a browser: history keeps them without
 // the access code (the part after #).
 
@@ -46,7 +47,7 @@ export function runsDir(dataDir = ".osa"): string {
   return join(dataDir, "runs");
 }
 
-function runDir(dataDir: string, runId: string): string {
+export function runDir(dataDir: string, runId: string): string {
   if (!RUN_ID.test(runId)) throw new Error(`bad run id: ${runId}`);
   return join(runsDir(dataDir), runId);
 }

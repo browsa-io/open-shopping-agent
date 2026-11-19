@@ -7,8 +7,9 @@
 // stops on the sign-in / guest page with `needsUser`; never signs in, never types personal details.
 // Best Buy's bot wall ("Access Denied") or queue page: wait for Phantom, retry once, else a clear error.
 
-import type { Approval, Cart, CartLine, CheckoutReview, Money, Offer, OrderResult } from "../core/types.js";
+import type { Approval, Cart, CartLine, CheckoutReview, Money, Offer, OrderResult, ProductIds } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
+import { idsFromHtml } from "../core/identity.js";
 import {
   attr, browsaSolves, clean, elementAt, elementsWith, firstWith, jsonAfterMarker as jsonAfter, jsonLd, moneyFromNumeric as moneyFromNumber,
   isDeadPageError, needsUser, nowIso, pageIsDead, parseCount, parseMoney, parseStars, replacePage, sameOption, textLines, textOfHtml as textOf,
@@ -182,6 +183,11 @@ export function parseProduct(html: string): BbProduct {
     })),
     otherOffers: offers.filter((o) => o !== main).map((o) => ({ sku: String(o.sku), price: moneyFromNumber(o.price, o.priceCurrency ?? "USD"), seller: clean(o.seller?.name), condition: conditionOf(String(o.itemCondition ?? "") + " " + String(o.description ?? "")) })),
   };
+}
+
+/** Identifiers from a product page's JSON-LD: gtin13 when shown, "model" (the maker's model number) and brand. */
+export function bestbuyIds(html: string): ProductIds | undefined {
+  return idsFromHtml(html, jsonLd(html));
 }
 
 /** The SKU for wanted options, or the problems; undefined sku means "stay on this SKU". */
@@ -611,12 +617,14 @@ export const adapter: StoreAdapter = {
     // Once this browser's product pages are refused, do not spend a minute per offer on them.
     if (pdpBlocked.has(ctx.agentId)) return offer;
     let prod: BbProduct;
+    let html: string;
     try {
-      ({ prod } = await openProduct(ctx, sku, offer.url));
+      ({ prod, html } = await openProduct(ctx, sku, offer.url));
     } catch (e) {
       if (/refused the browser/.test((e as Error).message)) pdpBlocked.add(ctx.agentId);
       throw e;
     }
+    const ids = bestbuyIds(html) ?? offer.ids;
     const delivery = [
       prod.shippingDaysOut !== undefined ? `Shipping: ${prod.shippingDaysOut === 0 ? "today" : prod.shippingDaysOut === 1 ? "tomorrow" : `in ${prod.shippingDaysOut} days`}` : "",
       prod.pickupDaysOut !== undefined ? `Pickup: ${prod.pickupDaysOut === 0 ? "today" : prod.pickupDaysOut === 1 ? "tomorrow" : `in ${prod.pickupDaysOut} days`}` : "",
@@ -634,6 +642,7 @@ export const adapter: StoreAdapter = {
       deliveryText: delivery || offer.deliveryText,
       deliveryDate: date ?? offer.deliveryDate,
       variants: prod.variations.length ? Object.fromEntries(prod.variations.map((v) => [v.name, v.options.map((o) => o.name)])) : offer.variants,
+      ...(ids ? { ids } : {}),
       raw: { ...offer.raw, buttonState: prod.buttonState, otherOffers: prod.otherOffers.slice(0, 6), variationSkus: Object.fromEntries(prod.variations.flatMap((v) => v.options.map((o) => [`${v.name}:${o.name}`, o.sku]))) },
     };
   },
@@ -764,16 +773,18 @@ export const adapter: StoreAdapter = {
     }
     if (r.needs || !r.placeEnabled) return { store: "bestbuy", placed: false, needsUser: await needsUser(ctx, r.needs ?? "other", "Best Buy needs your input before the order can be placed. Open the live browser.") };
     await page.locator(`button:has-text("Place Your Order")`).first().click({ timeout: 15_000 });
+    // From here the click was sent: every result says submitted, so the engine never clicks again.
     await page.waitForURL(/thank-you|confirmation|order-confirmation/i, { timeout: 90_000 }).catch(() => {});
     await page.waitForTimeout(3000);
     const text = textLines(await page.content()).join(" ");
     if (/verification code|3-?D Secure|verify your card/i.test(text) && !/thank you for your order/i.test(text)) {
-      return { store: "bestbuy", placed: false, needsUser: await needsUser(ctx, "3ds", "Your bank asks for a verification step. Open the live browser to finish it.") };
+      return { store: "bestbuy", placed: false, submitted: true, needsUser: await needsUser(ctx, "3ds", "Your bank asks for a verification step. Open the live browser to finish it.") };
     }
     const placed = /thank you for your order|order (is )?confirmed|we('|’)ve received your order/i.test(text);
     return {
       store: "bestbuy",
       placed,
+      submitted: true,
       orderId: /\b(BBY01-\d{9,})\b/.exec(text)?.[1],
       total: r.total,
       confirmationText: clean(/(thank you for your order[^.]*\.?)/i.exec(text)?.[0]),

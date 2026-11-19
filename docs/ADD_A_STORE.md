@@ -52,7 +52,9 @@ Rules every adapter follows:
 - **Hand off instead of guessing.** If the store needs a sign-in, a code, a card check, an address or a puzzle, return `needsUser` from `reviewCheckout` or `placeOrder`. Do not type passwords and do not solve captchas.
 - **Re-read the total before placing.** `placeOrder` aborts if the review total is not `approval.approvedTotal`.
 
-Register the adapter in `src/stores/index.ts`.
+- **Say when the click happened.** Before the click, refuse with `{ placed: false, error }` or `needsUser`. After it, set `submitted: true` on every result. An order counts as placed only with an order number; anything else after the click becomes "unknown" and is never retried.
+
+Register the adapter in `src/stores/index.ts`. Add `src/orders/<id>.ts` (confirmation page, order page, orders list URL) and register it in `src/orders/index.ts`, with extracts in `test/orders/fixtures/pages.json`.
 
 ## 3. Save fixtures
 

@@ -12,6 +12,7 @@ import { RealEngine, type RealEngineOptions } from "./real-engine.js";
 import { llmFromEnv, type LLMConfig } from "../core/llm.js";
 import { createWatchCheck } from "../core/watch-check.js";
 import type { CheckFn } from "../alerts/types.js";
+import type { StoreId } from "../core/types.js";
 import { CdpProvider, chooseProvider, LocalProvider, localChromeAvailable, ProxyPlan, type ProviderId } from "../core/providers/index.js";
 
 export interface EngineChoice {
@@ -47,7 +48,9 @@ export function wantsReal(config: OsaConfig, choice: EngineChoice = {}): boolean
 export async function createEngine(config: OsaConfig, choice: EngineChoice = {}): Promise<EnginePort> {
   if (wantsReal(config, choice)) return new RealEngine(realOptions(config, choice));
   const speed = choice.speed ?? (process.env.OSA_DEMO_SPEED ? Number(process.env.OSA_DEMO_SPEED) : 1);
-  return new MockEngine({ speed, liveBase: choice.demoLiveBase ?? null });
+  // OSA_DEMO_UNKNOWN_STORE=walmart: that store's demo order ends "unknown" (to see the check-the-store screens).
+  const unknown = process.env.OSA_DEMO_UNKNOWN_STORE as StoreId | undefined;
+  return new MockEngine({ speed, liveBase: choice.demoLiveBase ?? null, ...(unknown ? { unknownStore: unknown } : {}) });
 }
 
 export function realOptions(config: OsaConfig, choice: EngineChoice = {}): RealEngineOptions {
@@ -60,6 +63,7 @@ export function realOptions(config: OsaConfig, choice: EngineChoice = {}): RealE
     browser: providerFor(config, choice).id,
     ...(config.cdpUrl ? { cdpUrl: config.cdpUrl } : {}),
     ...(config.storeProxies || config.proxyPool ? { proxies: { perStore: config.storeProxies, pool: config.proxyPool } } : {}),
+    ...(config.shopCatalog ? { shopCatalog: true } : {}),
     ...choice.real,
   };
 }

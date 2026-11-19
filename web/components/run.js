@@ -2,7 +2,7 @@
 // next action. Live runs stream over Server-Sent Events; saved runs replay with no browsers.
 
 import { api, confirmDialog, copyText, download, elapsed, h, icon, mount, store, toast } from "../lib/dom.js";
-import { formatCents, money, reduceStores, shortRaw, storeName, storeStatus } from "../lib/wording.js";
+import { formatCents, money, orderStateOf, reduceStores, shortRaw, storeName, mandateSummary, storeStatus, unknownText } from "../lib/wording.js";
 import { DEFAULT_FILTERS, computePlan, planChoices, runModel, summaryText, toCSV, toJSON, watchFromOffer } from "../lib/model.js";
 import { renderCompare } from "./compare.js";
 import { renderCheckout } from "./checkout.js";
@@ -35,6 +35,8 @@ export async function runView(main, id, app) {
   run.startedAt = rec.startedAt || run.startedAt;
   run.finishedAt = rec.finishedAt || null;
   run.replay = rec.status !== "running";
+  // "Buy without asking" on this run (live runs and saved summaries carry it).
+  run.mandate = rec.mandate || rec.summary?.mandate || null;
   // A saved run replays with its final status; "failed" means it ended without finishing.
   if (rec.status !== "running") run.status = rec.status;
   document.title = `${rec.prompt.slice(0, 50)} - Open Shopping Agent`;
@@ -210,7 +212,7 @@ function exportMenu(run, getEx) {
 function renderHead(el, run, d, getEx, actions, app) {
   const running = run.status === "running";
   const credits = run.summary?.creditsUsed;
-  const sig = JSON.stringify([run.status, run.prompt, elapsed(run.startedAt, run.finishedAt), credits, !!d.model.picks, d.browser?.label]);
+  const sig = JSON.stringify([run.status, run.prompt, elapsed(run.startedAt, run.finishedAt), credits, !!d.model.picks, d.browser?.label, !!run.mandate]);
   mount(el, sig, () => h("header", { class: "run-head" },
     h("div", { class: "run-title" },
       h("h1", { class: "q" }, run.prompt),
@@ -222,7 +224,8 @@ function renderHead(el, run, d, getEx, actions, app) {
         d.browser ? h("span", { class: "browser", title: d.browser.fallback || "" }, `Browser: ${d.browser.label}`) : null,
         credits !== undefined ? h("span", { title: "Credits of this run's own browsers and tasks" }, `${run.summary?.creditsEstimated ? "about " : ""}${credits} credit${credits === 1 ? "" : "s"}`) : null,
         run.replay ? h("span", {}, new Date(run.startedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : null,
-        app.meta.demo ? h("span", { class: "badge demo" }, "Demo data") : null)),
+        app.meta.demo ? h("span", { class: "badge demo" }, "Demo data") : null,
+        run.mandate ? h("span", { class: "badge amber", title: "You set Buy without asking for this search. Anything outside it waits for your OK." }, `Buys without asking: ${mandateSummary(run.mandate)}`) : null)),
     h("div", { class: "run-actions" },
       d.model.picks ? h("a", { class: "btn sm ghost", href: `#/run/${encodeURIComponent(run.id)}/summary` }, icon("share"), "Share") : null,
       d.model.picks ? exportMenu(run, getEx) : null,
@@ -300,6 +303,17 @@ export function nextStep(run, d) {
   const totalText = `${formatCents(plan.totalCents, plan.currency)}${plan.shippingUnknown ? " plus shipping" : ""}`;
   const budget = model.request?.budget;
 
+  const placing = list.filter((s) => s.lastKind === "placing");
+  if (running && placing.length) {
+    return { tone: "busy", text: `Placing the order at ${names(placing)}`, sub: "Place order is clicked once. Do not buy again elsewhere until the result shows.", primary: null };
+  }
+  // An order that may have gone through comes before anything else: the person checks the store.
+  const unknown = list.filter((s) => orderStateOf(s, running) === "unknown");
+  if (unknown.length) {
+    const s = unknown[0];
+    return { tone: "warn", text: `Check your ${storeName(s.store, s.domain)} orders`, sub: s.order?.checkMessage || unknownText(s, !s.order),
+      primary: s.order?.ordersUrl ? { label: `Open ${storeName(s.store, s.domain)} orders`, act: "link", href: s.order.ordersUrl, icon: "ext" } : null };
+  }
   const awaiting = list.filter((s) => s.lastKind === "awaiting" && s.awaiting && !s.order);
   if (running && awaiting.length) {
     const one = awaiting.length === 1 ? awaiting[0] : null;
@@ -362,7 +376,7 @@ function renderDock(el, run, d, actions, running) {
       else if (p.act === "new") location.hash = "#/";
     };
     const btn = !p ? null : p.act === "link"
-      ? h("a", { class: "btn primary", href: p.href, target: "_blank", rel: "noopener noreferrer" }, icon("live"), p.label)
+      ? h("a", { class: "btn primary", href: p.href, target: "_blank", rel: "noopener noreferrer" }, icon(p.icon || "live"), p.label)
       : h("button", { class: `btn ${p.ghost ? "ghost" : "primary"}`, "data-key": "dock-primary", disabled: p.disabled || run.busy.has("fill") || run.busy.has(`buy:${p.store}`), onclick: onPrimary },
         run.busy.has("fill") && p.act === "fill" ? [h("span", { class: "spin", "aria-hidden": "true" }), "Starting"] : p.label);
     return h("div", { class: `dock tone-${s.tone}`, role: "region", "aria-label": "Next step" },

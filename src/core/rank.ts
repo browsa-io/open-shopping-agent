@@ -4,10 +4,12 @@
 // What counts: the delivered total (unit price x quantity + shipping), the rating weighted by how
 // many reviews back it (Bayesian average), the delivery date, whether the title matches the item
 // and its hard requirements. Sponsored, used and refurbished offers are penalized. Out of stock,
-// subscription, membership and over-the-limit offers are never picked.
+// subscription, membership and over-the-limit offers are never picked. The price per unit
+// (core/units.ts) only breaks exact ties (same score, same delivered total).
 
 import type { ItemRequest, Money, Offer, Pick, ShoppingRequest } from "./types.js";
 import { formatMoney } from "../stores/util.js";
+import { commonPer, compareUnitPrice } from "./units.js";
 
 export type Goal = NonNullable<ShoppingRequest["goal"]>;
 
@@ -170,7 +172,9 @@ export function scoreOffers(item: ItemRequest, offers: Offer[], opts: RankOption
     s.score = Math.round(score * 10_000) / 10_000;
   }
   const excluded = all.filter((s) => s.excluded).map((s) => ({ ...s, score: -1 }));
-  pool.sort((a, b) => b.score - a.score || a.total.cents - b.total.cents || b.rating - a.rating);
+  // Unit price only breaks ties (same score and same delivered total); it never changes the score.
+  const per = commonPer(pool.map((s) => s.offer));
+  pool.sort((a, b) => b.score - a.score || a.total.cents - b.total.cents || compareUnitPrice(a.offer, b.offer, per) || b.rating - a.rating);
   return [...pool, ...excluded];
 }
 
@@ -248,6 +252,7 @@ export function reasonFor(item: ItemRequest, best: ScoredOffer, pool: ScoredOffe
   const met = (item.mustHave ?? []).filter((r) => !best.missing.includes(r));
   if (met.length) parts.push(`lists ${met.join(", ")}`);
   if (best.missing.length) parts.push(`title does not list ${best.missing.join(", ")}`);
+  if (o.perUnit) parts.push(o.perUnit.text);
   if (o.condition && o.condition !== "new") parts.push(o.condition);
   if (o.sponsored) parts.push("sponsored");
   parts.push(o.store === "shopify" ? o.storeDomain : STORE_NAMES[o.store] ?? o.store);

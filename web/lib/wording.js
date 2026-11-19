@@ -82,7 +82,7 @@ export function reduceStores(events, opts = {}) {
   let done = false;
   const get = (s) => {
     if (!stores.has(s)) {
-      stores.set(s, { store: s, domain: "", started: false, offers: 0, failure: null, failures: [], cart: null, review: null, needs: null, awaiting: null, order: null, liveUrl: null, exit: null, last: -1, lastKind: "" });
+      stores.set(s, { store: s, domain: "", started: false, offers: 0, failure: null, failures: [], cart: null, review: null, needs: null, awaiting: null, order: null, orderState: null, liveUrl: null, exit: null, last: -1, lastKind: "" });
       order.push(s);
     }
     return stores.get(s);
@@ -97,7 +97,15 @@ export function reduceStores(events, opts = {}) {
       case "cart": { const st = get(e.cart.store); st.cart = e.cart; st.last = i; st.lastKind = "cart"; break; }
       case "checkout_review": { const st = get(e.review.store); st.review = e.review; st.last = i; st.lastKind = "review"; break; }
       case "needs_user": { const st = get(e.store); st.needs = e.needs; st.awaiting = null; st.last = i; st.lastKind = "needs"; break; }
-      case "awaiting_approval": { const st = get(e.store); st.awaiting = e.review; st.needs = null; st.last = i; st.lastKind = "awaiting"; break; }
+      case "awaiting_approval": { const st = get(e.store); st.awaiting = e.review; st.mandateDeclined = e.mandateDeclined || null; st.needs = null; st.last = i; st.lastKind = "awaiting"; break; }
+      case "order_state": {
+        // proposed -> awaiting_approval -> placing -> placed | failed | unknown (the order event follows the last three)
+        const st = get(e.store);
+        st.orderState = e;
+        if (e.domain) st.domain = e.domain;
+        if (e.state === "placing") { st.awaiting = null; st.order = null; st.last = i; st.lastKind = "placing"; }
+        break;
+      }
       case "order": { const st = get(e.result.store); st.order = e.result; st.awaiting = null; st.last = i; st.lastKind = "order"; break; }
       case "done": done = true; break;
     }
@@ -107,6 +115,37 @@ export function reduceStores(events, opts = {}) {
 
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
+/** "$60" for whole dollars, "$59.99" otherwise. */
+const dollars = (m) => (m && m.cents % 100 === 0 ? `$${(m.cents / 100).toLocaleString("en-US")}` : money(m));
+
+/** "Bought under your up-front approval (up to $60)" for an order bought without asking, else null. */
+export function upFrontText(order) {
+  if (!order || order.approval_source !== "mandate" || !order.mandate?.maxTotal) return null;
+  return `Bought under your up-front approval (up to ${dollars(order.mandate.maxTotal)})`;
+}
+
+/** "up to $60 per order at walmart, target, until 14:00" for the run's "Buy without asking" setting. */
+export function mandateSummary(m) {
+  if (!m?.maxTotal) return "";
+  const parts = [`up to ${dollars(m.maxTotal)} per order`, m.stores?.length ? `at ${m.stores.join(", ")}` : "at any store in this search"];
+  if (m.maxRunTotal) parts.push(`${dollars(m.maxRunTotal)} in all`);
+  if (m.expiresAt) parts.push(`until ${new Date(m.expiresAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`);
+  return parts.join(", ");
+}
+
+/** The order states a person sees: "placing", "placed", "failed", "unknown" (or null before an approval). */
+export function orderStateOf(st, running) {
+  if (st.order) return st.order.placed ? "placed" : st.order.state === "unknown" ? "unknown" : "failed";
+  if (st.lastKind === "placing") return running ? "placing" : "unknown";
+  return null;
+}
+
+/** The "check on the store" message for an order that may have gone through. */
+export function unknownText(st, stopped = false) {
+  const name = storeName(st.store, st.domain);
+  return `${stopped ? "The agent stopped while placing this order. " : ""}${name} may have taken this order, but no order number was confirmed. Check your orders on ${name} before you try again.`;
+}
+
 /**
  * The status word for one store: { word, tone, detail }. tone is "busy", "ok", "warn", "bad" or "idle".
  * Words: Starting, Searching, Reading prices, Found N offers, Nothing found, Filling cart, Cart filled,
@@ -115,7 +154,12 @@ const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 export function storeStatus(st, ctx) {
   const { running, picked, gates, answered } = ctx;
   const has = (set, k) => !!set && (typeof set.has === "function" ? set.has(k) : false);
-  if (st.order) return st.order.placed ? { word: "Ordered", tone: "ok", detail: st.order.orderId ? `Order ${st.order.orderId}` : "" } : { word: "Not ordered", tone: "bad", detail: st.order.error || "" };
+  if (st.order) {
+    if (st.order.placed) return { word: "Ordered", tone: "ok", detail: [st.order.orderId ? `Order ${st.order.orderId}` : "", upFrontText(st.order)].filter(Boolean).join(". ") };
+    if (st.order.state === "unknown") return { word: "Check the store", tone: "warn", detail: `Not confirmed. Check your orders on ${storeName(st.store, st.domain)} before you try again.` };
+    return { word: "Not ordered", tone: "bad", detail: st.order.error || "" };
+  }
+  if (st.lastKind === "placing") return running ? { word: "Placing order", tone: "busy", detail: "Place order is clicked once; then the confirmation is read" } : { word: "Check the store", tone: "warn", detail: unknownText(st, true) };
   if (st.lastKind === "needs" && st.needs) return running ? { word: "Needs you", tone: "warn", detail: st.needs.message } : { word: "Stopped at checkout", tone: "warn", detail: st.needs.message };
   if (st.lastKind === "awaiting" && st.awaiting) return { word: "Ready to buy", tone: "ok", detail: money(st.awaiting.total) };
   if (st.lastKind === "failed" && st.failure) {

@@ -115,7 +115,7 @@ test("CSV: header, one row per offer, quoting and formula guard", () => {
   const model = M.runModel([...events(), { type: "offers", store: "ebay", itemId: "item-2", offers: [{ ...walmartCable, store: "ebay", url: "https://www.ebay.com/itm/9", title: '=HYPERLINK("x"), "6 ft"', seller: "a,b" }] }]);
   const csv = M.toCSV(model, M.computePlan(model, {}));
   const lines = csv.trim().split("\n");
-  assert.equal(lines[0], "item,store,title,price,shipping,total,delivery,rating,reviews,seller,condition,in_stock,sponsored,chosen,url");
+  assert.equal(lines[0], "item,store,title,price,shipping,total,unit_price,same_item,delivery,rating,reviews,seller,condition,in_stock,sponsored,chosen,url");
   assert.equal(lines.length, 1 + 6 + 3);
   assert.ok(csv.includes(`"'=HYPERLINK(""x""), ""6 ft"""`), "formula neutralised and quotes doubled");
   assert.ok(csv.includes('"a,b"'));
@@ -205,4 +205,98 @@ test("wording: a store that is starting does not name Phantom (it may be your ow
   const s = W.storeStatus({ store: "walmart", offers: 0, started: false, failures: [] }, { running: true, picked: false });
   assert.equal(s.word, "Starting");
   assert.doesNotMatch(s.detail, /Phantom/);
+});
+
+// ---------- same item and unit price (added in v1 discovery) ----------
+
+const HUB_GTIN = "00042100005264";
+const hubA = { ...amazonHub, url: "https://www.amazon.com/dp/H1", ids: { gtin: HUB_GTIN, brand: "northbay", mpn: "NBH7100" } };
+const hubW = { ...walmartHub, url: "https://www.walmart.com/ip/H2", ids: { gtin: HUB_GTIN } };
+const hubE = { ...ebayHub, url: "https://www.ebay.com/itm/H3", ids: { brand: "northbay", mpn: "NBH7100" } };
+const hubSilver = { ...walmartHub, url: "https://www.walmart.com/ip/H4", ids: { gtin: "00042100005332", brand: "northbay", mpn: "NBH7100" } };
+
+test("same item: exact by GTIN or brand + MPN, relative to the chosen offer; never dropped by default", () => {
+  assert.deepEqual(M.sameItemAs(hubA, hubW), { match: "exact", by: "gtin" });
+  assert.deepEqual(M.sameItemAs(hubA, hubE), { match: "exact", by: "brand_mpn" });
+  assert.deepEqual(M.sameItemAs(hubA, hubSilver), { match: "similar" }, "another GTIN is another item");
+  assert.deepEqual(M.sameItemAs(hubA, ebayHub), { match: "similar" }, "no ids: not proven the same");
+  assert.equal(M.sameItemAs(hubA, hubA), null);
+  assert.equal(M.sameItemAs(null, hubW), null);
+  assert.match(M.matchTitle({ match: "exact", by: "gtin" }), /GTIN/);
+  const all = [hubA, hubW, hubE, hubSilver, ebayHub];
+  assert.equal(M.filterOffers(all, M.DEFAULT_FILTERS, hubA).length, 5, "similar offers stay unless the person filters");
+  assert.deepEqual(M.filterOffers(all, { ...M.DEFAULT_FILTERS, sameOnly: true }, hubA).map((o: { url: string }) => o.url), [hubA.url, hubW.url, hubE.url]);
+  assert.equal(M.filterOffers(all, { ...M.DEFAULT_FILTERS, sameOnly: true }, null).length, 5, "nothing chosen yet: the filter does nothing");
+});
+
+test("unit price: a sort the person picks, in the unit most offers share, unknown last", () => {
+  const per = (o: object, cents: number, unit = "count") => ({ ...o, perUnit: { cents, currency: "USD", per: unit, text: `$${(cents / 100).toFixed(2)} / ${unit}`, source: "title" } });
+  const a = per({ ...amazonCable, url: "https://a/1" }, 42);
+  const b = { ...walmartCable, url: "https://w/1", contents: { count: 48, source: "title", text: "48 count" } }; // 900 / 48 = 18.75
+  const c = per({ ...amazonCable, url: "https://a/2", price: usd(200) }, 200);
+  const d = { ...walmartCable, url: "https://w/2" }; // unknown
+  assert.equal(M.commonPer([a, b, c, d]), "count");
+  assert.equal(M.unitCents(b, "count"), 18.75);
+  assert.deepEqual(M.sortOffers([d, c, a, b], { key: "unit", dir: 1 }).map((o: { url: string }) => o.url), ["https://w/1", "https://a/1", "https://a/2", "https://w/2"]);
+  assert.ok(M.SORTS.some(([k]: [string]) => k === "unit"));
+  assert.equal(M.sortOffers([d, c, a, b])[0].url, "https://a/2", "the default sort (best match) stays on the total, not the unit price");
+  assert.match(M.pickWhy({ offer: a, reason: "Lowest delivered total of 3 offers: $5.84" }), /\$0\.42 \/ count/);
+});
+
+test("CSV: unit price and same-item columns relative to the chosen offer", () => {
+  const model = M.runModel([
+    { type: "parsed", request: { prompt: "hub", stores: ["amazon", "walmart"], items: [{ id: "item-1", query: "hub", description: "hub", quantity: 1 }] } },
+    { type: "offers", store: "amazon", itemId: "item-1", offers: [{ ...hubA, perUnit: { cents: 2500, currency: "USD", per: "count", text: "$25.00 / count", source: "title" } }] },
+    { type: "offers", store: "walmart", itemId: "item-1", offers: [hubW, hubSilver] },
+  ]);
+  const plan = M.computePlan(model, { "item-1": { offerKey: M.offerKey(hubA) } });
+  const lines = M.toCSV(model, plan).trim().split("\n");
+  assert.match(lines.find((l: string) => l.includes(hubA.url))!, /,\$25\.00 \/ count,,/, "the chosen offer has no same-item label");
+  assert.match(lines.find((l: string) => l.includes(hubW.url))!, /,,exact,/);
+  assert.match(lines.find((l: string) => l.includes(hubSilver.url))!, /,,similar,/);
+});
+
+test("hub: the last order state is per Shopify shop, per store elsewhere", async () => {
+  const { lastOrderState } = await import("../../src/web/session.js");
+  const at = "2026-11-19T10:00:00.000Z";
+  const ev = [
+    { type: "order_state", store: "shopify", domain: "a.example", state: "placed", at },
+    { type: "order", result: { store: "shopify", placed: true, state: "placed", orderId: "1001" } },
+    { type: "order_state", store: "amazon", state: "unknown", at },
+  ] as never[];
+  assert.equal(lastOrderState(ev, "shopify", "a.example"), "placed");
+  assert.equal(lastOrderState(ev, "shopify", "b.example"), undefined, "another shop is not blocked");
+  assert.equal(lastOrderState(ev, "amazon"), "unknown");
+});
+
+test("wording: order states per store (placing, placed, not placed, check the store)", () => {
+  const at = "2026-11-19T10:00:00.000Z";
+  const base = [
+    { type: "parsed", request: { prompt: "x", items: [], stores: ["amazon"] } },
+    { type: "order_state", store: "amazon", state: "awaiting_approval", at },
+    { type: "order_state", store: "amazon", state: "placing", at },
+  ];
+  const placing = W.reduceStores(base).stores.get("amazon");
+  assert.equal(W.orderStateOf(placing, true), "placing");
+  assert.equal(W.storeStatus(placing, { running: true, picked: true }).word, "Placing order");
+  // A saved run that stopped while placing: check the store.
+  assert.equal(W.orderStateOf(placing, false), "unknown");
+  const stopped = W.storeStatus(placing, { running: false, picked: true });
+  assert.equal(stopped.word, "Check the store");
+  assert.match(stopped.detail, /stopped while placing.*Check your orders on Amazon/);
+
+  const unknown = W.reduceStores([...base, { type: "order_state", store: "amazon", state: "unknown", at },
+    { type: "order", result: { store: "amazon", placed: false, state: "unknown", checkMessage: "Amazon may have taken this order. Check your orders on Amazon (https://www.amazon.com/gp/css/order-history) before you try again.", ordersUrl: "https://www.amazon.com/gp/css/order-history" } }]).stores.get("amazon");
+  assert.equal(W.orderStateOf(unknown, false), "unknown");
+  const u = W.storeStatus(unknown, { running: false, picked: true });
+  assert.equal(u.word, "Check the store");
+  assert.equal(u.tone, "warn");
+  assert.match(u.detail, /Check your orders on Amazon before you try again/);
+
+  const placed = W.reduceStores([...base, { type: "order", result: { store: "amazon", placed: true, state: "placed", orderId: "111-2222222-3333333" } }]).stores.get("amazon");
+  assert.equal(W.orderStateOf(placed, false), "placed");
+  assert.equal(W.storeStatus(placed, { running: false, picked: true }).detail, "Order 111-2222222-3333333");
+  const failed = W.reduceStores([...base, { type: "order", result: { store: "amazon", placed: false, state: "failed", error: "Amazon total is now $33.00" } }]).stores.get("amazon");
+  assert.equal(W.orderStateOf(failed, false), "failed");
+  assert.equal(W.storeStatus(failed, { running: false, picked: true }).word, "Not ordered");
 });

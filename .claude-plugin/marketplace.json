@@ -1,0 +1,12 @@
+{
+  "name": "open-shopping-agent",
+  "description": "Open Shopping Agent: one plugin with the shopping MCP server and its skill.",
+  "owner": { "name": "Browsa", "email": "support@browsa.io" },
+  "plugins": [
+    {
+      "name": "open-shopping-agent",
+      "source": "./",
+      "description": "Search several stores at once, compare, fill carts and check out only with your approval of the exact total."
+    }
+  ]
+}

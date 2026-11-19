@@ -85,9 +85,10 @@ export class FakeAdapter implements StoreAdapter {
     this.calls.placeOrder++;
     // A real adapter re-reads the total and refuses on a mismatch; the fake does the same.
     const subtotal = this.cart.reduce((s, l) => s + l.price.cents, 0) + (this.o.taxCents ?? 0) + (this.o.priceJumpCents ?? 0);
-    if (subtotal !== approval.approvedTotal.cents) return { store: this.id, placed: false, confirmationText: "total changed" };
+    // Refused before the click: an error and no `submitted` (the adapter contract).
+    if (subtotal !== approval.approvedTotal.cents) return { store: this.id, placed: false, error: "total changed", confirmationText: "total changed" };
     this.placed.push(approval);
-    return { store: this.id, placed: true, orderId: `FAKE-${this.placed.length}`, total: { cents: subtotal, currency: "USD" }, placedAt: new Date().toISOString() };
+    return { store: this.id, placed: true, submitted: true, orderId: `FAKE-${this.placed.length}`, total: { cents: subtotal, currency: "USD" }, placedAt: new Date().toISOString() };
   }
 }
 

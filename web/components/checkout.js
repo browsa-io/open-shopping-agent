@@ -2,7 +2,7 @@
 // checkout review and the Buy button. Every step says what happens next.
 
 import { h, icon, mount } from "../lib/dom.js";
-import { formatCents, friendlyError, money, shortRaw, storeName } from "../lib/wording.js";
+import { formatCents, friendlyError, money, orderStateOf, shortRaw, storeName, unknownText, upFrontText } from "../lib/wording.js";
 import { storeLabel } from "../lib/store-icon.js";
 
 function linesList(lines, priced = true) {
@@ -30,20 +30,38 @@ function panel(ctx, store, planStore) {
   const busy = (step) => run.busy.has(`${step}:${store}`);
   const said = (step) => run.answered.has(`${step}:${store}`);
   const live = st.needs?.liveUrl || st.liveUrl;
-  const stepN = st.order?.placed ? 3 : st.awaiting || st.review ? 2 : st.cart ? 1 : 0;
+  const orderState = orderStateOf(st, running);
+  const stepN = orderState === "placed" ? 3 : st.awaiting || st.review || orderState ? 2 : st.cart ? 1 : 0;
   const body = [];
   const planLines = planStore ? linesList(planStore.lines) : null;
   const k = st.lastKind;
+  const ordersLink = (url) => url ? h("a", { class: "btn", href: url, target: "_blank", rel: "noopener noreferrer" }, icon("ext"), `Open your ${name} orders`) : null;
 
   if (st.order) {
     const o = st.order;
-    body.push(o.placed
-      ? h("div", { class: "order" }, h("div", { class: "big" }, icon("check"), "Order placed"),
+    if (o.placed) {
+      body.push(h("div", { class: "order" }, h("div", { class: "big" }, icon("check"), "Order placed"),
         h("p", { class: "muted" }, `${money(o.total)} at ${name}`),
+        upFrontText(o) ? h("p", { class: "small" }, upFrontText(o)) : null,
         o.orderId ? h("p", {}, "Order ", h("span", { class: "oid" }, o.orderId)) : null,
-        o.confirmationText ? h("p", { class: "faint small" }, o.confirmationText) : null)
-      : h("div", { class: "note bad" }, h("strong", {}, "Not ordered. "), o.error || o.confirmationText || "The store did not confirm the order. Nothing was charged by the agent."));
-    if (!o.placed && o.needsUser?.liveUrl) body.push(h("a", { class: "btn", href: o.needsUser.liveUrl, target: "_blank", rel: "noopener noreferrer" }, icon("live"), "Open the live browser"));
+        o.confirmationText ? h("p", { class: "faint small" }, o.confirmationText) : null,
+        o.orderUrl ? h("p", { class: "small" }, h("a", { href: o.orderUrl, target: "_blank", rel: "noopener noreferrer" }, "View the order on ", name)) : null));
+    } else if (o.state === "unknown") {
+      // The click may have gone through: never offer Buy again; send the person to the store's orders.
+      body.push(h("div", { class: "note warn", role: "status" }, h("strong", {}, "Not confirmed. "), o.checkMessage || unknownText(st)));
+      body.push(h("div", { class: "actions" }, ordersLink(o.ordersUrl),
+        o.needsUser?.liveUrl ? h("a", { class: "btn ghost", href: o.needsUser.liveUrl, target: "_blank", rel: "noopener noreferrer" }, icon("live"), "Open the live browser") : null));
+    } else {
+      body.push(h("div", { class: "note bad" }, h("strong", {}, "Not ordered. "), o.error || o.confirmationText || "Nothing was submitted to the store."));
+      if (o.needsUser?.liveUrl) body.push(h("a", { class: "btn", href: o.needsUser.liveUrl, target: "_blank", rel: "noopener noreferrer" }, icon("live"), "Open the live browser"));
+    }
+  } else if (k === "placing") {
+    if (running) {
+      body.push(spin(`Placing the order at ${name}`));
+      body.push(h("p", { class: "hint center" }, "Place order is clicked once. The agent then reads the store's confirmation for the order number."));
+    } else {
+      body.push(h("div", { class: "note warn", role: "status" }, h("strong", {}, "Not confirmed. "), unknownText(st, true)));
+    }
   } else if (k === "needs" && st.needs && !running) {
     if (st.cart) body.push(linesList(st.cart.lines));
     body.push(h("div", { class: "note warn" }, h("strong", {}, "Stopped here. "), st.needs.message));
@@ -66,6 +84,8 @@ function panel(ctx, store, planStore) {
       h("dt", {}, "Tax"), h("dd", {}, money(r.tax)),
       h("dt", { class: "grand" }, "Total"), h("dd", { class: "grand" }, money(r.total))));
     if (r.shipTo || r.paymentHint) body.push(h("p", { class: "faint small" }, [r.shipTo && `Ships to ${r.shipTo}`, r.paymentHint].filter(Boolean).join(". ")));
+    // Buy without asking was on, but this checkout is outside it: say why it asks.
+    if (st.mandateDeclined) body.push(h("div", { class: "note warn" }, h("strong", {}, "Needs your OK. "), `Not bought without asking: ${st.mandateDeclined}.`));
     body.push(h("button", {
       class: "btn primary buy", "data-key": `buy-${store}`, disabled: run.busy.has(`buy:${store}`), onclick: () => actions.buy(store, r, name),
     }, run.busy.has(`buy:${store}`) ? [h("span", { class: "spin", "aria-hidden": "true" }), "Placing order"] : `Buy for ${money(r.total)}`));
@@ -104,7 +124,15 @@ function panel(ctx, store, planStore) {
 
   const sum = planStore ? h("span", { class: "co-sum" }, formatCents(planStore.cents), planStore.shippingUnknown ? h("small", {}, " plus shipping") : null) : null;
   return h("section", { class: "card co", "aria-label": `Checkout at ${name}` },
-    h("div", { class: "co-head" }, h("h3", {}, storeLabel(store, st.domain || planStore?.domain, "lg")), sum), steps(stepN), body);
+    h("div", { class: "co-head" }, h("h3", {}, storeLabel(store, st.domain || planStore?.domain, "lg")), orderState ? stateBadge(orderState) : sum), steps(stepN), body);
+}
+
+const STATE_BADGE = { placing: ["blue", "Placing"], placed: ["green", "Placed"], failed: ["red", "Not placed"], unknown: ["amber", "Check the store"] };
+
+/** The order state as a badge: placing, placed, not placed, check the store. */
+export function stateBadge(state) {
+  const [tone, label] = STATE_BADGE[state] || ["", state];
+  return h("span", { class: `badge ${tone}` }, state === "placing" ? h("span", { class: "dot pulse", "aria-hidden": "true" }) : null, label);
 }
 
 /** Stores shown: the plan's stores, plus any store with cart or checkout activity. */
@@ -112,8 +140,8 @@ export function renderCheckout(el, ctx) {
   const { run, plan, stores, model } = ctx;
   if (!model.picks) { mount(el, "none", () => null); return; }
   const keys = plan.stores.map((s) => s.store);
-  for (const [s, st] of stores) if ((st.cart || st.review || st.order || st.needs) && !keys.includes(s)) keys.push(s);
-  const sig = JSON.stringify([keys.map((s) => { const st = stores.get(s); return st ? [st.lastKind, st.last, st.cart?.lines.length, !!st.order] : null; }),
+  for (const [s, st] of stores) if ((st.cart || st.review || st.order || st.needs || st.orderState) && !keys.includes(s)) keys.push(s);
+  const sig = JSON.stringify([keys.map((s) => { const st = stores.get(s); return st ? [st.lastKind, st.last, st.cart?.lines.length, !!st.order, st.orderState?.state] : null; }),
     plan.stores, [...run.gates.keys()], [...run.answered], [...run.busy], run.status]);
   mount(el, sig, () => keys.length ? [
     h("div", { class: "section-head", id: "checkout" }, h("h2", {}, "Carts and checkout"), h("span", { class: "count" }, `${keys.length} store${keys.length === 1 ? "" : "s"}`)),

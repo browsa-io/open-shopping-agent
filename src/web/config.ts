@@ -7,6 +7,7 @@ import type { Money, StoreId } from "../core/types.js";
 import { STORE_IDS, maskKey } from "./format.js";
 import { proxyDisplay, proxyFromText } from "../core/browsers.js";
 import { cdpDisplay, maskProxyText, parseProviderId, parseProxy, PROVIDER_CHOICES, PROVIDER_TABLE, type ProviderId } from "../core/providers/index.js";
+import { shopCatalogEnabled } from "../core/shop-catalog.js";
 
 /** Settings added with browser providers and bring-your-own keys (see byokPublic). */
 export interface ByokConfig {
@@ -34,6 +35,8 @@ export interface OsaConfig extends ByokConfig {
   browserMode?: BrowserChoice;
   /** The user's own proxy for every store ("http://user:pass@host:port"). OSA_PROXY wins. Free on Browsa. */
   proxy?: string;
+  /** Also find Shopify stores through Shop's catalog (Shopify's API; its terms apply). Off by default. OSA_SHOP_CATALOG wins. */
+  shopCatalog?: boolean;
 }
 
 export type BrowserChoice = "burner" | "persistent";
@@ -58,6 +61,9 @@ export interface PublicConfig {
   hasProxy: boolean;
   /** Added with browser providers and bring-your-own keys. */
   byok: ByokPublic;
+  /** Added in v1 discovery: Shop catalog on (after OSA_SHOP_CATALOG), and whether the environment decides it. */
+  shopCatalog: boolean;
+  shopCatalogFromEnv: boolean;
 }
 
 export function osaHome(): string {
@@ -92,6 +98,7 @@ export class ConfigStore {
       browser: (process.env.OSA_BROWSER as OsaConfig["browser"]) || c.browser,
       cdpUrl: process.env.OSA_CDP_URL || c.cdpUrl,
       llmBaseUrl: process.env.OSA_LLM_BASE_URL || c.llmBaseUrl,
+      shopCatalog: shopCatalogEnabled(c.shopCatalog),
     };
   }
 
@@ -124,6 +131,8 @@ export function toPublic(c: OsaConfig): PublicConfig {
     proxy: c.proxy ? safeProxyDisplay(c.proxy) : "",
     hasProxy: !!c.proxy,
     byok: byokPublic(c),
+    shopCatalog: c.shopCatalog === true,
+    shopCatalogFromEnv: !!process.env.OSA_SHOP_CATALOG?.trim(),
   };
 }
 
@@ -259,6 +268,7 @@ function sanitize(input: unknown, cur: OsaConfig): Partial<OsaConfig> {
       out.proxy = t;
     }
   }
+  if ("shopCatalog" in i) out.shopCatalog = i.shopCatalog === true ? true : undefined;
   if ("browserMode" in i) {
     if (i.browserMode !== "burner" && i.browserMode !== "persistent") throw new Error("browserMode must be burner or persistent");
     out.browserMode = i.browserMode;

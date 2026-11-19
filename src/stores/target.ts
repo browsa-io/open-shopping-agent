@@ -10,9 +10,10 @@
 // "Sorry for the wait" to addresses it refuses outright (non-US and some datacenter exits).
 
 import type {
-  Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult,
+  Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult, ProductIds,
 } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
+import { normalizeIds } from "../core/identity.js";
 import { CaptchaHandoffError, clean, detectCurrency, evalWithRenew, gotoRetry, isDeadPageError, needsUser, nowIso, pageIsDead, parseMoney, passPressAndHold, replacePage } from "./util.js";
 
 const ORIGIN = "https://www.target.com";
@@ -170,6 +171,26 @@ export interface TargetProduct {
   options: Record<string, string[]>;
   childPrices: Map<string, Money>;
   childTitles: Map<string, string>;
+  /** Added in v1 discovery: identifiers per TCIN (the parent's and each child's barcode, the brand). */
+  ids: Map<string, ProductIds>;
+}
+
+/**
+ * pdp_client_v1 -> identifiers per TCIN: item.primary_barcode (a UPC) of the product and of each
+ * child (colour, size), and item.primary_brand.name. A child without its own barcode gets the brand only.
+ */
+export function targetIdsByTcin(json: J): Map<string, ProductIds> {
+  const p = json?.data?.product ?? {};
+  const brand = p.item?.primary_brand?.name ?? p.parent?.item?.primary_brand?.name;
+  const out = new Map<string, ProductIds>();
+  const add = (tcin: unknown, item: J | undefined) => {
+    if (!tcin) return;
+    const ids = normalizeIds({ gtin: item?.primary_barcode, brand: item?.primary_brand?.name ?? brand, mpn: item?.manufacturer_part_number ?? item?.product_description?.manufacturer_part_number });
+    if (ids) out.set(String(tcin), ids);
+  };
+  add(p.tcin, p.item);
+  for (const c of p.children ?? []) add(c.tcin, c.item);
+  return out;
 }
 
 /** pdp_client_v1 -> title, price, rating and the variant tree flattened to one entry per child TCIN. */
@@ -213,6 +234,7 @@ export function parseTargetPdp(json: J): TargetProduct {
     options,
     childPrices,
     childTitles,
+    ids: targetIdsByTcin(json),
   };
 }
 
@@ -558,6 +580,8 @@ export const target: StoreAdapter = {
     if (childPrice) out.price = childPrice;
     else if (prod.price && !prod.variants.length) { out.price = prod.price; out.listPrice = prod.listPrice; out.unitPrice = prod.unitPrice ?? out.unitPrice; }
     if (prod.rating) out.rating = prod.rating;
+    const ids = prod.ids.get(tcin) ?? (prod.variants.length ? undefined : prod.ids.get(prod.tcin));
+    if (ids) out.ids = ids;
     if (Object.keys(prod.options).length) out.variants = prod.options;
     if (!out.title && prod.title) out.title = prod.title;
     try {
@@ -723,13 +747,14 @@ export const target: StoreAdapter = {
     if (!(await mouseClick(ctx, '[data-test="placeOrderButton"], button:has-text("Place your order")', 10_000))) {
       return { store: "target", placed: false, total, needsUser: await needsUser(ctx, "other", "Target's 'Place your order' button was not found. Check the live browser.") };
     }
+    // From here the click was sent: every result says submitted, so the engine never clicks again.
     const ok = await ctx.page.waitForURL(/order-confirmation|\/co-thankyou|thank/i, { timeout: 60_000 }).then(() => true).catch(() => false);
     const text = await pageText(ctx);
     const orderId = (text.match(/order\s*(?:#|number)?\s*:?\s*(\d{9,})/i) || [])[1];
     if (!ok && !orderId) {
-      return { store: "target", placed: false, total, needsUser: await needsUser(ctx, "other", "Target did not confirm the order. Check the live browser before trying again.") };
+      return { store: "target", placed: false, submitted: true, total, needsUser: await needsUser(ctx, "other", "Target did not confirm the order. Check the live browser before trying again.") };
     }
-    return { store: "target", placed: true, orderId, total, confirmationText: clean(text.match(/thanks[^.\n]*[.!]?/i)?.[0]) ?? "Order placed", placedAt: nowIso() };
+    return { store: "target", placed: true, submitted: true, orderId, total, confirmationText: clean(text.match(/thanks[^.\n]*[.!]?/i)?.[0]) ?? "Order placed", placedAt: nowIso() };
   },
 };
 

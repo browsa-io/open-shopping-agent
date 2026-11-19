@@ -1,0 +1,23 @@
+{
+  "_fixture": "hand-made extract of pdp_client_v1 (made-up product): the parent and two children (colours), each with its own barcode",
+  "data": {
+    "product": {
+      "tcin": "90000001",
+      "item": {
+        "primary_barcode": "042100005264",
+        "primary_brand": { "name": "Northbay" },
+        "product_description": { "title": "Northbay 7-in-1 USB-C Hub" },
+        "enrichment": { "buy_url": "https://www.target.com/p/northbay-hub/-/A-90000001" }
+      },
+      "price": { "current_retail": 25.99, "formatted_current_price": "$25.99" },
+      "variation_hierarchy": [
+        { "name": "Color", "value": "Gray", "tcin": "90000002", "availability": { "is_sold_out": false, "is_shipping_available": true } },
+        { "name": "Color", "value": "Silver", "tcin": "90000003", "availability": { "is_sold_out": false, "is_shipping_available": true } }
+      ],
+      "children": [
+        { "tcin": "90000002", "item": { "primary_barcode": "042100005264", "product_description": { "title": "Northbay 7-in-1 USB-C Hub - Gray" } }, "price": { "current_retail": 25.99 } },
+        { "tcin": "90000003", "item": { "primary_barcode": "042100005332", "product_description": { "title": "Northbay 7-in-1 USB-C Hub - Silver" } }, "price": { "current_retail": 25.99 } }
+      ]
+    }
+  }
+}

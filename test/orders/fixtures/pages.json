@@ -1,0 +1,110 @@
+{
+  "_note": "Hand-made extracts (URL, visible text, links) shaped like each store's confirmation and order pages. Not captured from a real account: no order was placed and no store was signed in to make them. Order numbers, tracking numbers and totals are invented.",
+  "amazon": {
+    "confirmation": {
+      "url": "https://www.amazon.com/gp/buy/thankyou/handlers/display.html?purchaseId=106-0000000-0000000",
+      "text": "Order placed, thanks!\nConfirmation will be sent to your email.\nShipping to Sam Example, 1 Main St\nOrder# 111-2222222-3333333\nItems: $29.99\nOrder total: $32.09\nReview or edit your recent orders",
+      "links": [{ "text": "Review or edit your recent orders", "href": "https://www.amazon.com/gp/your-account/order-details?orderID=111-2222222-3333333&ref=ppx_yo_dt_b" }]
+    },
+    "review": {
+      "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html?hasWorkingJavascript=1",
+      "text": "Review your order\nPlace your order\nItems: $29.99\nOrder total: $32.09",
+      "links": []
+    },
+    "order": {
+      "url": "https://www.amazon.com/gp/your-account/order-details?orderID=111-2222222-3333333",
+      "text": "Order Details\nOrdered on November 19, 2026    Order# 111-2222222-3333333\nShipping Address\nPayment method\nArriving Thursday\nShipped with UPS\nTracking ID: 1Z999AA10123456784\nTrack package\nUSB-C Hub, 7-in-1\nReturn or replace items",
+      "links": [{ "text": "Track package", "href": "https://www.amazon.com/progress-tracker/package/ref=ppx_od_dt_b_track_package?orderId=111-2222222-3333333&shipmentId=A1" }]
+    },
+    "signIn": {
+      "url": "https://www.amazon.com/ap/signin?openid.return_to=https%3A%2F%2Fwww.amazon.com%2Fgp%2Fyour-account%2Forder-details",
+      "text": "Sign in\nEmail or mobile phone number\nContinue",
+      "links": []
+    }
+  },
+  "walmart": {
+    "confirmation": {
+      "url": "https://www.walmart.com/checkout/thankyou?pcid=abc",
+      "text": "Thanks for your order!\nOrder# 2000123-45678901\nWe'll send a confirmation email.\nSubtotal $49.99\nEstimated taxes $3.19\nTotal $53.18",
+      "links": [{ "text": "View order details", "href": "https://www.walmart.com/orders/200012345678901?storePurchase=false" }]
+    },
+    "order": {
+      "url": "https://www.walmart.com/orders/200012345678901",
+      "text": "Purchase history\nOrder# 2000123-45678901\nPlaced on Nov 19, 2026\nShipped\nArrives by Fri, Nov 22\nFedEx tracking number: 771234567890\nTrack shipment",
+      "links": [{ "text": "Track shipment", "href": "https://www.walmart.com/orders/200012345678901/track?shipment=1" }]
+    },
+    "signIn": {
+      "url": "https://www.walmart.com/account/login?returnUrl=%2Forders",
+      "text": "Sign in or create your account\nEmail address\nContinue",
+      "links": []
+    }
+  },
+  "ebay": {
+    "confirmation": {
+      "url": "https://pay.ebay.com/rxo?action=confirm&sessionid=123",
+      "text": "Order confirmed. You're all set!\nWe'll email you when it ships.\nOrder number: 12-34567-89012\nItem (1) $15.99\nShipping Free\nOrder total $17.07",
+      "links": [{ "text": "View order details", "href": "https://order.ebay.com/ord/show?orderId=12-34567-89012#/" }]
+    },
+    "order": {
+      "url": "https://order.ebay.com/ord/show?orderId=12-34567-89012#/",
+      "text": "Order details\nOrder number 12-34567-89012\nDelivered\nDelivered on Mon, Nov 24\nUSPS Tracking number 9400111899223456789012",
+      "links": [{ "text": "9400111899223456789012", "href": "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400111899223456789012" }]
+    },
+    "signIn": {
+      "url": "https://signin.ebay.com/ws/eBayISAPI.dll?SignIn&ru=https%3A%2F%2Forder.ebay.com",
+      "text": "Hello\nSign in to eBay or create an account\nEmail or username\nContinue",
+      "links": []
+    }
+  },
+  "bestbuy": {
+    "confirmation": {
+      "url": "https://www.bestbuy.com/checkout/r/thank-you",
+      "text": "Thank you for your order!\nOrder number: BBY01-806712345678\nWe've sent a confirmation email.\nSubtotal $42.99\nOrder Total $45.98",
+      "links": [{ "text": "View order details", "href": "https://www.bestbuy.com/profile/ss/orders/order-details/BBY01-806712345678/view" }]
+    },
+    "order": {
+      "url": "https://www.bestbuy.com/profile/ss/orders/order-details/BBY01-806712345678/view",
+      "text": "Order Details\nBBY01-806712345678\nPreparing for shipment\nEstimated delivery: Tue, Nov 25",
+      "links": []
+    },
+    "signIn": {
+      "url": "https://www.bestbuy.com/identity/signin?token=tid%3Aabc",
+      "text": "Sign In to Best Buy\nEmail Address\nPassword\nSign In",
+      "links": []
+    }
+  },
+  "target": {
+    "confirmation": {
+      "url": "https://www.target.com/co-thankyou",
+      "text": "Thanks for your order!\nOrder #912001234567\nWe'll email you when it ships.\nTotal $38.33",
+      "links": [{ "text": "View order", "href": "https://www.target.com/orders/912001234567" }]
+    },
+    "order": {
+      "url": "https://www.target.com/orders/912001234567",
+      "text": "Order #912001234567\nOut for delivery\nArriving today\nShipped with UPS\nTracking # 1Z999AA10123456784",
+      "links": [{ "text": "Track package", "href": "https://www.ups.com/track?tracknum=1Z999AA10123456784" }]
+    },
+    "signIn": {
+      "url": "https://www.target.com/login?client_id=ecom-web&actions=create_session_signin",
+      "text": "Sign into your Target account\nEmail or mobile phone number\nContinue",
+      "links": []
+    }
+  },
+  "shopify": {
+    "confirmation": {
+      "url": "https://satechi.com/checkouts/c/2b3c4d5e6f/thank-you",
+      "text": "Confirmation #KX4PZT2N9\nThank you, Sam!\nYour order is confirmed\nYou'll receive a confirmation email with your order number shortly.\nOrder summary\nSubtotal $39.99\nShipping FREE\nTotal USD $41.97",
+      "links": []
+    },
+    "order": {
+      "url": "https://satechi.com/checkouts/c/2b3c4d5e6f/thank-you",
+      "text": "Order #1001\nYour order is on the way\nShipped\nUSPS tracking number: 9400111899223456789012\nOrder summary",
+      "links": [{ "text": "9400111899223456789012", "href": "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400111899223456789012" }]
+    },
+    "signIn": {
+      "url": "https://satechi.com/account/login?checkout_url=%2Faccount%2Forders",
+      "text": "Login\nEmail\nPassword\nSign in",
+      "links": []
+    }
+  }
+}

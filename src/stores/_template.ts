@@ -106,10 +106,11 @@ export const exampleStore: StoreAdapter = {
 
   async placeOrder(ctx: StoreContext, approval: Approval): Promise<OrderResult> {
     // Hint: re-read the total first; if it differs from approval.approvedTotal by even one cent,
-    // return { placed: false } with the new total. Only then click "Place order" and read the
-    // confirmation page (order id as shown).
+    // return { placed: false, error } with the new total. Only then click "Place order" and read the
+    // confirmation page (order id as shown). Every result after the click has submitted: true.
+    // Also add src/orders/<store>.ts so the engine can read the confirmation and order pages.
     void ctx; void approval;
-    return { store: "amazon", placed: false, confirmationText: "example store: placeOrder() not implemented" };
+    return { store: "amazon", placed: false, error: "example store: placeOrder() not implemented" };
   },
 };
 

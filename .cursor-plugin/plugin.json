@@ -1,0 +1,27 @@
+{
+  "name": "open-shopping-agent",
+  "version": "0.2.0",
+  "description": "Search Amazon, Walmart, eBay, Best Buy, Target and Shopify stores at once, compare, fill carts and check out only with your approval of the exact total. Placing orders stays off unless OSA_MCP_ALLOW_ORDERS=1.",
+  "author": { "name": "Browsa", "email": "support@browsa.io", "url": "https://browsa.io" },
+  "homepage": "https://github.com/browsa-io/open-shopping-agent",
+  "repository": "https://github.com/browsa-io/open-shopping-agent",
+  "license": "MIT",
+  "keywords": ["shopping", "price-comparison", "mcp", "browser-agent"],
+  "mcpServers": {
+    "open-shopping-agent": {
+      "command": "npx",
+      "args": ["-y", "open-shopping-agent", "mcp"],
+      "env": { "BROWSA_API_KEY": "${BROWSA_API_KEY}" }
+    }
+  },
+  "variables": {
+    "type": "object",
+    "properties": {
+      "BROWSA_API_KEY": {
+        "type": "string",
+        "title": "Browsa API key (optional)",
+        "description": "Runs each store on a Phantom cloud browser (browsa.io). Leave empty to use your own Chrome."
+      }
+    }
+  }
+}

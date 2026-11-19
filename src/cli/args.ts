@@ -4,8 +4,9 @@ import type { Money, StoreId } from "../core/types.js";
 import { dollarsToMoney } from "../web/format.js";
 import { parseProviderId } from "../core/providers/select.js";
 import type { ProviderId } from "../core/providers/types.js";
+import type { MandateInput } from "../core/mandate.js";
 
-export type Command = "run" | "watch" | "runs" | "web" | "mcp" | "help" | "version";
+export type Command = "run" | "watch" | "runs" | "orders" | "web" | "mcp" | "help" | "version";
 
 export interface CliArgs {
   command: Command;
@@ -29,6 +30,21 @@ export interface CliArgs {
   browser?: ProviderId;
   /** --headless: the local browser runs without a window. */
   headless?: boolean;
+  /** --dry-run: compare and show what each cart would get; no cart is changed. */
+  dryRun: boolean;
+  /** osa orders --all: failed checkouts too. */
+  all: boolean;
+  /** osa orders refresh [runId]: read the store's order pages. */
+  refresh?: boolean;
+  runId?: string;
+  /**
+   * Added in 0.2.0: --approve-up-to 60 [--approve-stores walmart,target] [--approve-expires 2h]
+   * [--approve-run-total 100] [--approve-max-orders 2]: buy without asking within these limits.
+   * Confirmed once in a terminal unless --yes.
+   */
+  mandate?: MandateInput;
+  /** --yes: the up-front approval needs no confirmation question. */
+  yes: boolean;
 }
 
 export class CliError extends Error {}
@@ -63,7 +79,8 @@ function money(flag: string, v: string | undefined): Money {
 }
 
 export function parseArgs(argv: string[]): CliArgs {
-  const out: CliArgs = { command: "run", json: false, noCart: false, everyStore: false, demo: false, backInStock: false };
+  const out: CliArgs = { command: "run", json: false, noCart: false, everyStore: false, demo: false, backInStock: false, dryRun: false, all: false, yes: false };
+  const approve: Partial<Record<"upTo" | "stores" | "expires" | "runTotal" | "maxOrders", string>> = {};
   const words: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -80,6 +97,8 @@ export function parseArgs(argv: string[]): CliArgs {
       case "-v": case "--version": out.command = "version"; break;
       case "--json": out.json = true; break;
       case "--no-cart": out.noCart = true; break;
+      case "--dry-run": out.dryRun = true; break;
+      case "--all": out.all = true; break;
       case "--every-store": out.everyStore = true; break;
       case "--demo": out.demo = true; break;
       case "--back-in-stock": out.backInStock = true; break;
@@ -110,6 +129,12 @@ export function parseArgs(argv: string[]): CliArgs {
         break;
       }
       case "--headless": out.headless = true; break;
+      case "--yes": case "-y": out.yes = true; break;
+      case "--approve-up-to": approve.upTo = next(); break;
+      case "--approve-stores": approve.stores = next(); break;
+      case "--approve-expires": approve.expires = next(); break;
+      case "--approve-run-total": approve.runTotal = next(); break;
+      case "--approve-max-orders": approve.maxOrders = next(); break;
       case "--limit": out.limit = Math.max(1, Math.min(500, Number(next()) || 20)); break;
       default:
         if (a.startsWith("--")) throw new CliError(`Unknown option ${a}. Run osa --help.`);
@@ -117,6 +142,18 @@ export function parseArgs(argv: string[]): CliArgs {
     }
   }
   if (out.command === "help" || out.command === "version") return out;
+  if (Object.keys(approve).length) {
+    if (!approve.upTo) throw new CliError("--approve-stores, --approve-expires, --approve-run-total and --approve-max-orders need --approve-up-to <amount per order>");
+    if (out.json || out.dryRun || out.noCart) throw new CliError("--approve-up-to buys without asking, so it cannot go with --json, --dry-run or --no-cart (they never fill a cart)");
+    if (out.watch !== undefined) throw new CliError("--approve-up-to is for a shopping run, not a watch (watches never buy)");
+    out.mandate = {
+      maxTotal: approve.upTo,
+      ...(approve.stores ? { stores: approve.stores } : {}),
+      ...(approve.expires ? { expiresIn: approve.expires } : {}),
+      ...(approve.runTotal ? { maxRunTotal: approve.runTotal } : {}),
+      ...(approve.maxOrders ? { maxOrders: approve.maxOrders } : {}),
+    };
+  }
   if (out.watch !== undefined) {
     if (!out.watch) throw new CliError("--watch needs an item");
     if (!out.below && !out.backInStock) throw new CliError('--watch needs --below <price> or --back-in-stock');
@@ -124,8 +161,23 @@ export function parseArgs(argv: string[]): CliArgs {
     return out;
   }
   const first = words[0];
-  if (words.length === 1 && (first === "runs" || first === "web" || first === "mcp" || first === "help" || first === "version")) {
+  if (words.length === 1 && (first === "runs" || first === "orders" || first === "web" || first === "mcp" || first === "help" || first === "version")) {
+    if (out.mandate && first !== "help" && first !== "version") {
+      throw new CliError(first === "web" ? "Set \"Buy without asking\" on the run in the web app instead of --approve-up-to"
+        : first === "mcp" ? "The MCP server takes its up-front approval from its environment (OSA_MCP_APPROVE_UP_TO), not from flags"
+        : `--approve-up-to is for a shopping run, not osa ${first}`);
+    }
     out.command = first;
+    return out;
+  }
+  // osa orders refresh [run-id]
+  if (first === "orders" && words[1] === "refresh" && words.length <= 3) {
+    out.command = "orders";
+    out.refresh = true;
+    if (words[2]) {
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(words[2])) throw new CliError(`"${words[2]}" is not a run id. Run osa orders to see them.`);
+      out.runId = words[2];
+    }
     return out;
   }
   const prompt = words.join(" ").trim();
@@ -143,6 +195,8 @@ export const HELP = `Open Shopping Agent: search stores at once, compare, fill c
 Usage
   osa "usb-c hub and 6 ft hdmi under $60"     find, compare, then ask per store
   osa runs                                    past runs
+  osa orders [--all]                          orders placed (and ones to check on the store)
+  osa orders refresh [run-id] [--store x]     read each order's page on the store: status, carrier, tracking
   osa web [--port 4319] [--host 127.0.0.1]    start the web app
   osa mcp                                     start the MCP server (stdio)
   osa --watch "6 ft hdmi cable" --below 9.99  price-drop watch (or --back-in-stock)
@@ -153,11 +207,25 @@ Options
   --zip 82001                                 delivery ZIP
   --budget 60                                 total budget in dollars
   --no-cart                                   compare only, do not fill carts
+  --dry-run                                   compare and show what each cart would get; no cart is changed
   --every-store                               a cart at every store with every item (compare real totals)
-  --json                                      print JSON (compare only)
+  --json                                      one JSON reply {ok, v, data, next} (compare only, no carts)
   --demo                                      use made-up demo data
   --browser browsa|local|cdp                  where the browsers run (default: browsa with a key, else your Chrome)
   --headless                                  run your local Chrome without a window
+
+Buy without asking (off by default; you confirm it once with a y, or pass --yes)
+  --approve-up-to 60                          buy without asking when a store's checkout total is at most $60
+  --approve-stores walmart,target             only at these stores (store names or Shopify domains)
+  --approve-expires 2h                        only for this long (default: this run only)
+  --approve-run-total 100                     at most this much for all orders of the run
+  --approve-max-orders 2                      at most this many orders (default: one per store)
+  --yes                                       no confirmation question (needed without a terminal)
+  Anything outside these limits waits for your y on the exact total, as without them.
+
+Exit codes
+  0 ok, 1 user error, 2 store or network problem (try again later),
+  3 needs you (captcha, sign-in, approval, an order to check on the store), 4 safety refusal
 
 Environment
   BROWSA_API_KEY     Browsa key (Phantom browsers)

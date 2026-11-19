@@ -4,7 +4,7 @@
 import { h, icon, mount } from "../lib/dom.js";
 import { NOT_SHOWN, formatCents, money, storeName } from "../lib/wording.js";
 import {
-  SORTS, conditionOf, deliveryShort, filterOffers, isSponsored, offerKey, pickWhy, shippingKnown, shippingShort, sortOffers, totalCents,
+  SORTS, conditionOf, deliveryShort, filterOffers, isSponsored, matchTitle, offerKey, pickWhy, sameItemAs, shippingKnown, shippingShort, sortOffers, totalCents,
 } from "../lib/model.js";
 import { storeIcon, storeLabel } from "../lib/store-icon.js";
 
@@ -19,9 +19,12 @@ export function thumb(o, size = "sm") {
   }) : null);
 }
 
-function tags(o, chosen) {
+function tags(o, chosen, ref) {
   const t = [];
   if (chosen) t.push(h("span", { class: "badge green" }, icon("check"), "Your pick"));
+  // Relative to the offer chosen for this item: the same product (GTIN, or brand and MPN) or not proven so.
+  const m = chosen ? null : sameItemAs(ref, o);
+  if (m) t.push(h("span", { class: m.match === "exact" ? "badge blue" : "badge", title: matchTitle(m), "data-match": m.match }, m.match === "exact" ? "Exact match" : "Similar"));
   if (isSponsored(o)) t.push(h("span", { class: "badge" }, "Sponsored"));
   if (conditionOf(o) === "used") t.push(h("span", { class: "badge amber" }, o.condition === "refurbished" ? "Refurbished" : "Used"));
   if (!o.inStock) t.push(h("span", { class: "badge red" }, "Out of stock"));
@@ -32,12 +35,17 @@ function tags(o, chosen) {
 const cleanTitle = (t) => String(t || "").replace(/^Sponsored Ad\s*-\s*/i, "");
 
 function priceCell(o) {
-  return [h("span", { class: "amt" }, money(o.price)), o.listPrice && o.listPrice.cents > o.price.cents ? h("s", { class: "was" }, money(o.listPrice)) : null];
+  return [
+    h("span", { class: "amt" }, money(o.price)), o.listPrice && o.listPrice.cents > o.price.cents ? h("s", { class: "was" }, money(o.listPrice)) : null,
+    o.perUnit?.text ? h("span", { class: "sub unit", title: o.contents?.text ? `Price per unit (${o.contents.text})` : "Price per unit, as the store shows it" }, o.perUnit.text) : null,
+  ];
 }
 
 function totalCell(o, qty) {
   const c = formatCents(totalCents(o, qty), o.price.currency);
-  return shippingKnown(o) ? h("span", { class: "amt strong" }, c) : [h("span", { class: "amt strong" }, c), h("span", { class: "sub" }, "plus shipping")];
+  // On a phone the price column is hidden: the unit price shows under the total instead.
+  const unit = o.perUnit?.text ? h("span", { class: "unit-m" }, o.perUnit.text) : null;
+  return shippingKnown(o) ? [h("span", { class: "amt strong" }, c), unit] : [h("span", { class: "amt strong" }, c), h("span", { class: "sub" }, "plus shipping"), unit];
 }
 
 function ratingCell(o) {
@@ -63,7 +71,7 @@ function toolbar(ctx) {
     type: "button", class: "chip toggle", "aria-pressed": f[key] ? "true" : "false", "data-key": `f-${key}`,
     onclick: () => actions.setFilter({ [key]: !f[key] }),
   }, f[key] ? icon("check") : null, label);
-  const active = (f.hideSponsored ? 1 : 0) + (f.inStockOnly ? 1 : 0) + (f.condition !== "any" ? 1 : 0);
+  const active = (f.hideSponsored ? 1 : 0) + (f.inStockOnly ? 1 : 0) + (f.sameOnly ? 1 : 0) + (f.condition !== "any" ? 1 : 0);
   return h("div", { class: "toolbar", role: "group", "aria-label": "Sort and filter" },
     h("div", { class: "tb-row" },
       h("div", { class: "sel" }, sortSel),
@@ -74,6 +82,7 @@ function toolbar(ctx) {
       h("div", { class: "sel" }, cond),
       toggle("hideSponsored", "Hide sponsored"),
       toggle("inStockOnly", "In stock only"),
+      toggle("sameOnly", "Same item only"),
       active ? h("button", { type: "button", class: "btn sm ghost", "data-key": "f-clear", onclick: () => actions.clearFilters() }, "Clear filters") : null));
 }
 
@@ -130,7 +139,7 @@ function pickPanel(item, planItem, ctx, offers) {
   const priceBlock = (cls) => h("div", { class: `pick-price ${cls}` },
     h("div", { class: "big" }, formatCents(totalCents(o, planItem.quantity), o.price.currency)),
     h("div", { class: "sub" }, [planItem.quantity > 1 ? `${planItem.quantity} x ${money(o.price)}` : null,
-      shippingKnown(o) ? (o.shipping.cents === 0 ? "free shipping" : `incl. ${money(o.shipping)} shipping`) : "plus shipping"].filter(Boolean).join(", ")));
+      shippingKnown(o) ? (o.shipping.cents === 0 ? "free shipping" : `incl. ${money(o.shipping)} shipping`) : "plus shipping", o.perUnit?.text].filter(Boolean).join(", ")));
   return h("div", { class: "pick" },
     thumb(o, "lg"),
     h("div", { class: "pick-main" },
@@ -170,7 +179,7 @@ function offerRow(item, o, planItem, ctx) {
         h("div", { class: "prod-text" },
           h("a", { href: o.url, target: "_blank", rel: "noopener noreferrer", class: "clamp2", title: cleanTitle(o.title) }, cleanTitle(o.title)),
           h("div", { class: "seller" }, o.seller ? o.seller : ""),
-          tags(o, chosen)))),
+          tags(o, chosen, planItem.offer)))),
     h("td", { class: "c-store" }, storeLabel(o.store, o.storeDomain, "sm")),
     h("td", { class: "c-price num" }, priceCell(o)),
     h("td", { class: "c-ship num" }, shippingKnown(o) ? shippingShort(o) : h("span", { class: "none" }, NOT_SHOWN)),
@@ -195,7 +204,7 @@ function itemSection(item, planItem, ctx) {
   const { model, view, ui } = ctx;
   const all = model.offers[item.id] || [];
   const excluded = new Set(planItem.excluded);
-  const visible = filterOffers(all, view.filters).filter((o) => !excluded.has(o.store));
+  const visible = filterOffers(all, view.filters, planItem.offer).filter((o) => !excluded.has(o.store));
   const pick = model.picks?.find((p) => p.itemId === item.id);
   const rows = sortOffers(visible, view.sort, { chosenKey: planItem.offer ? offerKey(planItem.offer) : undefined, alternatives: pick?.alternatives });
   const open = ui.expanded.has(item.id);

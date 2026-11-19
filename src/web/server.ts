@@ -18,8 +18,9 @@ import { STORE_IDS, dollarsToMoney } from "./format.js";
 import { parseChoices } from "./plan.js";
 import { HubError, RunHub, type HubMessage } from "./session.js";
 import { IconCache, IconError, iconHeaders } from "./icons.js";
+import { MandateError, makeMandate, type Mandate } from "../core/mandate.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.2.0";
 
 export const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "web");
 
@@ -98,6 +99,56 @@ function tokenOk(req: IncomingMessage, token: string): boolean {
   const a = Buffer.from(got);
   const b = Buffer.from(token);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** True for this machine's own socket addresses (IPv4, IPv6 and IPv4-mapped IPv6). */
+export function loopbackAddress(addr: string | undefined): boolean {
+  if (!addr) return false;
+  const a = addr.toLowerCase().replace(/^::ffff:/, "");
+  return a === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(a);
+}
+
+/**
+ * Why a request may not set "Buy without asking" (a mandate), or undefined when it may. A mandate
+ * spends money with no further question, so only the app's own page may set it: never a
+ * cross-origin or cross-site request, and without the access token only from this machine (by
+ * the socket address and by a loopback Host name, which also keeps the DNS-rebinding guard).
+ */
+export function mandateRequestProblem(req: IncomingMessage, token?: string): string | undefined {
+  const site = req.headers["sec-fetch-site"];
+  if (site && site !== "same-origin") return "Buy without asking can only be set from the app's own page";
+  const origin = req.headers.origin;
+  if (origin) {
+    let host: string;
+    try { host = new URL(origin).host; } catch { return "Buy without asking can only be set from the app's own page"; }
+    if (host !== req.headers.host) return "Buy without asking can only be set from the app's own page";
+  }
+  if (token) return tokenOk(req, token) ? undefined : "Buy without asking needs the access token";
+  if (!loopbackHostHeader(req.headers.host) || !loopbackAddress(req.socket?.remoteAddress)) {
+    return "Buy without asking can only be set on this computer (open the agent at http://localhost), or with the access token";
+  }
+  return undefined;
+}
+
+/** The "Buy without asking" setting of a new run, from the app's own confirmed form. */
+function mandateFromBody(v: unknown): Mandate | undefined {
+  if (v === undefined || v === null || v === false) return undefined;
+  if (typeof v !== "object" || Array.isArray(v)) throw new HubError(400, "mandate must be an object");
+  const b = v as Record<string, unknown>;
+  if (b.confirmed !== true) throw new HubError(400, "Confirm Buy without asking first");
+  try {
+    return makeMandate({
+      maxTotal: b.maxTotal as never,
+      maxRunTotal: (b.maxRunTotal ?? undefined) as never,
+      stores: Array.isArray(b.stores) || typeof b.stores === "string" ? (b.stores as string[] | string) : undefined,
+      expiresIn: typeof b.expiresIn === "string" ? b.expiresIn : undefined,
+      expiresAt: typeof b.expiresAt === "string" ? b.expiresAt : undefined,
+      maxOrders: (b.maxOrders ?? undefined) as never,
+    }, "web");
+  } catch (e) {
+    if (e instanceof MandateError) throw new HubError(400, e.message);
+    throw e;
+  }
 }
 
 export function createApp(opts: AppOptions): Server {
@@ -201,9 +252,19 @@ export function createApp(opts: AppOptions): Server {
       const stores = Array.isArray(body.stores) && body.stores.length ? body.stores.map(asStore) : c.allowedStores;
       const budget = asMoney(body.budget) ?? c.budget;
       const zip = typeof body.zip === "string" && /^\d{5}$/.test(body.zip) ? body.zip : c.zip;
+      // "Buy without asking": off unless the person set and confirmed it on this run, from the app's own page.
+      let mandate: Mandate | undefined;
+      if (body.mandate !== undefined && body.mandate !== null && body.mandate !== false) {
+        const why = mandateRequestProblem(req, opts.token);
+        if (why) throw new HubError(403, why);
+        if (body.checkout === false) throw new HubError(400, "Buy without asking needs a run that fills carts");
+        mandate = mandateFromBody(body.mandate);
+      }
       const run = hub.start(prompt, {
         limits: { allowedStores: stores, budget }, zip, shopifyDomains: c.shopifyDomains, checkout: body.checkout !== false,
         everyStore: body.everyStore === true,
+        // The person still chooses the picks and clicks Fill carts; checkouts at the mandate's stores then go ahead.
+        ...(mandate ? { mandate, autoSteps: ["checkout" as const] } : {}),
       });
       return send(res, 201, { runId: run.runId });
     }
@@ -246,6 +307,19 @@ export function createApp(opts: AppOptions): Server {
       const b = (await readJson(req)) as Record<string, unknown>;
       await hub.cancel(mm[1], b.store === undefined ? undefined : asStore(b.store));
       return send(res, 200, { ok: true });
+    }
+    if (p === "/api/orders" && m === "GET") {
+      return send(res, 200, await hub.orders({ all: url.searchParams.get("all") === "1", limit: Number(url.searchParams.get("limit") ?? 200) || 200 }));
+    }
+    if (p === "/api/orders/refresh" && m === "POST") {
+      const b = (await readJson(req)) as Record<string, unknown>;
+      const runId = typeof b.runId === "string" && /^[\w.-]{1,80}$/.test(b.runId) ? b.runId : undefined;
+      try {
+        return send(res, 200, await hub.refreshOrders({ runId, store: b.store === undefined ? undefined : asStore(b.store) }));
+      } catch (e) {
+        if (e instanceof HubError) throw e;
+        throw new HubError(409, (e as Error).message);
+      }
     }
     if (p === "/api/watches" && m === "GET") return send(res, 200, await alerts.list());
     if (p === "/api/watches" && m === "POST") {

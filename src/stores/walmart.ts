@@ -3,10 +3,11 @@
 // through Playwright on the Phantom page. HTML helpers come from util.ts.
 
 import type { Page } from "playwright-core";
-import type { Cart, CartLine, CheckoutReview, Money, NeedsUser, Offer, OrderResult } from "../core/types.js";
+import type { Cart, CartLine, CheckoutReview, Money, NeedsUser, Offer, OrderResult, ProductIds } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
+import { idsFromHtml, idsFromSpecs, mergeIds, normalizeIds } from "../core/identity.js";
 import {
-  aiSearchFallback, approvalMatches, CaptchaHandoffError, clean, clickFirstVisible, declineOffer, formatMoney, gotoRetry, moneyFromNumber, needsUser, nowIso,
+  aiSearchFallback, approvalMatches, CaptchaHandoffError, clean, clickFirstVisible, declineOffer, formatMoney, gotoRetry, jsonLd, moneyFromNumber, needsUser, nowIso,
   optionWarnings, parseDeliveryDate, parseHtml, parseMoney, passBotCheck, pickVariant, qs, qsa, shortAddress, sumLines, textOf,
   typeZip, zipNotTaken, type HNode, type VariantChoice,
 } from "./util.js";
@@ -101,6 +102,20 @@ export function parseWalmartSearch(html: string, itemId: string, now = new Date(
     }
   }
   return [...byId.values()];
+}
+
+/**
+ * Identifiers from a product page: its JSON-LD (gtin13, model, brand), the __NEXT_DATA__ product
+ * (upc, brand, model, manufacturer part number) and its specifications table.
+ */
+export function walmartIds(html: string): ProductIds | undefined {
+  const p = walmartNextData(html)?.props?.pageProps?.initialData?.data;
+  const prod = p?.product ?? {};
+  const specs: [string, string][] = (Array.isArray(p?.idml?.specifications) ? p.idml.specifications : [])
+    .filter((x: any) => typeof x?.name === "string" && (typeof x?.value === "string" || typeof x?.value === "number"))
+    .map((x: any) => [x.name, String(x.value)] as [string, string]);
+  const own = normalizeIds({ gtin: prod.upc ?? prod.gtin13 ?? prod.gtin, mpn: prod.manufacturerProductId ?? prod.model, brand: prod.brand, sku: prod.usItemId });
+  return mergeIds(mergeIds(idsFromHtml(html, jsonLd(html)), own), idsFromSpecs(specs));
 }
 
 export interface WalmartProduct {
@@ -412,6 +427,7 @@ const adapter: StoreAdapter = {
     const id = offer.productId ?? walmartIdFromUrl(offer.url);
     if (!id) return offer;
     const p = await loadWalmartProduct(ctx, id);
+    const ids = mergeIds(walmartIds(await ctx.page.content().catch(() => "")), offer.ids);
     const raw = { ...(offer.raw ?? {}) };
     if (p.variantChoices) raw.variantChoices = p.variantChoices;
     if (p.selected) raw.selectedOptions = p.selected;
@@ -431,6 +447,7 @@ const adapter: StoreAdapter = {
       variants: p.variants ?? offer.variants,
       subscription: false,
       ...(p.subscribeAndSave || offer.subscribeAndSaveAvailable ? { subscribeAndSaveAvailable: true } : {}),
+      ...(ids ? { ids } : {}),
       raw,
     };
   },
@@ -523,22 +540,23 @@ const adapter: StoreAdapter = {
     }
     const page = ctx.page;
     const clicked = await clickFirstVisible(page, ["[data-automation-id=\"place-order-button\"]", "button[data-testid=\"place-order-button\"]", "button:has-text(\"Place order\")"], 15_000);
-    if (!clicked) throw new Error("Walmart: Place order button not found; order not placed");
+    if (!clicked) return { store: "walmart", placed: false, error: "Walmart's Place order button was not found; order not placed" };
+    // From here the click was sent: every result says submitted, so the engine never clicks again.
     for (let i = 0; i < 20; i++) {
       await page.waitForTimeout(1500);
       const state = walmartCheckoutState(page.url(), await page.content());
       if (state === "confirmation") {
         const body = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
         return {
-          store: "walmart", placed: true, orderId: /Order\s*#\s*([\d-]{6,})/i.exec(body)?.[1], total: review.total,
+          store: "walmart", placed: true, submitted: true, orderId: /Order\s*#\s*([\d-]{6,})/i.exec(body)?.[1], total: review.total,
           confirmationText: clean(/(Thanks for your order!?|Order confirmed\.?)/i.exec(body)?.[1]), placedAt: nowIso(),
         } satisfies OrderResult;
       }
       if (/verify|3-D Secure|authentication/i.test(await page.title().catch(() => ""))) {
-        return { store: "walmart", placed: false, needsUser: await needsUser(ctx, "3ds", "Your bank asks to verify the payment. Open the live link.") };
+        return { store: "walmart", placed: false, submitted: true, needsUser: await needsUser(ctx, "3ds", "Your bank asks to verify the payment. Open the live link.") };
       }
     }
-    return { store: "walmart", placed: false, needsUser: await needsUser(ctx, "other", "Walmart did not show an order confirmation. Open the live link to check before trying again.") };
+    return { store: "walmart", placed: false, submitted: true, needsUser: await needsUser(ctx, "other", "Walmart did not show an order confirmation. Open the live link to check before trying again.") };
   },
 };
 

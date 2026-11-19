@@ -2,12 +2,13 @@
 // pages live here; the run page, compare, checkout, history, watches, summary and shortcuts are in
 // web/components/, shared logic in web/lib/.
 
-import { api, h, toast } from "./lib/dom.js";
+import { api, confirmDialog, h, toast } from "./lib/dom.js";
 import { ALL_STORES, STORE_NAMES } from "./lib/wording.js";
 import { storeIcon } from "./lib/store-icon.js";
 import { runView } from "./components/run.js";
 import { summaryView } from "./components/summary.js";
 import { historyView } from "./components/history.js";
+import { ordersView } from "./components/orders.js";
 import { watchesView } from "./components/watches.js";
 import { installShortcuts } from "./components/keys.js";
 
@@ -44,6 +45,7 @@ async function route() {
     if (page === "run" && arg && sub === "summary") { setNav(""); await summaryView(main, decodeURIComponent(arg)); }
     else if (page === "run" && arg) { setNav(""); closeCurrent = await runView(main, decodeURIComponent(arg), app); }
     else if (page === "history") { setNav("history"); await historyView(main); }
+    else if (page === "orders") { setNav("orders"); await ordersView(main, app); }
     else if (page === "watches") { setNav("watches"); await watchesView(main, app); }
     else if (page === "settings") { setNav("settings"); await settingsView(); }
     else { setNav("new"); await homeView(); }
@@ -71,6 +73,21 @@ async function homeView() {
   const budget = h("input", { type: "number", id: "budget", min: 1, step: "0.01", inputmode: "decimal", placeholder: "No limit", value: settings?.budget ? (settings.budget.cents / 100).toFixed(2) : "" });
   const go = h("button", { class: "btn primary lg", type: "submit" }, "Find and compare");
   const every = h("input", { type: "checkbox", id: "every-store", name: "every" });
+  // "Buy without asking": off by default, for this search only, confirmed before the search starts.
+  const upOn = h("input", { type: "checkbox", id: "buy-without-asking", "aria-describedby": "bwa-hint" });
+  const upTo = h("input", { type: "number", id: "bwa-up-to", min: 1, step: "0.01", inputmode: "decimal", placeholder: "60", disabled: true });
+  const upStores = h("input", { type: "text", id: "bwa-stores", placeholder: "Every store of this search", disabled: true, autocomplete: "off" });
+  const upExpires = h("select", { id: "bwa-expires", disabled: true },
+    h("option", { value: "" }, "This search only"), h("option", { value: "1h" }, "1 hour"), h("option", { value: "2h" }, "2 hours"), h("option", { value: "24h" }, "24 hours"));
+  const upFields = h("div", { class: "grid3 bwa-fields", hidden: true },
+    h("div", { class: "field" }, h("label", { for: "bwa-up-to" }, "Up to, per order ($)"), upTo),
+    h("div", { class: "field" }, h("label", { for: "bwa-stores" }, "Only at (optional)"), upStores),
+    h("div", { class: "field" }, h("label", { for: "bwa-expires" }, "For"), upExpires));
+  upOn.addEventListener("change", () => {
+    for (const el of [upTo, upStores, upExpires]) el.disabled = !upOn.checked;
+    upFields.hidden = !upOn.checked;
+    if (upOn.checked) upTo.focus();
+  });
   const storeCount = h("span", { class: "faint" });
   const updateCount = () => {
     const n = form.querySelectorAll("input[name=store]:checked").length;
@@ -86,10 +103,22 @@ async function homeView() {
       if (!prompt) { ta.focus(); toast("Write what you want to buy, or pick an example", true); return; }
       const picked = [...form.querySelectorAll("input[name=store]:checked")].map((i) => i.value);
       if (!picked.length) { toast("Choose at least one store", true); form.querySelector("details.opts").open = true; return; }
+      let mandate;
+      if (upOn.checked) {
+        const amount = Number(upTo.value);
+        if (!(amount > 0)) { toast("Set the most one order may cost, or turn off Buy without asking", true); form.querySelector("details.opts").open = true; upTo.focus(); return; }
+        const where = upStores.value.trim() ? ` at ${upStores.value.trim()}` : " at any store of this search";
+        const until = upExpires.value ? ` for the next ${upExpires.selectedOptions[0].textContent}` : " for this search only";
+        const ok = await confirmDialog("Buy without asking?",
+          `${app.meta.demo ? "Demo: pretend orders only. " : ""}The agent will place orders without asking you when a store's checkout total, with shipping and tax, is $${amount.toFixed(2)} or less${where},${until}. Anything else still waits for your OK. Store sign-ins, codes and bank checks still come to you.`,
+          `Allow up to $${amount.toFixed(2)}`);
+        if (!ok) return;
+        mandate = { maxTotal: amount, stores: upStores.value.trim() || undefined, expiresIn: upExpires.value || undefined, confirmed: true };
+      }
       go.disabled = true;
       go.replaceChildren(h("span", { class: "spin", "aria-hidden": "true" }), "Starting");
       try {
-        const { runId } = await api("/api/runs", { method: "POST", body: { prompt, stores: picked, zip: zip.value || undefined, budget: budget.value || undefined, everyStore: every.checked || undefined } });
+        const { runId } = await api("/api/runs", { method: "POST", body: { prompt, stores: picked, zip: zip.value || undefined, budget: budget.value || undefined, everyStore: every.checked || undefined, mandate } });
         location.hash = `#/run/${encodeURIComponent(runId)}`;
       } catch (e) {
         toast(e.message, true);
@@ -116,7 +145,11 @@ async function homeView() {
         h("div", { class: "grid2" },
           h("div", { class: "field" }, h("label", { for: "zip" }, "Delivery ZIP (optional)"), zip),
           h("div", { class: "field" }, h("label", { for: "budget" }, "Budget for everything, $ (optional)"), budget)),
-        h("label", { class: "check" }, every, "A cart at every store, to compare real totals"))),
+        h("label", { class: "check" }, every, "A cart at every store, to compare real totals"),
+        h("fieldset", { class: "bwa" }, h("legend", {}, "Buy without asking"),
+          h("label", { class: "check" }, upOn, "Buy without asking, within a limit"),
+          h("p", { id: "bwa-hint", class: "faint small" }, "Off by default. You still choose the picks and fill the carts; a checkout at or under the limit is then bought with no question. Anything over it waits for your OK."),
+          upFields))),
     h("ol", { class: "how", "aria-label": "How it works" },
       h("li", {}, h("strong", {}, "Compare"), h("span", {}, "Searches every store at once")),
       h("li", {}, h("strong", {}, "Fill carts"), h("span", {}, "Only when you say so")),
@@ -184,6 +217,7 @@ async function settingsView() {
   const zip = h("input", { type: "text", id: "s-zip", inputmode: "numeric", maxlength: 5, pattern: "\\d{5}", value: s.zip, placeholder: "82001" });
   const budget = h("input", { type: "number", id: "s-budget", min: "1", step: "0.01", inputmode: "decimal", value: s.budget ? (s.budget.cents / 100).toFixed(2) : "", placeholder: "No limit" });
   const shop = h("input", { type: "text", id: "s-shop", value: s.shopifyDomains.join(", "), placeholder: "shop.example.com, another-store.com", "aria-describedby": "s-shop-hint" });
+  const catalog = h("input", { type: "checkbox", id: "s-catalog", checked: !!s.shopCatalog, disabled: !!s.shopCatalogFromEnv, "aria-describedby": "s-catalog-hint" });
   const proxy = h("input", { type: "password", id: "s-proxy", autocomplete: "off", spellcheck: "false", placeholder: s.hasProxy ? s.proxy : "http://user:pass@host:port", "aria-describedby": "s-proxy-hint" });
   const save = h("button", { class: "btn primary", type: "submit" }, "Save");
 
@@ -199,6 +233,7 @@ async function settingsView() {
           browsaApiKey: key.value || undefined, llm: llmSpec(), llmApiKey: llmKey.value || undefined, llmBaseUrl: llmBase.value.trim(),
           zip: zip.value, budget: budget.value || null, allowedStores: stores,
           shopifyDomains: shop.value.split(/[\s,]+/).filter(Boolean),
+          ...(s.shopCatalogFromEnv ? {} : { shopCatalog: catalog.checked }),
           browserMode: form.querySelector("input[name=bmode]:checked")?.value || "burner",
           browser: form.querySelector("input[name=bprov]:checked")?.value || "auto",
           ...(cdpUrl.value.trim() ? { cdpUrl: cdpUrl.value.trim() } : {}),
@@ -245,6 +280,13 @@ async function settingsView() {
       h("fieldset", {}, h("legend", {}, "Allowed stores"),
         h("div", { class: "checks" }, ALL_STORES.map((st) => h("label", { class: "check" }, h("input", { type: "checkbox", name: "sstore", value: st, checked: s.allowedStores.includes(st) }), storeIcon(st, undefined, "sm"), STORE_NAMES[st])))),
       h("div", { class: "field" }, h("label", { for: "s-shop" }, "Shopify stores"), shop, h("p", { class: "hint", id: "s-shop-hint" }, "Domains, comma separated.")),
+      h("div", { class: "field" },
+        h("label", { class: "check" }, catalog, "Also find Shopify stores through Shop's catalog"),
+        h("p", { class: "hint", id: "s-catalog-hint" },
+          s.shopCatalogFromEnv ? "Set by OSA_SHOP_CATALOG. " : "",
+          "Off by default. Sends your search words to Shopify's catalog API (mcp.shop.com); ",
+          h("a", { href: "https://www.shopify.com/legal/api-terms", target: "_blank", rel: "noopener" }, "Shopify's API terms"),
+          " apply. No Shop account. Carts and checkout stay on each store's own site, with your approval.")),
       h("fieldset", {}, h("legend", {}, "Browsers"),
         h("div", { class: "checks col" }, BROWSER_MODES.map(([v, label]) => h("label", { class: "check" },
           h("input", { type: "radio", name: "bmode", value: v, checked: (s.browserMode || "burner") === v }), label))),

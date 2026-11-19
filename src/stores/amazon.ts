@@ -6,8 +6,9 @@
 
 import type { Page } from "playwright-core";
 import type {
-  Cart, CartLine, CheckoutReview, Money, NeedsUser, Offer, OrderResult, Rating,
+  Cart, CartLine, CheckoutReview, Money, NeedsUser, Offer, OrderResult, ProductIds, Rating,
 } from "../core/types.js";
+import { idsFromSpecs, mergeIds, normalizeIds } from "../core/identity.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
 import {
   aiSearchFallback, approvalMatches, CaptchaHandoffError, clean, clickFirstVisible, declineOffer, decodeEntities, formatMoney, gotoRetry, hasClass, jsonAfter, needsUser,
@@ -210,6 +211,33 @@ export function parseAmazonProduct(html: string, now = new Date()): AmazonProduc
     variants, selected, variantChoices, subscribeAndSave: sns, hasAccordion, primeOnlyDefault, canAddToCart,
     image: qs(doc, "#landingImage")?.attrs["data-old-hires"] || qs(doc, "#landingImage")?.attrs.src,
   };
+}
+
+/**
+ * Identifiers from a product page: the product details tables and bullets (UPC, EAN, "Item model
+ * number", "Manufacturer Part Number", "Brand") and the byline ("Visit the Logitech Store").
+ * Amazon has no JSON-LD on product pages.
+ */
+export function amazonIds(html: string): ProductIds | undefined {
+  const doc = parseHtml(html);
+  const rows: [string, string][] = [];
+  const strip = (s: string) => s.replace(/[‎‏ ]|&[lr]rm;|&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  for (const table of ["#productDetails_techSpec_section_1", "#productDetails_techSpec_section_2", "#productDetails_detailBullets_sections1", "#technicalSpecifications_section_1", "#poExpander", "#productOverview_feature_div"]) {
+    for (const tr of qsa(doc, `${table} tr`)) {
+      const cells = qsa(tr, "td");
+      const th = qs(tr, "th");
+      const label = strip(textOf(th ?? cells[0]));
+      const value = strip(textOf(cells[cells.length - 1]));
+      if (label && value && label !== value) rows.push([label, value]);
+    }
+  }
+  for (const li of qsa(doc, "#detailBullets_feature_div li")) {
+    const t = strip(textOf(li));
+    const i = t.indexOf(":");
+    if (i > 0) rows.push([t.slice(0, i).trim(), t.slice(i + 1).trim()]);
+  }
+  const byline = strip(textOf(qs(doc, "#bylineInfo")));
+  return mergeIds(idsFromSpecs(rows), normalizeIds({ brand: byline || undefined }));
 }
 
 export function parseAmazonCart(html: string): Cart {
@@ -522,7 +550,9 @@ const adapter: StoreAdapter = {
     const asin = offer.productId ?? asinFromUrl(offer.url);
     await gotoAmazon(ctx, asin ? `${amazonProductUrl(asin)}?th=1&psc=1` : offer.url);
     await ctx.page.waitForSelector("#productTitle", { timeout: 15_000 }).catch(() => undefined);
-    const p = parseAmazonProduct(await ctx.page.content());
+    const html = await ctx.page.content();
+    const p = parseAmazonProduct(html);
+    const ids = mergeIds(amazonIds(html), offer.ids);
     const raw = { ...(offer.raw ?? {}) };
     if (p.variantChoices) raw.variantChoices = p.variantChoices;
     if (p.selected) raw.selectedOptions = p.selected;
@@ -545,6 +575,7 @@ const adapter: StoreAdapter = {
       image: offer.image ?? p.image,
       subscription: false,
       ...(p.subscribeAndSave || offer.subscribeAndSaveAvailable ? { subscribeAndSaveAvailable: true } : {}),
+      ...(ids ? { ids } : {}),
       raw,
     };
   },
@@ -669,21 +700,22 @@ const adapter: StoreAdapter = {
     }
     const page = ctx.page;
     const clicked = await clickFirstVisible(page, ["input[name=\"placeYourOrder1\"]", "#submitOrderButtonId input", "#placeOrder", "#bottomSubmitOrderButtonId input", "#turbo-checkout-pyo-button"], 15_000);
-    if (!clicked) throw new Error("Amazon: Place your order button not found; order not placed");
+    if (!clicked) return { store: "amazon", placed: false, error: "Amazon's Place your order button was not found; order not placed" };
+    // From here the click was sent: every result says submitted, so the engine never clicks again.
     for (let i = 0; i < 20; i++) {
       await page.waitForTimeout(1500);
       const url = page.url();
       const state = amazonCheckoutState(url, await page.content());
-      if (state === "mfa") return { store: "amazon", placed: false, needsUser: await needsUser(ctx, "3ds", "Amazon or your bank asks to verify the payment. Open the live link.") };
+      if (state === "mfa") return { store: "amazon", placed: false, submitted: true, needsUser: await needsUser(ctx, "3ds", "Amazon or your bank asks to verify the payment. Open the live link.") };
       const body = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
       if (state === "confirmation" || /Order placed, thank you|Thank you, your order has been placed/i.test(body)) {
         return {
-          store: "amazon", placed: true, orderId: /\b(\d{3}-\d{7}-\d{7})\b/.exec(body)?.[1], total: review.total,
+          store: "amazon", placed: true, submitted: true, orderId: /\b(\d{3}-\d{7}-\d{7})\b/.exec(body)?.[1], total: review.total,
           confirmationText: clean(/(Order placed, thank you!?|Thank you, your order has been placed\.?)/i.exec(body)?.[1]), placedAt: nowIso(),
         } satisfies OrderResult;
       }
     }
-    return { store: "amazon", placed: false, needsUser: await needsUser(ctx, "other", "Amazon did not show an order confirmation. Open the live link to check before trying again.") };
+    return { store: "amazon", placed: false, submitted: true, needsUser: await needsUser(ctx, "other", "Amazon did not show an order confirmation. Open the live link to check before trying again.") };
   },
 };
 
