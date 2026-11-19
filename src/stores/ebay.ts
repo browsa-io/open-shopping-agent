@@ -97,8 +97,38 @@ function sellerText(s: SellerInfo | undefined): string | undefined {
 export function parseShipping(text: string | undefined): Money | undefined {
   if (!text) return undefined;
   if (/free (delivery|shipping)|^free\b/i.test(text)) return { cents: 0, currency: "USD" };
-  const m = /\+?\s*(\$[\d,]+(?:\.\d{2})?)\s*(delivery|shipping)/i.exec(text);
+  // "+$5.99 delivery", or converted for a visitor outside the US: "+IDR468,015.44 delivery".
+  const m = /\+\s*([^|+]{1,30}?)\s*(?:delivery|shipping)/i.exec(text) ?? /(\$[\d,]+(?:\.\d{2})?)\s*(?:delivery|shipping)/i.exec(text);
   return m ? parseMoney(m[1]) : undefined;
+}
+
+/**
+ * eBay's dp1 cookie with the buyer location set to the US ("bbl/US..."). Outside the US, eBay
+ * converts prices to the local currency ("IDR52,872.80"); with bbl/US it shows US dollars
+ * (checked live 2026-11-19 from a non-US connection). Entries look like "bbl/IDen-US6ec12539^": key,
+ * country, locale, hex expiry. Returns undefined when it already says US.
+ */
+export function dp1WithUsBuyer(dp1: string | undefined, nowSec = Math.floor(Date.now() / 1000)): string | undefined {
+  const exp = (nowSec + 365 * 86_400).toString(16).padStart(8, "0");
+  if (!dp1) return `bbl/USen-US${exp}^`;
+  const m = /bbl\/([A-Z]{2})([a-z]{2}-[A-Z]{2})?([0-9a-f]{8})\^/.exec(dp1);
+  if (!m) return `${dp1}bbl/USen-US${exp}^`;
+  if (m[1] === "US") return undefined;
+  return dp1.replace(m[0], `bbl/US${m[2] ?? "en-US"}${m[3]}^`);
+}
+
+/** Ask eBay for US dollars (dp1 buyer location US) before loading its pages. Best effort. */
+export async function preferUsd(ctx: StoreContext): Promise<void> {
+  try {
+    const bc = ctx.page.context();
+    const have = (await bc.cookies("https://www.ebay.com")).find((c) => c.name === "dp1");
+    const next = dp1WithUsBuyer(have?.value);
+    if (!next) return;
+    await bc.addCookies([{ name: "dp1", value: next, domain: ".ebay.com", path: "/", expires: Math.floor(Date.now() / 1000) + 365 * 86_400 }]);
+    if (have) ctx.log("eBay: buyer location set to the US so prices show in US dollars");
+  } catch (e) {
+    ctx.log(`eBay: could not ask for US dollars (${(e as Error).message.split("\n")[0].slice(0, 100)})`);
+  }
 }
 
 /** Search results page -> offers (Buy It Now only; auctions and placeholder cards skipped). */
@@ -743,6 +773,7 @@ export const adapter: StoreAdapter = {
   async search(ctx, item, limit) {
     const url = searchUrlFor(item.query, { zip: ctx.zip, condition: wantedCondition(item) });
     let offers: Offer[] = [];
+    await preferUsd(ctx);
     try {
       // Like a person: the home page, the typed search, then the filtered results from inside the
       // page. A fresh session that opens a deep URL first gets 403 from eBay's Akamai.

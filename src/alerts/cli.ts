@@ -11,7 +11,7 @@ import type { Alert, AlertConfig, CheckFn, NotifyChannel, NotifyTarget, WatchInp
 
 export const WATCH_HELP = `osa watch: price-drop and back-in-stock alerts
 
-  osa watch add "<query>" [--store amazon,walmart] [--target 199.99] [--back-in-stock]
+  osa watch add "<query>" [--store amazon,walmart,satechi.com] [--target 199.99] [--back-in-stock]
                 [--notify desktop,slack,webhook,email] [--to you@example.com] [--every 12h] [--id name]
   osa watch add --url <product url> [--target 49] [--back-in-stock] ...
   osa watch list
@@ -42,6 +42,11 @@ export function parseEvery(s: string): number {
   return Math.round(unit === "d" ? n * 1440 : unit === "h" ? n * 60 : n);
 }
 
+/** "amazon, satechi.com": the watch's stores with each Shopify shop by its domain. */
+export function whereText(w: { stores: StoreId[]; shopifyDomains?: string[] }, sep = ", "): string {
+  return w.stores.flatMap((s) => (s === "shopify" ? (w.shopifyDomains?.length ? w.shopifyDomains : ["shopify"]) : [s])).join(sep);
+}
+
 /** Returns the process exit code. */
 export async function runWatchCli(args: string[], deps: WatchCliDeps = {}): Promise<number> {
   const out = deps.out ?? process.stdout;
@@ -69,7 +74,8 @@ export async function runWatchCli(args: string[], deps: WatchCliDeps = {}): Prom
           label: values.label,
           query: positionals.join(" ") || undefined,
           url: values.url,
-          stores: values.store ? (values.store.split(",").map((s) => s.trim()) as StoreId[]) : undefined,
+          // Store names and Shopify shop domains: --store amazon,satechi.com (normalizeWatch splits them).
+          stores: values.store ? (values.store.split(",").map((s) => s.trim()).filter(Boolean) as StoreId[]) : undefined,
           shopifyDomains: values.shopify ? values.shopify.split(",").map((s) => s.trim()) : undefined,
           targetPrice: values.target ? Number(values.target.replace(/[$,]/g, "")) : undefined,
           backInStock: values["back-in-stock"],
@@ -79,7 +85,7 @@ export async function runWatchCli(args: string[], deps: WatchCliDeps = {}): Prom
         };
         if (input.shopifyDomains && !input.stores) input.stores = ["shopify"];
         const w = await store.add(input);
-        say(`Added watch "${w.id}": ${w.query ?? w.url} on ${w.stores.join(", ")}, every ${w.intervalMinutes / 60} h` +
+        say(`Added watch "${w.id}": ${w.query ?? w.url} on ${whereText(w)}, every ${w.intervalMinutes / 60} h` +
           `${w.targetPrice ? `, target ${formatMoney(w.targetPrice)}` : ""}${w.backInStock ? ", back in stock" : ""}` +
           `, notify ${w.notify.map((n) => n.channel).join(", ")}.`);
         return 0;
@@ -90,7 +96,7 @@ export async function runWatchCli(args: string[], deps: WatchCliDeps = {}): Prom
         for (const w of watches) {
           const last = (await store.history(w.id, 1))[0];
           const seen = last?.best ? `${formatMoney(last.best.total)} at ${last.best.storeDomain}` : last ? (last.ok ? "none in stock" : "last check failed") : "not checked yet";
-          say(`${w.id}${w.paused ? " (paused)" : ""}: ${w.query ?? w.url} | ${w.stores.join(",")} | ` +
+          say(`${w.id}${w.paused ? " (paused)" : ""}: ${w.query ?? w.url} | ${whereText(w, ",")} | ` +
             `${w.targetPrice ? `target ${formatMoney(w.targetPrice)} | ` : ""}${w.backInStock ? "back in stock | " : ""}last: ${seen}`);
         }
         return 0;

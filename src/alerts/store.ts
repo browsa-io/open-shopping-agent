@@ -14,6 +14,28 @@ export const DEFAULT_INTERVAL_MINUTES = 720;
 
 const STORES: StoreId[] = ["amazon", "walmart", "ebay", "bestbuy", "target", "shopify"];
 const CHANNELS: NotifyChannel[] = ["email", "slack", "webhook", "desktop"];
+const STORE_ALIASES: Record<string, StoreId> = {
+  "amazon.com": "amazon", "walmart.com": "walmart", "ebay.com": "ebay", "bestbuy.com": "bestbuy", "best-buy": "bestbuy", "best buy": "bestbuy", "target.com": "target",
+};
+
+/**
+ * Store names and Shopify shop domains in one list (what --store and --stores take):
+ * ["amazon", "satechi.com"] -> stores ["amazon", "shopify"], shopifyDomains ["satechi.com"].
+ * Throws on a word that is neither a store nor a domain.
+ */
+export function storesFromList(list: string[]): { stores: StoreId[]; shopifyDomains: string[] } {
+  const stores: StoreId[] = [];
+  const shopifyDomains: string[] = [];
+  for (const raw of list.map((s) => String(s).trim().toLowerCase()).filter(Boolean)) {
+    const host = raw.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    const id = STORES.includes(raw as StoreId) ? (raw as StoreId) : STORE_ALIASES[raw] ?? STORE_ALIASES[host];
+    if (id) { if (!stores.includes(id)) stores.push(id); continue; }
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host)) throw new Error(`unknown store "${raw}" (known: ${STORES.join(", ")}, or a Shopify shop domain like allbirds.com)`);
+    if (!shopifyDomains.includes(host)) shopifyDomains.push(host);
+    if (!stores.includes("shopify")) stores.push("shopify");
+  }
+  return { stores, shopifyDomains };
+}
 
 /** The .osa folder: OSA_DIR, or .osa in the current directory. */
 export function defaultDir(): string {
@@ -111,9 +133,12 @@ export function normalizeWatch(input: WatchInput | Watch, createdAt = new Date()
   if (url && !/^https?:\/\//i.test(url)) throw new Error(`not a web address: ${url}`);
 
   const storesIn = (input as WatchInput).stores ?? ((input as WatchInput).store ? [(input as WatchInput).store!] : undefined);
-  const stores = storesIn && storesIn.length ? [...new Set(storesIn)] : url ? [storeFromUrl(url)] : STORES.filter((s) => s !== "shopify");
-  for (const s of stores) if (!STORES.includes(s)) throw new Error(`unknown store "${s}" (known: ${STORES.join(", ")})`);
-  if (stores.includes("shopify") && !input.shopifyDomains?.length && !url) {
+  // A Shopify shop domain given as a store ("satechi.com") is the shopify store with that domain.
+  const parsed = storesFromList((storesIn ?? []) as string[]);
+  const shopifyDomains = [...new Set([...(input.shopifyDomains ?? []).map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter(Boolean), ...parsed.shopifyDomains])];
+  if (input.shopifyDomains?.length && !parsed.stores.includes("shopify")) parsed.stores.push("shopify");
+  const stores = parsed.stores.length ? parsed.stores : url ? [storeFromUrl(url)] : STORES.filter((s) => s !== "shopify");
+  if (stores.includes("shopify") && !shopifyDomains.length && !url) {
     throw new Error("the shopify store needs shopifyDomains, e.g. [\"allbirds.com\"]");
   }
 
@@ -132,7 +157,7 @@ export function normalizeWatch(input: WatchInput | Watch, createdAt = new Date()
     ...(query ? { query } : {}),
     ...(url ? { url } : {}),
     stores,
-    ...(input.shopifyDomains?.length ? { shopifyDomains: input.shopifyDomains } : {}),
+    ...(shopifyDomains.length && stores.includes("shopify") ? { shopifyDomains } : {}),
     ...(targetPrice ? { targetPrice } : {}),
     ...(input.backInStock ? { backInStock: true } : {}),
     condition: input.condition ?? "new",

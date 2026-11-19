@@ -3,8 +3,9 @@
 An open-source AI shopping agent. One request searches Amazon, Walmart, eBay, Best Buy, Target and any Shopify store, compares the real totals and fills the carts. It never buys without your OK.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/open-shopping-agent.svg)](https://www.npmjs.com/package/open-shopping-agent)
 [![CI](https://github.com/browsa-io/open-shopping-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/browsa-io/open-shopping-agent/actions/workflows/ci.yml)
-<!-- Add back after publishing: the npm badge once open-shopping-agent is on npm, and the bench badge once bench.yml has run in this repo. -->
+<!-- Add back once bench.yml has run in this repo: the bench badge. -->
 
 ![A real run from start to finish: the request, six stores searched, the comparison, Fill cart at eBay, the cart read back, and checkout stopped at eBay's guest checkout (waiting parts are sped up and labelled)](docs/demo.gif)
 
@@ -16,7 +17,8 @@ No account and no key needed: it runs on the Chrome (or Edge) already on your co
 
 ```bash
 npx open-shopping-agent web                                   # web app on http://localhost:4319
-npm i -g open-shopping-agent && osa "usb-c hub with hdmi under \$40"   # command line
+npx open-shopping-agent "usb-c hub with hdmi under \$40"       # command line
+npm i -g open-shopping-agent                                  # or install it once and run osa "..."
 claude mcp add open-shopping-agent -- npx -y open-shopping-agent mcp  # MCP for Claude Code
 ```
 

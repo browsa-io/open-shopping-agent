@@ -16,6 +16,8 @@ export interface WatchInput {
   item: string;              // what to watch: "6 ft HDMI 2.1 cable", or a product URL
   url?: string;              // a product page, when watching one listing
   stores?: StoreId[];        // default: allowed stores
+  /** Shopify shop domains for the "shopify" store (added in 0.1.1: --stores satechi.com). */
+  shopifyDomains?: string[];
   below?: Money;             // price_drop: notify when the delivered price is at or below this
   notify?: { email?: string; slack?: string; webhook?: string };
 }
@@ -48,7 +50,13 @@ export function validateWatch(input: unknown): WatchInput {
   if (!item) throw new Error("item is required");
   const out: WatchInput = { kind, item };
   if (typeof i.url === "string" && /^https:\/\//.test(i.url)) out.url = i.url.slice(0, 1000);
-  if (Array.isArray(i.stores)) out.stores = i.stores.filter((s): s is StoreId => typeof s === "string").slice(0, 6) as StoreId[];
+  if (Array.isArray(i.stores)) out.stores = i.stores.filter((s): s is StoreId => typeof s === "string").slice(0, 12) as StoreId[];
+  if (Array.isArray(i.shopifyDomains)) {
+    const domains = i.shopifyDomains.filter((d): d is string => typeof d === "string")
+      .map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
+      .filter((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)).slice(0, 10);
+    if (domains.length) out.shopifyDomains = [...new Set(domains)];
+  }
   const below = i.below as Money | undefined;
   if (below && typeof below === "object" && Number.isInteger(below.cents) && below.cents > 0) {
     out.below = { cents: below.cents, currency: typeof below.currency === "string" ? below.currency : "USD" };
@@ -132,9 +140,14 @@ export class WatchAlerts implements AlertsPort {
   async create(input: WatchInput): Promise<Watch> {
     const w = validateWatch(input);
     const d = (await this.o.defaults?.()) ?? {};
-    let stores = w.stores?.length ? w.stores : w.url ? undefined : d.stores;
-    const shopifyDomains = stores?.includes("shopify") ? d.shopifyDomains : undefined;
+    // The watch's own stores and Shopify domains first (osa --watch ... --stores satechi.com);
+    // the saved defaults only when it names none. A watch that names stores never falls back to
+    // the default stores.
+    let stores = w.stores?.length ? w.stores : w.shopifyDomains?.length ? ["shopify" as StoreId] : w.url ? undefined : d.stores;
+    if (w.shopifyDomains?.length && stores && !stores.includes("shopify")) stores = [...stores, "shopify"];
+    const shopifyDomains = w.shopifyDomains?.length ? w.shopifyDomains : stores?.includes("shopify") ? d.shopifyDomains : undefined;
     if (stores?.includes("shopify") && !shopifyDomains?.length) stores = stores.filter((s) => s !== "shopify");
+    if (w.stores?.length && !stores?.length) throw new Error("The shopify store needs a shop domain, like satechi.com");
     const notify: NotifyTarget[] = [];
     if (w.notify?.email) notify.push({ channel: "email", to: w.notify.email });
     if (w.notify?.slack) notify.push({ channel: "slack", url: w.notify.slack });
@@ -179,6 +192,7 @@ function toPortWatch(w: AlertWatch, last: HistoryEntry | undefined): Watch {
     item: w.label ?? w.query ?? w.url ?? w.id,
     ...(w.url ? { url: w.url } : {}),
     stores: w.stores,
+    ...(w.shopifyDomains?.length ? { shopifyDomains: w.shopifyDomains } : {}),
     ...(w.targetPrice ? { below: w.targetPrice } : {}),
     ...(Object.keys(notify).length ? { notify } : {}),
     createdAt: w.createdAt,

@@ -15,11 +15,11 @@ import type {
 } from "./types.js";
 import type { StoreAdapter, StoreContext } from "../stores/adapter.js";
 import { loadAdapter, STORE_NAMES } from "../stores/index.js";
-import { formatMoney, isDeadPageError, isExitError, nowIso } from "../stores/util.js";
+import { currencyNote, formatMoney, isDeadPageError, isExitError, nowIso } from "../stores/util.js";
 import { parseRequest, ALL_STORES } from "./parse.js";
 import { llmFromEnv, type LLMConfig } from "./llm.js";
 import { BrowserPool, defaultDomain, proxyFromText, type BrowserMode, type BrowsaClient, type StoreBrowser } from "./browsers.js";
-import { deliveredTotal, pickAll, pickEveryStore, scoreOffers } from "./rank.js";
+import { deliveredTotal, markCurrency, pickAll, pickEveryStore, scoreOffers } from "./rank.js";
 import type { SpendEvent } from "./credits.js";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -469,7 +469,8 @@ export class ShoppingRun {
       try {
         let offers = await this.step(shop, () => shop.adapter.search(shop.ctx, item, limit), Math.min(left, this.o.stepTimeoutMs ?? 180_000), `searching ${STORE_NAMES[store]}`);
         offers = (Array.isArray(offers) ? offers : []).filter(isOffer).map((o) => ({ ...o, itemId: item.id, store, storeDomain: o.storeDomain || domain }));
-        offers = await this.addDetails(shop, item, offers, deadline);
+        offers = this.checkCurrency(store, domain, offers);
+        offers = this.checkCurrency(store, domain, await this.addDetails(shop, item, offers, deadline));
         this.offers.push(...offers);
         this.emit({ type: "offers", store, itemId: item.id, offers });
       } catch (e) {
@@ -478,6 +479,24 @@ export class ShoppingRun {
         if (failedItems === this.request.items.length) this.fail(store, "search", e, domain);
       }
     }
+  }
+
+  /** Shops that already got the "showed prices in IDR" note in this run. */
+  private currencyNoted = new Set<string>();
+
+  /**
+   * Mark offers a store priced in another currency than the run's (USD): they stay in the list,
+   * never in the picks or totals. Says so once per shop, in one plain line.
+   */
+  private checkCurrency(store: StoreId, domain: string, offers: Offer[]): Offer[] {
+    const currency = this.budget?.currency ?? "USD";
+    const { offers: out, shown } = markCurrency(offers, currency);
+    const key = shopKey(store, domain);
+    if (shown.length && !this.currencyNoted.has(key)) {
+      this.currencyNoted.add(key);
+      this.log(currencyNote(store === "shopify" ? domain : STORE_NAMES[store], shown.join(", ")), store);
+    }
+    return out;
   }
 
   private async addDetails(shop: Shop, item: ItemRequest, offers: Offer[], deadline: number): Promise<Offer[]> {

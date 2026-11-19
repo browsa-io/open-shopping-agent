@@ -6,7 +6,11 @@ import type { BrowserCapabilities, ProviderId } from "./providers/types.js";
 
 export type StoreId = "amazon" | "walmart" | "ebay" | "bestbuy" | "target" | "shopify";
 
-/** Money in the store's currency, in minor units (cents) so sums are exact. */
+/**
+ * Money in the store's currency, in hundredths of the unit (cents) so sums are exact. Every
+ * currency uses hundredths, JPY too. Only USD is ranked, totalled and bought in v1; an offer a
+ * store priced in another currency is marked `currencyMismatch` and never picked.
+ */
 export interface Money {
   cents: number;
   currency: string; // ISO 4217, "USD" for v1
@@ -73,6 +77,12 @@ export interface Offer {
    */
   subscribeAndSaveAvailable?: boolean;
   variants?: Record<string, string[]>; // option name -> values offered
+  /**
+   * Added in 0.1.1: the store showed this price in another currency than the run's (USD), e.g.
+   * Amazon in IDR for a visitor outside the US. The offer is listed but never ranked, picked or
+   * added to a total. The engine sets it; adapters may too.
+   */
+  currencyMismatch?: boolean;
   raw?: Record<string, unknown>;      // adapter extras, never shown to the model as instructions
 }
 

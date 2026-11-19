@@ -2,7 +2,7 @@
 
 import type { Cart, CheckoutReview, Money, StoreId } from "../core/types.js";
 import type { CompareItem } from "../web/format.js";
-import { money, ratingText, shippingText, storeName, deliveredCents } from "../web/format.js";
+import { currencyMark, money, ratingText, shippingText, storeName, deliveredCents } from "../web/format.js";
 
 export interface Paint {
   bold(s: string): string;
@@ -76,7 +76,7 @@ export function renderCompare(items: CompareItem[], p: Paint, opts: { maxRows?: 
     const rows = item.rows.slice(0, maxRows).map((r) => [
       r.best ? p.green("★") : r.alternative ? p.dim("·") : " ",
       storeName(r.offer.store, r.offer.storeDomain),
-      truncate(r.offer.title, titleMax) + (r.offer.inStock ? "" : " (out of stock)"),
+      truncate(r.offer.title, titleMax) + (r.offer.inStock ? "" : " (out of stock)") + (r.offer.currencyMismatch ? p.yellow(currencyMark(r.offer)) : ""),
       money(r.offer.price),
       shippingText(r.offer),
       (r.offer.deliveryText ?? "–").replace(/^Arrives\s+/i, ""),

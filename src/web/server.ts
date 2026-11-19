@@ -19,7 +19,7 @@ import { parseChoices } from "./plan.js";
 import { HubError, RunHub, type HubMessage } from "./session.js";
 import { IconCache, IconError, iconHeaders } from "./icons.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 
 export const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "web");
 

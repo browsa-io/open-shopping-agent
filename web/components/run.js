@@ -243,7 +243,10 @@ function renderStores(el, run, d, ui, actions) {
   const picked = !!d.model.picks;
   const list = d.order.map((s) => d.stores.get(s));
   const states = list.map((st) => storeStatus(st, { running, picked, gates: run.gates, answered: run.answered }));
-  const sig = JSON.stringify([list.map((st, i) => [st.store, st.domain, states[i].word, states[i].detail, st.failure?.hint, !!st.liveUrl && running]), ui.live]);
+  // "Amazon showed prices in IDR from your location; ...": those offers are listed, never picked.
+  const curNotes = new Map();
+  for (const e of run.events) if (e.type === "log" && e.store && /showed prices in [A-Z]{3}/.test(e.message)) curNotes.set(e.store, e.message);
+  const sig = JSON.stringify([list.map((st, i) => [st.store, st.domain, states[i].word, states[i].detail, st.failure?.hint, !!st.liveUrl && running, curNotes.get(st.store)]), ui.live]);
   mount(el, sig, () => [
     h("div", { class: "section-head" }, h("h2", {}, "Stores"), h("span", { class: "count" }, list.length ? `${list.length}` : "")),
     list.length ? h("div", { class: "stores" }, list.map((st, i) => {
@@ -255,6 +258,7 @@ function renderStores(el, run, d, ui, actions) {
         h("div", { class: `status ${s.tone}`, role: "status" }, h("span", { class: `dot${s.tone === "busy" ? " pulse" : ""}`, "aria-hidden": "true" }), s.word),
         s.detail ? h("p", { class: "detail" }, s.detail) : null,
         st.failure?.hint ? h("p", { class: "blocked-note" }, hintText(st.failure.hint)) : null,
+        curNotes.get(st.store) ? h("p", { class: "blocked-note" }, curNotes.get(st.store)) : null,
         f ? h("details", { class: "raw" }, h("summary", {}, "Details"), h("code", {}, shortRaw(f.raw, 300))) : null,
         h("div", { class: "store-actions" },
           f && f.action === "retry" && f.stage === "search" ? h("button", { class: "btn sm", "data-key": `retry-${st.store}`, onclick: () => actions.retryStore(st.store) }, icon("retry"), "Try again") : null,

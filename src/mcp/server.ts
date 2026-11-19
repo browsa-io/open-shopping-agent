@@ -7,11 +7,11 @@ import type { RunEvent, StoreId } from "../core/types.js";
 import type { AlertsPort } from "../web/alerts-port.js";
 import { ConfigStore, DEFAULT_STORES } from "../web/config.js";
 import { createAlerts, createEngine } from "../web/engine-factory.js";
-import { STORE_IDS, compareFromEvents, deliveredCents, dollarsToMoney, money, storeName } from "../web/format.js";
+import { STORE_IDS, compareFromEvents, currencyMark, deliveredCents, dollarsToMoney, money, storeName } from "../web/format.js";
 import { RunHub, type LiveRun } from "../web/session.js";
 
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-const SERVER_INFO = { name: "open-shopping-agent", version: "0.1.0" };
+const SERVER_INFO = { name: "open-shopping-agent", version: "0.1.1" };
 
 /** OSA_MCP_ALLOW_ORDERS=1 (or true/on/yes) lets place_order spend money; off by default. */
 export function mcpOrdersAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -122,13 +122,15 @@ function storesArg(v: unknown): StoreId[] | undefined {
 
 function textTable(run: LiveRun): string {
   const lines: string[] = [];
+  // "Amazon showed prices in IDR from your location; ..." comes first: those offers are not compared.
+  for (const e of run.events) if (e.type === "log" && /showed prices in [A-Z]{3}/.test(e.message)) lines.push(`Note: ${e.message}`, "");
   for (const item of compareFromEvents(run.events)) {
     lines.push(`## ${item.label}`);
     if (item.pick) lines.push(`Best pick: ${item.pick.offer.title} at ${storeName(item.pick.offer.store, item.pick.offer.storeDomain)}, ${money({ cents: deliveredCents(item.pick.offer), currency: "USD" })} delivered. ${item.pick.reason}`);
     lines.push("| | Store | Product | Price | Shipping | Delivery | Rating | Seller |", "|---|---|---|---|---|---|---|---|");
     for (const r of item.rows.slice(0, 8)) {
       const o = r.offer;
-      lines.push(`| ${r.best ? "best" : r.alternative ? "alt" : ""} | ${storeName(o.store, o.storeDomain)} | [${o.title.replace(/\|/g, "/")}](${o.url})${o.inStock ? "" : " (out of stock)"} | ${money(o.price)} | ${!o.shipping ? "not shown" : o.shipping.cents === 0 ? "Free" : money(o.shipping)} | ${(o.deliveryText ?? "–").replace(/^Arrives\s+/i, "")} | ${o.rating ? `${o.rating.stars.toFixed(1)} (${o.rating.count})` : ""} | ${o.seller ?? ""} |`);
+      lines.push(`| ${r.best ? "best" : r.alternative ? "alt" : ""} | ${storeName(o.store, o.storeDomain)} | [${o.title.replace(/\|/g, "/")}](${o.url})${o.inStock ? "" : " (out of stock)"}${currencyMark(o)} | ${money(o.price)} | ${!o.shipping ? "not shown" : o.shipping.cents === 0 ? "Free" : money(o.shipping)} | ${(o.deliveryText ?? "–").replace(/^Arrives\s+/i, "")} | ${o.rating ? `${o.rating.stars.toFixed(1)} (${o.rating.count})` : ""} | ${o.seller ?? ""} |`);
     }
     lines.push("");
   }

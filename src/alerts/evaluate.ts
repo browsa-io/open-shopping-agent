@@ -27,13 +27,18 @@ export function snapshot(o: Offer): OfferSnapshot {
   };
 }
 
-/** Offers that count for this watch: priced, not a subscription, and new unless condition is "any". */
+/**
+ * Offers that count for this watch: priced in the watch's currency (US dollars unless its target
+ * says otherwise; never an offer a store showed in another currency), not a subscription, and new
+ * unless condition is "any".
+ */
 export function eligible(watch: Watch, offers: Offer[]): Offer[] {
+  const currency = watch.targetPrice?.currency ?? "USD";
   return offers.filter((o) =>
     o.price && Number.isFinite(o.price.cents) && o.price.cents > 0 &&
-    !o.subscription &&
+    !o.subscription && !o.currencyMismatch &&
     (watch.condition === "any" || !o.condition || o.condition === "new") &&
-    (!watch.targetPrice || o.price.currency === watch.targetPrice.currency));
+    o.price.currency === currency);
 }
 
 function lastOk(history: HistoryEntry[]): HistoryEntry | undefined {

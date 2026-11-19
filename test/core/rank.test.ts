@@ -36,7 +36,7 @@ test("exclusions: out of stock, subscription, membership, over max price, other 
   assert.equal(exclusionReason(i, offer("amazon", "hub", 30, { subscription: true })), "subscription offer");
   assert.equal(exclusionReason(i, offer("amazon", "Amazon Prime membership free trial", 0.01)), "membership or trial offer");
   assert.equal(exclusionReason(i, offer("amazon", "hub", 41)), "over $40.00 each");
-  assert.equal(exclusionReason(i, offer("amazon", "hub", 30, { price: { cents: 3000, currency: "EUR" } })), "priced in EUR");
+  assert.equal(exclusionReason(i, offer("amazon", "hub", 30, { price: { cents: 3000, currency: "EUR" } })), "currency_mismatch: priced in EUR, not USD");
   assert.equal(exclusionReason(i, offer("amazon", "hub", 40)), undefined);
 });
 

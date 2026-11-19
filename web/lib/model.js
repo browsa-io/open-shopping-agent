@@ -141,7 +141,7 @@ export function sortOffers(offers, sort = { key: "best", dir: 1 }, ctx = {}) {
       const ra = rank.get(offerKey(a)) ?? Infinity;
       const rb = rank.get(offerKey(b)) ?? Infinity;
       if (ra !== rb) return ra - rb;
-      return Number(b.inStock) - Number(a.inStock) || tie(a, b);
+      return Number(!!a.currencyMismatch) - Number(!!b.currencyMismatch) || Number(b.inStock) - Number(a.inStock) || tie(a, b);
     });
   }
   return offers.slice().sort((a, b) => {
@@ -174,7 +174,7 @@ export function computePlan(model, plan = {}) {
     const quantity = clampQty(p.quantity ?? engineQty);
     const excluded = new Set(p.excludedStores || []);
     const offers = (model.offers[item.id] || []);
-    const eligible = offers.filter((o) => o.inStock && !o.subscription && !excluded.has(o.store));
+    const eligible = offers.filter((o) => o.inStock && !o.subscription && !o.currencyMismatch && (o.price?.currency || "USD") === "USD" && !excluded.has(o.store));
     let offer = null;
     let source = "engine";
     if (p.skip) {

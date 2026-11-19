@@ -13,7 +13,7 @@ import type {
   Approval, Cart, CartLine, CheckoutReview, ItemRequest, Money, Offer, OrderResult,
 } from "../core/types.js";
 import type { StoreAdapter, StoreContext } from "./adapter.js";
-import { CaptchaHandoffError, clean, evalWithRenew, gotoRetry, isDeadPageError, needsUser, nowIso, pageIsDead, passPressAndHold, replacePage } from "./util.js";
+import { CaptchaHandoffError, clean, detectCurrency, evalWithRenew, gotoRetry, isDeadPageError, needsUser, nowIso, pageIsDead, parseMoney, passPressAndHold, replacePage } from "./util.js";
 
 const ORIGIN = "https://www.target.com";
 const REDSKY = "https://redsky.target.com/redsky_aggregations/v1/web/";
@@ -41,7 +41,12 @@ export function decodeEntities(s: string | undefined | null): string {
 
 /** Dollars as a number (25.99) -> Money. */
 export function usd(n: unknown): Money | undefined {
-  if (typeof n === "string") n = parseFloat(n.replace(/[^0-9.]/g, ""));
+  if (typeof n === "string") {
+    // Target sells in US dollars; a text that names another currency is never read as dollars.
+    const named = detectCurrency(n);
+    if (named && named !== "USD") return parseMoney(n);
+    n = parseFloat(n.replace(/[^0-9.]/g, ""));
+  }
   if (typeof n !== "number" || !Number.isFinite(n)) return undefined;
   return { cents: Math.round(n * 100), currency: "USD" };
 }

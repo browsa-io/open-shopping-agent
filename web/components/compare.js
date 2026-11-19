@@ -25,6 +25,7 @@ function tags(o, chosen) {
   if (isSponsored(o)) t.push(h("span", { class: "badge" }, "Sponsored"));
   if (conditionOf(o) === "used") t.push(h("span", { class: "badge amber" }, o.condition === "refurbished" ? "Refurbished" : "Used"));
   if (!o.inStock) t.push(h("span", { class: "badge red" }, "Out of stock"));
+  if (o.currencyMismatch) t.push(h("span", { class: "badge amber", title: "The store showed this price in another currency; it is not compared or picked" }, `${o.price.currency}, not compared`));
   return t.length ? h("div", { class: "tags" }, t) : null;
 }
 
@@ -157,7 +158,7 @@ function headerCell(label, key, ctx, cls = "") {
 function offerRow(item, o, planItem, ctx) {
   const k = offerKey(o);
   const chosen = planItem.offer && offerKey(planItem.offer) === k;
-  const canChoose = !ctx.locked && o.inStock && !o.subscription && !chosen;
+  const canChoose = !ctx.locked && o.inStock && !o.subscription && !o.currencyMismatch && !chosen;
   const rowKey = `row-${item.id}-${k}`;
   return h("tr", {
     class: [chosen ? "chosen" : "", o.inStock ? "" : "out"].join(" ").trim() || null,

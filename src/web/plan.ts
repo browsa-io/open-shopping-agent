@@ -53,10 +53,11 @@ export function applyChoices(request: ShoppingRequest, picks: Pick[], offers: Of
     if (!offer) throw new Error(`That offer is not in this run (${item.description || item.query})`);
     if (!offer.inStock) throw new Error(`That offer is out of stock: ${offer.title.slice(0, 60)}`);
     if (offer.subscription) throw new Error("Subscription offers are never bought");
+    if (offer.currencyMismatch || offer.price.currency !== (budget?.currency ?? "USD")) throw new Error(`That offer is priced in ${offer.price.currency}, not US dollars; it cannot be compared or bought`);
     const alternatives = [...(old ? [old.offer] : []), ...(old?.alternatives ?? [])].filter((o) => offerKey(o) !== c.offerKey).slice(0, 4);
     next.push({ itemId: item.id, offer, score: 0, reason: "Your choice", alternatives });
   }
-  const currency = budget?.currency ?? next[0]?.offer.price.currency ?? "USD";
+  const currency = budget?.currency ?? "USD";
   let cents = 0;
   for (const p of next) {
     const q = quantities.get(p.itemId) ?? 1;

@@ -7,21 +7,107 @@ import { BotCheckError, CaptchaHandoffError, captchaWords, solveWithBrowsa, type
 
 export { BotCheckError, CaptchaHandoffError } from "./captcha.js";
 
-const SYMBOLS: Record<string, string> = { "$": "USD", "US$": "USD", "£": "GBP", "€": "EUR", "C$": "CAD", "CA$": "CAD" };
+// ---------------------------------------------------------------------------------------------
+// Money and currencies
+//
+// OSA compares and buys in US dollars. A store can still show another currency: Amazon and eBay
+// convert prices for visitors outside the US ("IDR 182,704.89"). The parser reads the currency
+// from the symbol or ISO code next to the number and never assumes dollars when the text names
+// another currency. Amounts are kept in hundredths of the unit for every currency (JPY too), so
+// formatMoney and sums work the same way; only USD amounts are ever ranked or added up.
+// ---------------------------------------------------------------------------------------------
+
+/** ISO 4217 codes read from price text ("IDR 155,271.72", "1.234,56 EUR", "USD 1,234.56"). */
+const CODES = [
+  "USD", "EUR", "GBP", "JPY", "CNY", "RMB", "INR", "IDR", "CAD", "AUD", "NZD", "MXN", "BRL", "CHF", "SEK", "NOK", "DKK", "PLN",
+  "CZK", "HUF", "RON", "TRY", "ILS", "AED", "SAR", "QAR", "KWD", "EGP", "ZAR", "NGN", "KES", "SGD", "HKD", "TWD", "KRW", "THB",
+  "VND", "PHP", "MYR", "PKR", "BDT", "LKR", "RUB", "UAH", "ARS", "CLP", "COP", "PEN", "ISK",
+];
+/** Symbols, longest first. "$" alone is resolved by dollarFor(). */
+const SYMBOLS: [string, string][] = [
+  ["US$", "USD"], ["CA$", "CAD"], ["AU$", "AUD"], ["NZ$", "NZD"], ["HK$", "HKD"], ["MX$", "MXN"], ["NT$", "TWD"],
+  ["C$", "CAD"], ["A$", "AUD"], ["S$", "SGD"], ["R$", "BRL"], ["Rs.", "INR"], ["Rs", "INR"], ["Rp", "IDR"], ["RM", "MYR"],
+  ["zł", "PLN"], ["Kč", "CZK"], ["kr", "SEK"], ["£", "GBP"], ["€", "EUR"], ["¥", "JPY"], ["￥", "JPY"], ["₹", "INR"],
+  ["₩", "KRW"], ["₱", "PHP"], ["฿", "THB"], ["₫", "VND"], ["₺", "TRY"], ["₪", "ILS"], ["₽", "RUB"], ["₴", "UAH"],
+];
+const SYMBOL_MAP = new Map<string, string>(SYMBOLS);
+/** Currencies whose prices are shown without a minor unit. */
+const ZERO_DECIMAL = new Set(["JPY", "KRW", "VND", "CLP", "ISK"]);
+const DOLLARS = new Set(["USD", "CAD", "AUD", "NZD", "SGD", "HKD", "MXN", "TWD"]);
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const ALPHA_TOKENS = [...CODES, ...SYMBOLS.map(([s]) => s).filter((s) => /^[A-Za-z]/.test(s))].sort((a, b) => b.length - a.length);
+const OTHER_TOKENS = SYMBOLS.map(([s]) => s).filter((s) => !/^[A-Za-z]/.test(s));
+// "US $14.99" (eBay) is one token. Letter tokens must not be part of a longer word. A "$" after a
+// number belongs to the next price ("Pack of 2 $12.99"), so dollar signs only count before one.
+const SUFFIX_TOKEN = String.raw`(?<![A-Za-z])(?:${ALPHA_TOKENS.filter((t) => !t.endsWith("$")).map(esc).join("|")})(?![A-Za-z])|${OTHER_TOKENS.filter((t) => !t.endsWith("$")).map(esc).join("|")}`;
+const TOKEN = String.raw`US\s?\$|(?<![A-Za-z])(?:${ALPHA_TOKENS.map(esc).join("|")})(?![A-Za-z])|${OTHER_TOKENS.map(esc).join("|")}|\$`;
+// Whole part: Indian lakh grouping (1,23,456), 3-digit groups with , . ' or a space (1 234), or bare digits.
+const INT = String.raw`\d{1,2}(?:,\d{2})+,\d{3}|\d{1,3}(?:(?:[,.']|\s(?=\d{3}(?!\d)))\d{3})+|\d+`;
+const DEC = String.raw`[.,]\d{1,2}(?!\d)`;
+const PRICE_RE = new RegExp(String.raw`(${TOKEN})?\s?(${INT})(${DEC})?(?:\s?(${SUFFIX_TOKEN}))?`, "g");
+
+function tokenCurrency(token: string | undefined, fallback: string): string | undefined {
+  if (!token) return undefined;
+  const t = token.replace(/\s+/g, "");
+  if (t === "$") return dollarFor(fallback);
+  if (t === "US$") return "USD";
+  if (t === "RMB") return "CNY";
+  return SYMBOL_MAP.get(t) ?? (CODES.includes(t) ? t : undefined);
+}
+
+/** A bare "$" means the store's dollar currency (a Canadian Shopify shop) or else US dollars. */
+function dollarFor(fallback: string): string {
+  return DOLLARS.has(fallback) ? fallback : "USD";
+}
+
+const SPACES = /[   ]/g;
+
+/** The currency a price text names ("IDR 182,704.89" -> "IDR", "$5" -> "USD"), or undefined when it names none. */
+export function detectCurrency(text: string | null | undefined, fallback = "USD"): string | undefined {
+  if (!text) return undefined;
+  for (const m of text.replace(SPACES, " ").matchAll(PRICE_RE)) {
+    const c = tokenCurrency(m[1], fallback) ?? tokenCurrency(m[4], fallback);
+    if (c) return c;
+  }
+  return undefined;
+}
 
 /**
- * "$1,299.99" -> { cents: 129999, currency: "USD" }. Takes the first price in the text, so
+ * "$1,299.99" -> { cents: 129999, currency: "USD" }; "IDR 182,704.89" -> { cents: 18270489,
+ * currency: "IDR" }; "1.234,56 €" -> 123456 EUR; "¥1,980" -> 198000 JPY; "₹1,23,456.78" -> INR.
+ * Takes the first price that names a currency (else the first number, in `currency`), so
  * "$12.99 ($0.65/count)" gives 1299. Returns undefined when there is no price. "Free" -> 0.
+ * A text that names another currency is never read as dollars.
  */
 export function parseMoney(text: string | null | undefined, currency = "USD"): Money | undefined {
   if (!text) return undefined;
-  const t = text.replace(/ /g, " ").trim();
+  const t = text.replace(SPACES, " ").trim();
   if (/^free\b/i.test(t)) return { cents: 0, currency };
-  const m = t.match(/(US\$|C\$|CA\$|[$£€])?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?/);
-  if (!m) return undefined;
-  const whole = parseInt(m[2].replace(/,/g, ""), 10);
-  const frac = m[3] ? parseInt(m[3].padEnd(2, "0"), 10) : 0;
-  return { cents: whole * 100 + frac, currency: (m[1] && SYMBOLS[m[1]]) || currency };
+  let first: RegExpMatchArray | undefined;
+  let named: { m: RegExpMatchArray; cur: string } | undefined;
+  for (const m of t.matchAll(PRICE_RE)) {
+    first ??= m;
+    const cur = tokenCurrency(m[1], currency) ?? tokenCurrency(m[4], currency);
+    if (cur) { named = { m, cur }; break; }
+  }
+  const hit = named?.m ?? first;
+  if (!hit) return undefined;
+  const whole = parseInt(hit[2].replace(/[^\d]/g, ""), 10);
+  if (!Number.isFinite(whole)) return undefined;
+  const fracText = hit[3]?.slice(1);
+  const frac = fracText ? parseInt(fracText.padEnd(2, "0"), 10) : 0;
+  return { cents: whole * 100 + frac, currency: named?.cur ?? currency };
+}
+
+/** True for an amount in US dollars, the only currency OSA ranks, totals and buys in. */
+export function isUsd(m: Money | undefined): boolean {
+  return !!m && m.currency === "USD";
+}
+
+/** The one line shown when a store priced its offers in another currency than US dollars. */
+export function currencyNote(storeName: string, currency: string): string {
+  return `${storeName} showed prices in ${currency} from your location; set a US delivery ZIP or use a US connection. Those offers are left out of the picks and totals.`;
 }
 
 /** Amazon-style split prices: whole "12" + fraction "99" -> 1299 cents. */
@@ -38,6 +124,7 @@ export function formatMoney(m: Money | undefined): string {
   const sign = m.cents < 0 ? "-" : "";
   const abs = Math.abs(m.cents);
   const sym = m.currency === "USD" ? "$" : m.currency === "GBP" ? "£" : m.currency === "EUR" ? "€" : m.currency + " ";
+  if (ZERO_DECIMAL.has(m.currency) && abs % 100 === 0) return `${sign}${sym}${Math.floor(abs / 100).toLocaleString("en-US")}`;
   return `${sign}${sym}${Math.floor(abs / 100).toLocaleString("en-US")}.${String(abs % 100).padStart(2, "0")}`;
 }
 

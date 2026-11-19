@@ -106,7 +106,7 @@ export function exclusionReason(item: ItemRequest, offer: Offer, currency = "USD
   if (offer.subscription) return "subscription offer";
   if (MEMBERSHIP.test(offer.title)) return "membership or trial offer";
   if (!Number.isFinite(offer.price?.cents) || offer.price.cents <= 0) return "no price";
-  if (offer.price.currency !== currency) return `priced in ${offer.price.currency}`;
+  if (offer.currencyMismatch || offer.price.currency !== currency) return `currency_mismatch: priced in ${offer.price.currency}, not ${currency}`;
   if (item.maxPrice && offer.price.cents > item.maxPrice.cents) return `over ${formatMoney(item.maxPrice)} each`;
   return undefined;
 }
@@ -172,6 +172,27 @@ export function scoreOffers(item: ItemRequest, offers: Offer[], opts: RankOption
   const excluded = all.filter((s) => s.excluded).map((s) => ({ ...s, score: -1 }));
   pool.sort((a, b) => b.score - a.score || a.total.cents - b.total.cents || b.rating - a.rating);
   return [...pool, ...excluded];
+}
+
+/**
+ * Mark offers priced in another currency than `currency` (currencyMismatch), and drop a shipping
+ * cost in another currency than the price (it becomes unknown). Returns the offers and the other
+ * currencies seen, e.g. ["IDR"].
+ */
+export function markCurrency(offers: Offer[], currency = "USD"): { offers: Offer[]; shown: string[] } {
+  const shown = new Set<string>();
+  const out = offers.map((o) => {
+    let x = o;
+    if (x.shipping && x.shipping.currency !== x.price.currency) x = { ...x, shipping: undefined };
+    if (x.listPrice && x.listPrice.currency !== x.price.currency) x = { ...x, listPrice: undefined };
+    if (x.price.currency !== currency || x.currencyMismatch) {
+      shown.add(x.price.currency);
+      if (!x.currencyMismatch) x = { ...x, currencyMismatch: true };
+    }
+    return x;
+  });
+  shown.delete(currency);
+  return { offers: out, shown: [...shown] };
 }
 
 /** Same product listed twice (same store and URL or product id): keep the first. */
@@ -255,7 +276,13 @@ export function pickAll(request: ShoppingRequest, offers: Offer[], opts: Omit<Ra
       cents += deliveredTotal(pick.offer, item.quantity).cents;
     } else {
       const reasons = [...new Set(scoreOffers(item, mine, { ...opts, currency }).map((s) => s.excluded).filter(Boolean))];
-      unpicked.push({ itemId: item.id, reason: mine.length ? `no offer fits (${reasons.slice(0, 3).join("; ")})` : "no offers found" });
+      const shown = [...new Set(mine.filter((o) => o.currencyMismatch || o.price.currency !== currency).map((o) => o.price.currency))];
+      unpicked.push({
+        itemId: item.id,
+        reason: !mine.length ? "no offers found"
+          : shown.length && mine.every((o) => o.currencyMismatch || o.price.currency !== currency) ? `every offer was priced in ${shown.join(", ")}, not ${currency}; none can be compared`
+          : `no offer fits (${reasons.slice(0, 3).join("; ")})`,
+      });
     }
   }
   const budget = opts.budget ?? request.budget;

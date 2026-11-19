@@ -24,6 +24,11 @@ export function dollarsToMoney(value: number | string, currency = "USD"): Money 
   return { cents: Math.round(n * 100), currency };
 }
 
+/** " (IDR, not compared)" for an offer a store priced in another currency than US dollars, else "". */
+export function currencyMark(o: Offer): string {
+  return o.currencyMismatch ? ` (${o.price.currency}, not compared)` : "";
+}
+
 /** Price plus shipping when shipping is known; undefined shipping counts as unknown (price only). */
 export function deliveredCents(o: Offer): number {
   return o.price.cents + (o.shipping?.cents ?? 0);
@@ -72,9 +77,10 @@ export function compareFromEvents(events: RunEvent[]): CompareItem[] {
     const keyOf = (o: Offer) => `${o.store}|${o.url}`;
     const bestKey = pick ? keyOf(pick.offer) : undefined;
     const altKeys = new Set((pick?.alternatives ?? []).map(keyOf));
+    // Offers in another currency (currencyMismatch) are listed last: their numbers do not compare.
     const rows = (offers.get(itemId) ?? [])
       .slice()
-      .sort((a, b) => deliveredCents(a) - deliveredCents(b))
+      .sort((a, b) => Number(!!a.currencyMismatch) - Number(!!b.currencyMismatch) || deliveredCents(a) - deliveredCents(b))
       .map((offer) => ({ offer, best: keyOf(offer) === bestKey, alternative: altKeys.has(keyOf(offer)) }));
     rows.sort((a, b) => Number(b.best) - Number(a.best));
     return { itemId, label: labels.get(itemId) ?? itemId, pick, rows };

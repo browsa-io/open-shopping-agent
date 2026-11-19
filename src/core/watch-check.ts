@@ -11,6 +11,8 @@ import { LimitError } from "./limits.js";
 import { errText, withTimeout } from "./engine.js";
 import type { CheckFn, Watch } from "../alerts/types.js";
 import { storeFromUrl } from "../alerts/store.js";
+import { markCurrency } from "./rank.js";
+import { currencyNote } from "../stores/util.js";
 
 export interface WatchCheckOptions {
   /** Browsa API key. Default: BROWSA_API_KEY. */
@@ -64,6 +66,19 @@ export function createWatchCheck(o: WatchCheckOptions = {}): CheckFn {
     if (!offers.length && errors.length) throw new Error(errors.join("; "));
     return offers;
 
+    /**
+     * Mark offers the store priced in another currency (they never count for a watch). When every
+     * offer is in another currency the check fails with the plain reason, not "none in stock".
+     */
+    function usdOnly(store: StoreId, domain: string, list: Offer[]): Offer[] {
+      const { offers: marked, shown } = markCurrency(list, watch.targetPrice?.currency ?? "USD");
+      if (!shown.length) return marked;
+      const note = currencyNote(store === "shopify" ? domain : STORE_NAMES[store], shown.join(", "));
+      if (marked.every((x) => x.currencyMismatch)) throw new Error(note);
+      log(note);
+      return marked;
+    }
+
     async function checkOne(store: StoreId, domain: string): Promise<Offer[]> {
       // Load the adapter first, so a missing one costs no browser.
       const adapter = o.adapters?.[store] ?? await loadAdapter(store);
@@ -79,13 +94,13 @@ export function createWatchCheck(o: WatchCheckOptions = {}): CheckFn {
           const stub: Offer = { store, storeDomain: domain, itemId: "watch", title: watch.label ?? "", url: watch.url, price: { cents: 0, currency: "USD" }, inStock: false };
           const d = await withTimeout(adapter.details!(ctx, stub), step, "reading the product page");
           if (!d || !d.price || !Number.isFinite(d.price.cents) || d.price.cents <= 0) throw new Error("the product page showed no price");
-          return [{ ...stub, ...d, store, storeDomain: d.storeDomain || domain, itemId: "watch" }];
+          return usdOnly(store, domain, [{ ...stub, ...d, store, storeDomain: d.storeDomain || domain, itemId: "watch" }]);
         }
         const item: ItemRequest = { id: "watch", query: watch.query!, description: watch.label ?? watch.query!, quantity: 1 };
         const found = await withTimeout(adapter.search(ctx, item, o.searchLimit ?? 8), step, `searching ${STORE_NAMES[store]}`);
-        return (Array.isArray(found) ? found : [])
+        return usdOnly(store, domain, (Array.isArray(found) ? found : [])
           .filter((x) => x && typeof x.title === "string" && x.price && Number.isFinite(x.price.cents) && typeof x.inStock === "boolean")
-          .map((x) => ({ ...x, store, storeDomain: x.storeDomain || domain, itemId: "watch" }));
+          .map((x) => ({ ...x, store, storeDomain: x.storeDomain || domain, itemId: "watch" })));
       } finally {
         signal?.removeEventListener("abort", onAbort);
         await browser.close().catch(() => {});

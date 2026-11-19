@@ -222,7 +222,9 @@ export function parseAmazonCart(html: string): Cart {
     const asin = n.attrs["data-asin"];
     if (!asin) continue;
     const qty = parseInt(n.attrs["data-quantity"] ?? "1", 10) || 1;
-    const unit = parseMoney(n.attrs["data-price"]) ?? firstPrice(n);
+    // data-price is a bare number: its currency is the one the line's price text shows.
+    const shown = firstPrice(n);
+    const unit = parseMoney(n.attrs["data-price"], shown?.currency ?? "USD") ?? shown;
     if (!unit) continue;
     const title = clean(n.attrs["data-producttitle"]) ?? clean(textOf(qs(n, ".sc-product-title"))) ?? asin;
     const options: Record<string, string> = {};
@@ -349,7 +351,33 @@ export function isAmazonErrorPage(title: string, html: string): boolean {
   return /Sorry! Something went wrong/i.test(title) || /alt="Dogs of Amazon"|href="\/dogsofamazon/.test(html);
 }
 
+/**
+ * Amazon's currency preference cookie. Outside the US, amazon.com converts prices to the local
+ * currency (seen live 2026-11-19 from a non-US connection: "IDR 182,704.89", i18n-prefs=IDR). With
+ * i18n-prefs=USD it shows US dollars again (checked live; the currency=USD URL parameter does
+ * not do it on search pages). Set before every navigation unless it already says USD.
+ */
+export const AMAZON_USD_COOKIE = { name: "i18n-prefs", value: "USD", domain: ".amazon.com", path: "/" } as const;
+
+export async function preferUsd(ctx: StoreContext): Promise<void> {
+  try {
+    const bc = ctx.page.context();
+    const have = (await bc.cookies(AMZ)).find((c) => c.name === AMAZON_USD_COOKIE.name);
+    if (have?.value === "USD") return;
+    await bc.addCookies([{ ...AMAZON_USD_COOKIE, expires: Math.floor(Date.now() / 1000) + 365 * 86_400 }]);
+    if (have) ctx.log(`Amazon: currency preference was ${have.value}; set to USD`);
+  } catch (e) {
+    ctx.log(`Amazon: could not set the USD currency preference (${(e as Error).message.split("\n")[0].slice(0, 100)})`);
+  }
+}
+
+/** The non-USD currency of parsed offers, if any ("IDR"). */
+export function foreignCurrency(offers: Offer[]): string | undefined {
+  return offers.find((o) => o.price.currency !== "USD")?.price.currency;
+}
+
 async function gotoAmazon(ctx: StoreContext, url: string): Promise<void> {
+  await preferUsd(ctx);
   await gotoRetry(ctx, url);
   await settleAmazon(ctx, url);
   await amazonPassBotCheck(ctx);
@@ -468,6 +496,18 @@ const adapter: StoreAdapter = {
     await gotoAmazon(ctx, url);
     await ctx.page.waitForSelector("div[data-component-type=\"s-search-result\"]", { timeout: 15_000 }).catch(() => undefined);
     let offers = parseAmazonSearch(await ctx.page.content(), item.id);
+    const foreign = foreignCurrency(offers);
+    if (foreign) {
+      // Amazon kept the local currency (it may set the cookie back after the delivery location
+      // changed): ask for USD again and load the search once more. Offers still in another
+      // currency are marked by the engine and never picked.
+      ctx.log(`Amazon: prices shown in ${foreign}; asking for US dollars and loading the search again`);
+      await gotoAmazon(ctx, url);
+      await ctx.page.waitForSelector("div[data-component-type=\"s-search-result\"]", { timeout: 15_000 }).catch(() => undefined);
+      offers = parseAmazonSearch(await ctx.page.content(), item.id);
+      const still = foreignCurrency(offers);
+      if (still) ctx.log(`Amazon: prices still in ${still} after asking for USD`);
+    }
     if (!offers.length) {
       ctx.log(`Amazon: no results parsed on "${await ctx.page.title().catch(() => "")}", loading the search again`);
       await gotoAmazon(ctx, url);

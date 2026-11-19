@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import type { RunEvent, StoreId } from "../core/types.js";
 import { ConfigStore, DEFAULT_STORES, osaHome } from "../web/config.js";
 import { checkFor, createAlerts, createEngine } from "../web/engine-factory.js";
-import { runWatchCli } from "../alerts/cli.js";
+import { runWatchCli, whereText } from "../alerts/cli.js";
 import { WatchStore } from "../alerts/store.js";
 import { compareFromEvents, money, storeName } from "../web/format.js";
 import { RunHub, type Gate } from "../web/session.js";
@@ -16,7 +16,7 @@ import { CliError, HELP, parseArgs, type CliArgs } from "./args.js";
 import { Progress, colorEnabled, paint, renderCompare, renderLines, renderReview, totalLine } from "./render.js";
 import { friendlyError, shortRaw } from "../../web/lib/wording.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 export async function main(argv: string[]): Promise<number> {
   if (argv[0] === "watch") return watchCommands(argv.slice(1));
@@ -64,9 +64,12 @@ async function watch(args: CliArgs): Promise<number> {
     url: /^https:\/\//.test(args.watch!) ? args.watch : undefined,
     below: args.backInStock ? undefined : args.below,
     stores: args.stores,
+    // --stores satechi.com: the Shopify shop goes with the watch, as it does for a search.
+    ...(args.shopifyDomains?.length ? { shopifyDomains: args.shopifyDomains } : {}),
   });
+  const where = w.stores?.length ? ` on ${whereText({ stores: w.stores, shopifyDomains: w.shopifyDomains })}` : "";
   if (args.json) process.stdout.write(JSON.stringify(w, null, 2) + "\n");
-  else process.stdout.write(`Watch saved (${w.id}): ${w.item}, ${w.kind === "price_drop" ? `at or below ${money(w.below)}` : "back in stock"}\n`);
+  else process.stdout.write(`Watch saved (${w.id}): ${w.item}${where}, ${w.kind === "price_drop" ? `at or below ${money(w.below)}` : "back in stock"}\n`);
   if (!args.json) process.stdout.write(alerts.demo ? "Saved locally. Checks start when the alerts service runs.\n" : "Check it with: osa watch run --once (or keep osa watch run going).\n");
   return 0;
 }
@@ -260,7 +263,7 @@ async function shop(args: CliArgs): Promise<number> {
         break;
       case "log":
         if (compared && e.store) out.write(p.dim(`  ${storeName(e.store)}: ${e.message}\n`));
-        else if (/may block Browsa's default exit|often block non-US or datacenter browsers|AI fallback is off/.test(e.message)) {
+        else if (/may block Browsa's default exit|often block non-US or datacenter browsers|AI fallback is off|showed prices in [A-Z]{3}/.test(e.message)) {
           // Printed after the progress lines, which redraw in place.
           if (compared) out.write(p.yellow(`! ${e.message}\n`)); else exitWarnings.push(e.message);
         }

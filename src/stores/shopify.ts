@@ -351,8 +351,9 @@ async function shop(ctx: StoreContext): Promise<ShopInfo> {
     }
     if (!info.isShopify || !info.currency) info = { ...info, currency: (cart as J).currency };
   }
-  // v1 shops in US dollars: switch the store's market to the US when it picked another one.
-  if (info.country && info.country !== "US") {
+  // v1 shops in US dollars: switch the store's market to the US when it picked another one, or
+  // when it shows another currency (a visitor outside the US gets the local market's prices).
+  if ((info.country && info.country !== "US") || (info.currency && info.currency !== "USD")) {
     const r = await pageFetch(ctx, "/localization", { method: "POST", form: { form_type: "localization", utf8: "✓", _method: "put", return_to: "/", country_code: "US" } });
     if (r.status < 400) {
       await ctx.page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
@@ -362,7 +363,13 @@ async function shop(ctx: StoreContext): Promise<ShopInfo> {
       });
       ctx.log(`Shopify market set to ${after.country ?? "?"} (${after.currency ?? "?"})`);
       info = { ...info, ...after };
+      if (!after.currency) {
+        // Themes that hide window.Shopify: the cart says which currency prices are in.
+        const c = await pageFetch(ctx, "/cart.js");
+        try { const j = JSON.parse(c.body) as J; if (typeof j?.currency === "string") info.currency = j.currency; } catch { /* keep */ }
+      }
     }
+    if (info.currency && info.currency !== "USD") ctx.log(`${domain} still shows prices in ${info.currency}; its offers are listed but not compared`);
   }
   const s: ShopInfo = { origin, domain: hostOf(origin), currency: info.currency || "USD", country: info.country, asked: domain };
   shops.set(ctx.page, s);
