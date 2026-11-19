@@ -1,0 +1,39 @@
+name: New store request
+description: Ask for a store, or say you want to build its adapter
+labels: ["enhancement"]
+title: "Add <store> adapter"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A store is one adapter file with saved-page tests. See [CONTRIBUTING.md](https://github.com/browsa-io/open-shopping-agent/blob/main/CONTRIBUTING.md#add-a-store). Any Shopify store already works: pass its domain to `--stores`.
+  - type: input
+    id: store
+    attributes:
+      label: Store and domain
+      placeholder: Bol.com (bol.com)
+    validations:
+      required: true
+  - type: input
+    id: country
+    attributes:
+      label: Country and currency
+      placeholder: Netherlands, EUR
+    validations:
+      required: true
+  - type: textarea
+    id: searches
+    attributes:
+      label: What you would shop for there
+      description: A few everyday searches that should work, so the bench tasks can use them.
+  - type: textarea
+    id: notes
+    attributes:
+      label: What you know about its pages
+      description: JSON the pages load, guest checkout or sign-in only, bot checks, what its terms say about automated access.
+  - type: checkboxes
+    id: build
+    attributes:
+      label: Building it
+      options:
+        - label: I would like to build this adapter myself

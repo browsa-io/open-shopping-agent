@@ -1,7 +1,7 @@
 {
   "name": "open-shopping-agent",
   "version": "0.1.0",
-  "description": "Open-source AI shopping agent: search Amazon, Walmart, eBay, Best Buy, Target and Shopify stores at once, compare, fill the carts and check out only with your approval. Runs on Phantom cloud browsers by Browsa.",
+  "description": "Open-source AI shopping agent: compares Amazon, Walmart, eBay, Best Buy, Target and any Shopify store, fills the carts, and never buys without your OK. Runs on your own Chrome; cloud browsers optional.",
   "license": "MIT",
   "author": "Browsa <support@browsa.io>",
   "homepage": "https://github.com/browsa-io/open-shopping-agent",
@@ -30,5 +30,5 @@
     "tsx": "^4.19.2",
     "typescript": "^5.9.2"
   },
-  "keywords": ["ai-agent", "shopping", "price-comparison", "browser-automation", "amazon", "walmart", "ebay", "bestbuy", "target", "shopify", "mcp", "phantom", "browsa"]
+  "keywords": ["ai-shopping", "shopping-agent", "agentic-commerce", "ai-agent", "ai-agents", "browser-agent", "shopping", "ecommerce", "price-comparison", "price-tracker", "browser-automation", "cdp", "playwright", "mcp", "mcp-server", "claude", "llm", "amazon", "walmart", "ebay", "bestbuy", "target", "shopify", "phantom", "browsa"]
 }

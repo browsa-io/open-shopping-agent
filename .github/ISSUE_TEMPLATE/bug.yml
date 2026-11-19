@@ -1,0 +1,61 @@
+name: Bug report
+description: Something did not work as described
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please remove personal data (names, addresses, emails, order numbers, card hints) and keys from anything you paste.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran or clicked, what you expected, and what you got.
+      placeholder: |
+        osa --no-cart --stores walmart "aa batteries 24 pack"
+        Expected offers from Walmart, got "blocked at search".
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Your own Chrome (--browser local)
+        - Your own Chrome, headless
+        - Phantom on Browsa
+        - A CDP browser (--browser cdp)
+        - Demo data (--demo)
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      options:
+        - Command line
+        - Web app
+        - MCP
+        - Watches
+        - Docker
+    validations:
+      required: true
+  - type: input
+    id: stores
+    attributes:
+      label: Stores involved
+      placeholder: walmart, satechi.com
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or run notes
+      description: The terminal output, or the run notes from the web app. A trimmed copy of the page the adapter misread helps a lot.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version and system
+      description: "`npm ls open-shopping-agent` or the commit, Node version, OS, and the country you ran it from (stores change by country)."
+      placeholder: 0.1.0, Node 22, macOS 15, US
+    validations:
+      required: true
