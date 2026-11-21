@@ -8,7 +8,7 @@ export type BenchStage = "search" | "details" | "cart" | "checkout";
 export const STAGES: BenchStage[] = ["search", "details", "cart", "checkout"];
 export const STORE_IDS: StoreId[] = ["amazon", "walmart", "ebay", "bestbuy", "target", "shopify"];
 export const STORE_NAMES: Record<StoreId, string> = {
-  amazon: "Amazon", walmart: "Walmart", ebay: "eBay", bestbuy: "Best Buy", target: "Target", shopify: "Any Shopify store",
+  amazon: "Amazon", walmart: "Walmart", ebay: "eBay", bestbuy: "Best Buy", target: "Target", shopify: "Shopify stores (named by domain)",
 };
 
 export interface SearchExpect {
@@ -63,6 +63,18 @@ export interface StoreResult {
   credits?: number;     // Browsa credits this store used, when known
   ms: number;
   date?: string;        // the day this store last ran (kept when a later partial run merges results)
+  run?: string;         // startedAt of the run this store's result comes from (set in a merged file)
+}
+
+/** One run behind a merged results file (latest.json). */
+export interface RunRef {
+  startedAt: string;
+  finishedAt: string;
+  commit?: string;
+  creditsUsed?: number; // everything that run spent, also on results a later run replaced
+  creditsEstimated?: boolean;
+  maxCredits?: number;
+  stores: StoreId[];    // the stores whose shown result comes from this run
 }
 
 export interface BenchResults {
@@ -70,11 +82,19 @@ export interface BenchResults {
   startedAt: string;
   finishedAt: string;
   commit?: string;
-  creditsUsed?: number; // this run's own browsers and AI tasks (ledger), never the account balance
+  /**
+   * One run's file: this run's own browsers and AI tasks (ledger), never the account balance.
+   * A merged file (latest.json, see `runs`): the sum of the credits of the store results shown.
+   */
+  creditsUsed?: number;
   creditsEstimated?: boolean;
   maxCredits?: number;
   stopped?: string;     // set when the run stopped early (credit cap)
   stores: StoreResult[];
+  /** Merged file only: the runs the shown store results come from, oldest first. */
+  runs?: RunRef[];
+  /** Merged file only: what those runs spent in all, including results a later run replaced. */
+  creditsAllRuns?: number;
 }
 
 export interface StageSummary { pass: number; total: number }
@@ -228,10 +248,32 @@ export function renderTable(results?: BenchResults): string {
   // The stores shown may come from more than one run (a partial re-run keeps the others): add up each store's own credits.
   const ran = results.stores.filter((s) => s.status === "ran");
   const sum = ran.every((s) => typeof s.credits === "number") ? ran.reduce((n, s) => n + (s.credits ?? 0), 0) : results.creditsUsed;
-  const credits = sum !== undefined ? `, ${results.creditsEstimated ? "about " : ""}${sum} Browsa credits` : "";
-  const foot = `\nMeasured ${when} on Phantom (Browsa) by [the bench](bench/), stopped before buying` +
+  const about = results.creditsEstimated ? "about " : "";
+  // Results from more than one run: say so, name the stores that were run again, and give both
+  // figures (the results shown, and everything the runs spent). The linked file says the same.
+  const runs = results.runs ?? [];
+  const many = runs.length > 1;
+  const again = many ? runs.slice(1).flatMap((r) => r.stores).map((id) => STORE_NAMES[id]) : [];
+  const runsText = many ? ` in ${runs.length} runs${again.length ? ` (${listWords(again)} ${again.length === 1 ? "was" : "were"} run again)` : ""}` : "";
+  const credits = sum === undefined ? ""
+    : many && results.creditsAllRuns !== undefined && results.creditsAllRuns !== sum
+      ? `, ${about}${sum} Browsa credits for the results shown, ${about}${results.creditsAllRuns} for the ${runs.length} runs in all`
+      : `, ${about}${sum} Browsa credits`;
+  const foot = `\nMeasured ${when} on Phantom (Browsa) by [the bench](bench/)${runsText}, stopped before buying` +
     ` ([results](bench/results/latest.json)${credits}). Your own Chrome: see the browser table above.`;
   return [...head, ...rows].join("\n") + "\n" + foot;
+}
+
+function listWords(a: string[]): string {
+  return a.length <= 1 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
+}
+
+function refOf(r: BenchResults, stores: StoreId[]): RunRef {
+  return {
+    startedAt: r.startedAt, finishedAt: r.finishedAt, ...(r.commit ? { commit: r.commit } : {}),
+    ...(r.creditsUsed !== undefined ? { creditsUsed: r.creditsUsed } : {}), ...(r.creditsEstimated ? { creditsEstimated: true } : {}),
+    ...(r.maxCredits !== undefined ? { maxCredits: r.maxCredits } : {}), stores,
+  };
 }
 
 /**
@@ -241,11 +283,32 @@ export function renderTable(results?: BenchResults): string {
 export function mergeResults(previous: BenchResults | undefined, current: BenchResults): BenchResults {
   if (!previous) return current;
   const stores = current.stores.map((s) => {
-    if (s.status === "ran" || s.status === "not_installed" || s.status === "error") return s;
+    if (s.status === "ran" || s.status === "not_installed" || s.status === "error") return s.status === "ran" ? { ...s, run: current.startedAt } : s;
     const old = previous.stores.find((p) => p.store === s.store && p.status === "ran");
-    return old ? { ...old, date: old.date ?? previous.date } : s;
+    return old ? { ...old, date: old.date ?? previous.date, run: old.run ?? previous.startedAt } : s;
   });
-  return { ...current, stores };
+  // The runs behind the results shown. An older run none of whose results is still shown drops out.
+  const earlier = previous.runs ?? [refOf(previous, [])];
+  const runs = [...earlier.filter((r) => r.startedAt !== current.startedAt), refOf(current, [])]
+    .map((r) => ({ ...r, stores: stores.filter((s) => s.status === "ran" && s.run === r.startedAt).map((s) => s.store) }))
+    .filter((r) => r.stores.length);
+  // Everything came from this run: its own file is the whole truth.
+  if (runs.length <= 1) return { ...current, stores: stores.map(({ run: _run, ...s }) => s) };
+  const ran = stores.filter((s) => s.status === "ran");
+  const shown = ran.every((s) => typeof s.credits === "number") ? ran.reduce((n, s) => n + (s.credits ?? 0), 0) : undefined;
+  const all = runs.every((r) => typeof r.creditsUsed === "number") ? runs.reduce((n, r) => n + (r.creditsUsed ?? 0), 0) : undefined;
+  const { creditsUsed: _c, creditsEstimated: _e, maxCredits: _m, ...rest } = current;
+  return {
+    ...rest,
+    startedAt: runs[0].startedAt,
+    // The top-level figure matches the stores in this file (and the README sentence that links it);
+    // `runs` has each run's own figure and creditsAllRuns their sum.
+    ...(shown !== undefined ? { creditsUsed: shown } : {}),
+    ...(runs.some((r) => r.creditsEstimated) ? { creditsEstimated: true } : {}),
+    ...(all !== undefined ? { creditsAllRuns: all } : {}),
+    runs,
+    stores,
+  };
 }
 
 /** Replace the text between the bench markers. Throws if the markers are missing. */

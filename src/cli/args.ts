@@ -45,6 +45,8 @@ export interface CliArgs {
   mandate?: MandateInput;
   /** --yes: the up-front approval needs no confirmation question. */
   yes: boolean;
+  /** Added in 0.2.1: `osa mcp --help` prints the MCP server's own help. */
+  helpTopic?: "mcp";
 }
 
 export class CliError extends Error {}
@@ -141,7 +143,11 @@ export function parseArgs(argv: string[]): CliArgs {
         words.push(a);
     }
   }
-  if (out.command === "help" || out.command === "version") return out;
+  if (out.command === "help" || out.command === "version") {
+    // `osa mcp --help` and `osa mcp --version` print and exit; they never start the server.
+    if (out.command === "help" && words.length === 1 && words[0] === "mcp") out.helpTopic = "mcp";
+    return out;
+  }
   if (Object.keys(approve).length) {
     if (!approve.upTo) throw new CliError("--approve-stores, --approve-expires, --approve-run-total and --approve-max-orders need --approve-up-to <amount per order>");
     if (out.json || out.dryRun || out.noCart) throw new CliError("--approve-up-to buys without asking, so it cannot go with --json, --dry-run or --no-cart (they never fill a cart)");
@@ -190,7 +196,38 @@ export function parseArgs(argv: string[]): CliArgs {
   return out;
 }
 
-export const HELP = `Open Shopping Agent: search stores at once, compare, fill carts, buy only with your OK.
+export const MCP_HELP = `Open Shopping Agent MCP server (stdio).
+
+Usage
+  osa mcp                 start the server on stdin/stdout (newline-delimited JSON-RPC 2.0)
+  osa mcp --demo          the same on made-up demo data (no store is contacted)
+  osa mcp --help          this text
+  osa mcp --version       the version
+
+Add it to a client
+  claude mcp add open-shopping-agent -- npx -y open-shopping-agent mcp
+  Claude Desktop, Cursor: { "command": "npx", "args": ["-y", "open-shopping-agent", "mcp"] }
+
+Tools
+  find_and_compare   search and compare (read-only)
+  fill_carts         add the picks to each store's cart and read the carts back
+  review_checkout    go to checkout and stop on the order review page
+  place_order        place one order: off unless OSA_MCP_ALLOW_ORDERS=1, needs the exact approved total
+  watch_price        save a price or back-in-stock watch
+  list_runs          past runs (read-only)
+  list_orders        orders from the run history (read-only)
+
+Environment
+  BROWSA_API_KEY            Browsa key (Phantom cloud browsers); without it the stores open in your Chrome
+  OSA_BROWSER               browsa, local or cdp
+  OSA_MCP_ALLOW_ORDERS=1    let place_order place orders you approve in the chat (off by default)
+  OSA_MCP_APPROVE_UP_TO     with the line above: buy without asking up to this many dollars per order
+  OSA_MCP_APPROVE_STORES    only at these stores; OSA_MCP_APPROVE_EXPIRES: only for this long
+  OSA_HOME                  settings and history folder (default ./.osa)
+`;
+
+export const HELP = `Open Shopping Agent: search Amazon, Walmart, eBay, Best Buy and Target at once (and Shopify stores you name),
+compare, fill carts, buy only with your OK.
 
 Usage
   osa "usb-c hub and 6 ft hdmi under $60"     find, compare, then ask per store
@@ -198,20 +235,22 @@ Usage
   osa orders [--all]                          orders placed (and ones to check on the store)
   osa orders refresh [run-id] [--store x]     read each order's page on the store: status, carrier, tracking
   osa web [--port 4319] [--host 127.0.0.1]    start the web app
-  osa mcp                                     start the MCP server (stdio)
+  osa mcp                                     start the MCP server (stdio); osa mcp --help
   osa --watch "6 ft hdmi cable" --below 9.99  price-drop watch (or --back-in-stock)
   osa watch add|list|run|history|remove ...   manage and check watches (osa watch help)
 
 Options
-  --stores amazon,walmart,shop.example.com    stores to search (Shopify by domain)
+  --stores amazon,walmart,shop.example.com    stores to search (default: amazon, walmart, ebay, bestbuy, target;
+                                              a Shopify store is searched only when you name its domain here)
   --zip 82001                                 delivery ZIP
   --budget 60                                 total budget in dollars
   --no-cart                                   compare only, do not fill carts
   --dry-run                                   compare and show what each cart would get; no cart is changed
   --every-store                               a cart at every store with every item (compare real totals)
   --json                                      one JSON reply {ok, v, data, next} (compare only, no carts)
-  --demo                                      use made-up demo data
-  --browser browsa|local|cdp                  where the browsers run (default: browsa with a key, else your Chrome)
+  --demo                                      use made-up demo data (never used unless you ask: this flag or OSA_DEMO=1)
+  --browser browsa|local|cdp                  where the browsers run (default: browsa with a key, else your Chrome);
+                                              browsa without BROWSA_API_KEY stops with an error, it never shows demo data
   --headless                                  run your local Chrome without a window
 
 Buy without asking (off by default; you confirm it once with a y, or pass --yes)
@@ -224,7 +263,8 @@ Buy without asking (off by default; you confirm it once with a y, or pass --yes)
   Anything outside these limits waits for your y on the exact total, as without them.
 
 Exit codes
-  0 ok, 1 user error, 2 store or network problem (try again later),
+  0 ok (every store finished), 1 user error or a missing setting,
+  2 a store or the network failed or blocked the browser, also when other stores gave results (try again later),
   3 needs you (captcha, sign-in, approval, an order to check on the store), 4 safety refusal
 
 Environment
@@ -242,4 +282,5 @@ Environment
   OSA_PROXIES        a pool rotated per store and run: host1:port,host2:port or @proxies.txt
   OSA_US_EXIT=0      no Browsa residential US exit for Amazon, Target and Best Buy
   OSA_MAX_CREDITS    Browsa credits cap per run (default 40)
+  OSA_PRICE_HISTORY=1  preview: a price history chart per watch in the web app (from the local watch history)
 `;

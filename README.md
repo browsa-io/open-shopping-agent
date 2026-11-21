@@ -1,11 +1,11 @@
 # Open Shopping Agent
 
-An open-source AI shopping agent. One request searches Amazon, Walmart, eBay, Best Buy, Target and any Shopify store, compares the real totals and fills the carts. It never buys without your OK.
+An open-source AI shopping agent. One request searches Amazon, Walmart, eBay, Best Buy and Target, plus any Shopify store you name by its domain, compares the real totals and fills the carts. It never buys without your OK.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/open-shopping-agent.svg)](https://www.npmjs.com/package/open-shopping-agent)
 [![CI](https://github.com/browsa-io/open-shopping-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/browsa-io/open-shopping-agent/actions/workflows/ci.yml)
-<!-- Add back once bench.yml has run in this repo: the bench badge. -->
+<!-- No bench badge: without a BROWSA_API_KEY secret the bench workflow only does a dry run (no numbers), and a green badge would read as fresh results. Add it once real runs are committed daily. -->
 
 ![A real run from start to finish: the request, six stores searched, the comparison, Fill cart at eBay, the cart read back, and checkout stopped at eBay's guest checkout (waiting parts are sped up and labelled)](docs/demo.gif)
 
@@ -34,8 +34,8 @@ Stores that block bots (Walmart, eBay and others in the table below) work better
 
 ## What it does
 
-- **Asks once, searches everywhere.** Type what you want in plain words. It searches every store you allow at the same time.
-- **Compares the real total.** Price, shipping, delivery date, rating and seller, side by side, with a one-line reason for each pick.
+- **Asks once, searches everywhere.** Type what you want in plain words. It searches every store you allow at the same time: the five big stores by default, and the Shopify stores you name.
+- **Compares the real total.** Price, shipping, delivery date, rating and seller, side by side, with a one-line reason for each pick. The reason counts the offers that were compared and says how many were left out and why (out of stock, over your price limit, another currency).
 - **Fills the carts.** It picks the right size or colour, chooses one-time purchase, and reads the cart back from the store to check it.
 - **Stops before paying.** It goes to checkout and stops on the review page. Nothing is bought until you approve that exact total, or until you say up front "buy without asking, up to $60".
 - **Hands you the browser when needed.** Sign-in, a code by text message or a card check is yours to do, in the browser window or in Phantom Live.
@@ -57,11 +57,11 @@ osa watch run --once                                      # one pass now (put it
 
 ## Supported stores
 
-Amazon, Walmart, eBay, Best Buy, Target and any Shopify store, in the US for now. [Stores in other countries are open issues](CONTRIBUTING.md#add-a-store).
+Amazon, Walmart, eBay, Best Buy and Target are searched by default, in the US for now. Any Shopify store works too, but only when you name it: `--stores amazon,satechi.com` (or Settings in the web app). A default run searches no Shopify store, because there is no list of them to search; the opt-in [Shop catalog](#same-item-price-per-unit-shop-catalog) can find them for you. [Stores in other countries are open issues](CONTRIBUTING.md#add-a-store).
 
 ### By browser
 
-Measured 18 Nov 2026, one run per browser from a home connection outside the US: "usb-c hub with hdmi and a 6 ft hdmi cable under $60", ZIP 10001, a cart at every store, stopped before buying ([numbers and timings](docs/RELEASE-CHECK.md)).
+Measured 18 Nov 2026, one run per browser, on a test connection that the stores did not see as a US address: "usb-c hub with hdmi and a 6 ft hdmi cable under $60", ZIP 10001, a cart at every store, stopped before buying ([numbers and timings](docs/RELEASE-CHECK.md)).
 
 | Store | Phantom on Browsa | Your Chrome | Your Chrome, headless | Any CDP browser (a local Chrome) |
 |---|---|---|---|---|
@@ -72,11 +72,13 @@ Measured 18 Nov 2026, one run per browser from a home connection outside the US:
 | Target | cart filled, stopped at the $35 minimum and sign-in | no pick (every offer shown out of stock) | cart 1 of 2 items, checkout did not open | not run |
 | satechi.com (Shopify) | cart filled, stopped at guest checkout | cart filled, stopped at guest checkout | cart filled, stopped at guest checkout | cart filled, stopped at guest checkout |
 
-Search, compare, carts, the approval gate, watches, the web app, CLI and MCP work on every browser. A US home connection may get further on your Chrome; that was not measured.
+Search, compare, carts, the approval gate, watches, the web app, CLI and MCP work on every browser. A connection the stores see as a US home address may get further on your Chrome; that was not measured.
 
 ### The bench on Phantom
 
-What [the bench](bench/) did on each store: fixed shopping tasks on Phantom, 3 per store in the last run. "Reaches checkout" means it got to the sign-in, guest or order review page; nothing is ever bought. Amazon's checkout said an item was out of stock and handed the browser over.
+What [the bench](bench/) did on each store: fixed shopping tasks on Phantom, 3 per store. "Reaches checkout" means it got to the sign-in, guest or order review page; nothing is ever bought. Amazon's checkout said an item was out of stock and handed the browser over. The Shopify row is three Shopify stores named in [the task file](bench/tasks.json), not every Shopify store.
+
+The table comes from two runs on the same day. The first ran all six stores (13 credits). eBay and the Shopify stores were then run again (2 credits), because the first run counted a guest checkout page that asks for an address as a failure and one task named a store that is not on Shopify. Both runs are in [bench/results/](bench/results/); `latest.json` holds the result shown per store and says which run each came from. The bench has not run since: the daily workflow has no Browsa key in this repository, so it only does a dry run, which measures nothing.
 
 <!-- bench:start -->
 | Store | Search | Cart | Reaches checkout |
@@ -86,9 +88,9 @@ What [the bench](bench/) did on each store: fixed shopping tasks on Phantom, 3 p
 | eBay | ✓ | ✓ | ✓ |
 | Best Buy | ✓ | ✓ | ✓ |
 | Target | ✓ | ✓ | ✓ |
-| Any Shopify store | ✓ | ✓ | ✓ |
+| Shopify stores (named by domain) | ✓ | ✓ | ✓ |
 
-Measured 18 Nov 2026 on Phantom (Browsa) by [the bench](bench/), stopped before buying ([results](bench/results/latest.json), 13 Browsa credits). Your own Chrome: see the browser table above.
+Measured 18 Nov 2026 on Phantom (Browsa) by [the bench](bench/) in 2 runs (eBay and Shopify stores (named by domain) were run again), stopped before buying ([results](bench/results/latest.json), 13 Browsa credits for the results shown, 15 for the 2 runs in all). Your own Chrome: see the browser table above.
 <!-- bench:end -->
 
 ## How it compares
@@ -121,7 +123,7 @@ npx open-shopping-agent "a USB-C hub with HDMI under \$40 and a pack of AA batte
 npx open-shopping-agent --no-cart --stores amazon,satechi.com "usb-c hub with hdmi"
 ```
 
-Installed globally, the command is `osa`. `--no-cart` compares only; `--stores` takes store names and Shopify domains. By default each item goes to the store with the best pick; `--every-store` fills a cart with every item at each store, so you can compare the real delivered totals the stores show. `--zip 10001` sets the delivery ZIP, `--budget 60` a total budget. `osa --help` lists everything.
+Installed globally, the command is `osa`. `--no-cart` compares only; `--stores` takes store names and Shopify domains (a Shopify store is searched only when its domain is given). By default each item goes to the store with the best pick; `--every-store` fills a cart with every item at each store, so you can compare the real delivered totals the stores show. `--zip 10001` sets the delivery ZIP, `--budget 60` a total budget. `osa --help` lists everything.
 
 ### Web app (Docker)
 
@@ -167,7 +169,7 @@ Claude Code and Gemini CLI ask for an optional Browsa key. Cursor, Codex, VS Cod
 
 ## Buy without asking
 
-> **Not yet tried on a real purchase.** No order has gone through Open Shopping Agent end to end yet. Placing orders, Buy without asking and order tracking are tested against fakes and saved store pages (474 tests), not a live checkout. Try them on a small order first, and report what you see.
+> **Not yet tried on a real purchase.** No order has gone through Open Shopping Agent end to end yet. Placing orders, Buy without asking and order tracking are tested against fakes and saved store pages, not a live checkout. Try them on a small order first, and report what you see.
 
 
 Off by default. You can approve purchases up front, so the agent buys without stopping at checkout:
@@ -185,7 +187,7 @@ osa "usb-c hub with hdmi" --approve-up-to 60 --approve-stores walmart,target --a
 
 ## Pick a browser
 
-Open Shopping Agent runs on three kinds of browser. Pick one with `--browser`, `OSA_BROWSER` or Settings in the web app. Without a choice it uses Browsa when a Browsa key is set, else your own Chrome, so it works with no signup.
+Open Shopping Agent runs on three kinds of browser. Pick one with `--browser`, `OSA_BROWSER` or Settings in the web app. Without a choice it uses Browsa when a Browsa key is set, else your own Chrome, so it works with no signup. If the browser you chose cannot run (`--browser browsa` without `BROWSA_API_KEY`, `--browser cdp` without `OSA_CDP_URL`, or no Chrome installed), the command stops and says what to set. Made-up demo data is only ever used when you pass `--demo`.
 
 **1. Your own Chrome, no signup** (Chrome or Edge installed on this computer)
 
@@ -225,7 +227,7 @@ npx open-shopping-agent --browser cdp "6 ft usb-c cable under \$15"
 
 On Browsa, when a store shows a captcha or a press-and-hold check, the agent asks Browsa to solve it in the same browser session (the `Browsa.solveCaptcha` command on the browser's CDP socket). The run notes say which check it was and how long Browsa took. If Browsa cannot solve it, you get a Phantom Live link to finish it yourself.
 
-A blocked store ends with one line, for example "Walmart blocked this browser. Browsa's Phantom passes it: browsa.io". On your Chrome or a CDP browser, a store that shows a bot check stops with "This store showed a bot check. Solve it in the browser window, or run with Browsa to pass it automatically." Amazon, Target and Best Buy often block non-US or datacenter browsers; the agent warns once per run.
+A store that blocks the browser is reported as a block, in the words of the table above, never as "nothing found": for example "eBay: Blocked at search (403)" or "Walmart: Blocked at the cart (bot check)", and the run exits with code 2 or 3 (see [exit codes](#json-output-and-exit-codes)). It ends with one line, for example "Walmart blocked this browser. Browsa's Phantom passes it: browsa.io". On your Chrome or a CDP browser, a store that shows a bot check stops with "This store showed a bot check. Solve it in the browser window, or run with Browsa to pass it automatically." Amazon, Target and Best Buy often block non-US or datacenter browsers; the agent warns once per run.
 
 ## Bring your own keys
 
@@ -255,7 +257,7 @@ Keys stay on your machine: the environment, or `.osa/config.json` (mode 0600) wh
 
 1. **One browser per store.** Each store gets its own browser profile: a folder on your computer with your Chrome, or a cloud profile on [Browsa](https://browsa.io/?utm_source=github&utm_medium=readme&utm_campaign=osa). Carts and sign-ins stay in that profile between runs.
 2. **Direct code first, AI as a fallback.** Each store has an adapter that reads search results, product pages and carts with plain page code. That is fast and cheap. If a page changed and the code fails, an AI agent finishes that one step. On Browsa with a fresh browser per run (the default) the fallback runs in its own browser with a separate cart, so it can read pages there but cannot fill your cart; those steps then fail without spending credits.
-3. **Shopify through its public JSON.** Any Shopify store works without store-specific code.
+3. **Shopify through its public JSON.** Any Shopify store you name by its domain works without store-specific code.
 4. **The engine decides, the adapter only reads and clicks.** The engine ranks offers, applies your budget and limits, and asks for approval.
 5. **Approval gate.** The agent stops on the order review page and shows you the total. It places the order only with your approval, and only if the store still asks the same total. You can also click the final button yourself.
 6. **Hand-off.** When a store wants a sign-in, a one-time code, a card check or a puzzle, you do that step yourself: in the Chrome window, or on Browsa through a single-use Phantom Live link.
@@ -292,6 +294,8 @@ Alerts go to:
 | Email | SMTP: `OSA_SMTP_HOST`, `OSA_SMTP_PORT`, `OSA_SMTP_USER`, `OSA_SMTP_PASS`, `OSA_SMTP_FROM`. Or `RESEND_API_KEY` or `SENDGRID_API_KEY` with `OSA_EMAIL_FROM` |
 
 Test a channel with `osa watch test slack`.
+
+**Price history (preview, off by default).** Start the web app with `OSA_PRICE_HISTORY=1` and each price watch gets a "Price history" button: a small chart of the best in-stock price every check found, with the lowest and the latest price labelled and the same numbers as a table. It reads the history a watch already keeps in `.osa/watches/<id>.jsonl` on your computer; nothing new is stored and nothing is sent anywhere. A point appears per finished check, so a new watch starts with an empty chart.
 
 **Run watches on a schedule without your own server:**
 
@@ -339,13 +343,15 @@ osa orders refresh [run-id]     # read each order's page on the store: status, c
 
 | Exit | Meaning | Error codes |
 |---|---|---|
-| 0 | ok | |
-| 1 | user error | `bad_args`, `not_found`, `nothing_to_do` |
-| 2 | store or network problem, try again later | `store_error`, `network`, `timeout`, `blocked`, `no_browser` |
+| 0 | ok: every store finished | |
+| 1 | user error, or a setting is missing | `bad_args`, `not_found`, `nothing_to_do`, `setup_needed` |
+| 2 | a store or the network failed or blocked the browser, also when other stores gave results; try again later | `store_error`, `network`, `timeout`, `blocked`, `no_browser` |
 | 3 | needs you | `needs_sign_in`, `needs_captcha`, `needs_user`, `needs_approval`, `order_unknown` |
 | 4 | safety refusal | `approval_mismatch`, `total_changed`, `over_budget`, `credits_cap`, `already_ordered`, `orders_disabled`, `safety_refusal` |
 
-`--json` compares only (no carts). Order results and order states carry `approval_source`: `"user"` (approved at checkout) or `"mandate"` (bought under your up-front approval, with its limits). `--dry-run` shows what each cart would get and changes no cart (MCP: `fill_carts` with `dry_run: true`). MCP tool results carry the same `ok`, `v` and `next`, and errors carry `structuredContent.error` with the same codes. MCP tools: `find_and_compare`, `fill_carts`, `review_checkout`, `place_order`, `watch_price`, `list_runs`, `list_orders`.
+The exit code is the same with and without `--json`. A run where some stores gave picks and one failed still prints its picks (with `--json`: `"ok": true`, `data.partial: true` and the failed stores in `data.failures`, each with its code) and exits with that failure's code, so a script cannot read a blocked store as success. When several stores fail, the code is the most pressing one: needs you (3), then safety (4), then store or network (2). `setup_needed` means no browser can run with your settings (for example `--browser browsa` without a key); nothing is searched and no demo data is shown.
+
+`--json` compares only (no carts). Order results and order states carry `approval_source`: `"user"` (approved at checkout) or `"mandate"` (bought under your up-front approval, with its limits). `--dry-run` shows what each cart would get and changes no cart (MCP: `fill_carts` with `dry_run: true`). MCP tool results carry the same `ok`, `v` and `next`, and errors carry `structuredContent.error` with the same codes. MCP tools: `find_and_compare`, `fill_carts`, `review_checkout`, `place_order`, `watch_price`, `list_runs`, `list_orders`. Each carries MCP annotations: `find_and_compare`, `list_runs` and `list_orders` are marked read-only, `place_order` is marked destructive (and `review_checkout` too when you set an up-front limit). `npx open-shopping-agent mcp --help` lists the tools and settings and exits.
 
 ## FAQ
 
@@ -366,7 +372,7 @@ Run history and watches are files in `.osa/` on your machine. See [docs/SAFETY.m
 
 ## Contributing
 
-Store pages change, so adapter fixes and new stores are the most useful help. Each store is one file with saved-page tests. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the issues labelled [good first issue](https://github.com/browsa-io/open-shopping-agent/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+Store pages change, so adapter fixes and new stores are the most useful help. Each store is one file with saved-page tests. What changed in each version is in [CHANGELOG.md](CHANGELOG.md). Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the issues labelled [good first issue](https://github.com/browsa-io/open-shopping-agent/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ## License
 

@@ -67,8 +67,8 @@ const WM_OPENER = "[data-testid=\"gic-wrapper\"]";
 
 test("zip: the ZIP each store shows", () => {
   assert.equal(cartShipZip(fx("bestbuy", "cart.html")), "00000");
-  assert.equal(cartShipZip("<div>Shipping to 96939<button>Change</button></div>"), "96939");
-  assert.equal(cartShipZip("<div>$96,939.00</div>"), undefined);
+  assert.equal(cartShipZip("<div>Shipping to 12345<button>Change</button></div>"), "12345");
+  assert.equal(cartShipZip("<div>$12,345.00</div>"), undefined);
   assert.equal(walmartZip(fx("walmart", "product-hub-variants.html")), "95829");
   assert.equal(walmartZip(wmPage("10001")), "10001");
   assert.equal(walmartZip("<html></html>"), undefined);
@@ -77,7 +77,7 @@ test("zip: the ZIP each store shows", () => {
 });
 
 test("best buy: a cart for another ZIP gets the run's ZIP through its Change box", async () => {
-  const s = fakeStore({ zip: "96939", accepts: true, opener: BB_OPENER, html: bbCart });
+  const s = fakeStore({ zip: "12345", accepts: true, opener: BB_OPENER, html: bbCart });
   const ctx = ctxOn(s.page, "bestbuy", "10001");
   const cart = await bestbuy.readCart(ctx);
   assert.equal(s.zip(), "10001");
@@ -87,11 +87,11 @@ test("best buy: a cart for another ZIP gets the run's ZIP through its Change box
 });
 
 test("best buy: when it keeps its own ZIP, the notes and the cart say so (once)", async () => {
-  const s = fakeStore({ zip: "96939", accepts: false, opener: BB_OPENER, html: bbCart });
+  const s = fakeStore({ zip: "12345", accepts: false, opener: BB_OPENER, html: bbCart });
   const ctx = ctxOn(s.page, "bestbuy", "10001");
   const a = await bestbuy.readCart(ctx);
   const b = await bestbuy.readCart(ctx);
-  const note = "Best Buy did not take ZIP 10001 without an account; its prices, shipping and delivery are for ZIP 96939";
+  const note = "Best Buy did not take ZIP 10001 without an account; its prices, shipping and delivery are for ZIP 12345";
   assert.deepEqual(a.warnings, [note]);
   assert.deepEqual(b.warnings, [note]);
   assert.equal(ctx.logs.filter((l) => l === note).length, 1);
@@ -99,7 +99,7 @@ test("best buy: when it keeps its own ZIP, the notes and the cart say so (once)"
 });
 
 test("best buy: no --zip, nothing typed", async () => {
-  const s = fakeStore({ zip: "96939", accepts: true, opener: BB_OPENER, html: bbCart });
+  const s = fakeStore({ zip: "12345", accepts: true, opener: BB_OPENER, html: bbCart });
   const cart = await bestbuy.readCart(ctxOn(s.page, "bestbuy"));
   assert.deepEqual(s.filled, []);
   assert.deepEqual(cart.warnings, []);

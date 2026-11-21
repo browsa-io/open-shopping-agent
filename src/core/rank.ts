@@ -181,7 +181,7 @@ export function scoreOffers(item: ItemRequest, offers: Offer[], opts: RankOption
 /**
  * Mark offers priced in another currency than `currency` (currencyMismatch), and drop a shipping
  * cost in another currency than the price (it becomes unknown). Returns the offers and the other
- * currencies seen, e.g. ["IDR"].
+ * currencies seen, e.g. ["EUR"].
  */
 export function markCurrency(offers: Offer[], currency = "USD"): { offers: Offer[]; shown: string[] } {
   const shown = new Set<string>();
@@ -222,15 +222,42 @@ export function pickForItem(item: ItemRequest, offers: Offer[], opts: RankOption
     itemId: item.id,
     offer: best.offer,
     score: best.score,
-    reason: reasonFor(item, best, pool, opts.goal ?? "best_value"),
+    reason: reasonFor(item, best, pool, opts.goal ?? "best_value", scored),
     alternatives: pool.slice(1, 5).map((s) => s.offer),
   };
 }
 
 const STORE_NAMES: Record<string, string> = { amazon: "Amazon", walmart: "Walmart", ebay: "eBay", bestbuy: "Best Buy", target: "Target" };
 
-/** One factual line: what makes the pick win, its delivered total, shipping, rating, delivery, store. */
-export function reasonFor(item: ItemRequest, best: ScoredOffer, pool: ScoredOffer[], goal: Goal): string {
+/** Cut a text at a word boundary, with "…" when something was cut. Never mid-word. */
+export function clipWords(text: string, max: number): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if ([...t].length <= max) return t;
+  const cut = [...t].slice(0, max + 1).join("");
+  const at = cut.lastIndexOf(" ");
+  return `${(at > max * 0.4 ? cut.slice(0, at) : cut.slice(0, -1)).replace(/[\s,;:.(-]+$/, "")}…`;
+}
+
+/** "9 left out: 5 out of stock, 4 over $15.00 each" for the offers that were found but not compared; "" when none. */
+export function leftOutText(all: ScoredOffer[]): string {
+  const out = all.filter((s) => s.excluded);
+  if (!out.length) return "";
+  const counts = new Map<string, number>();
+  for (const s of out) {
+    // "currency_mismatch: priced in EUR, not USD" -> "priced in EUR, not USD"; "does not list a, b" is one group.
+    const why = s.excluded!.replace(/^currency_mismatch:\s*/, "").replace(/^does not list .*/, "without what you asked for in the title");
+    counts.set(why, (counts.get(why) ?? 0) + 1);
+  }
+  const groups = [...counts].sort((a, b) => b[1] - a[1]).map(([why, n]) => `${n} ${why}`);
+  return `${out.length} left out: ${groups.join(", ")}`;
+}
+
+/**
+ * One factual line: what makes the pick win, its delivered total, shipping, rating, delivery, store.
+ * The count is the offers that were compared (the pool); with `all` (every offer found for the
+ * item) it also says how many were found and why the others were left out.
+ */
+export function reasonFor(item: ItemRequest, best: ScoredOffer, pool: ScoredOffer[], goal: Goal, all?: ScoredOffer[]): string {
   const o = best.offer;
   const n = pool.length;
   const parts: string[] = [];
@@ -238,17 +265,17 @@ export function reasonFor(item: ItemRequest, best: ScoredOffer, pool: ScoredOffe
   const qty = item.quantity > 1 ? ` for ${item.quantity}` : "";
   const totalText = `${formatMoney(best.total)}${qty} ${o.shipping === undefined ? "plus shipping" : "delivered"}`;
   if (n === 1) parts.push(`Only offer that fits (${totalText})`);
-  else if (goal === "fastest" && best.days !== undefined && pool.every((s) => s.days === undefined || s.days >= best.days!)) parts.push(`Soonest delivery of ${n} offers (${totalText})`);
-  else if (goal === "top_rated" && pool.every((s) => s.rating <= best.rating)) parts.push(`Best rating for its review count of ${n} offers (${totalText})`);
-  else if (cheapest) parts.push(`Lowest ${o.shipping === undefined ? "price" : "delivered total"} of ${n} offers: ${totalText}`);
-  else parts.push(`${totalText}, best mix of price and rating of ${n} offers`);
+  else if (goal === "fastest" && best.days !== undefined && pool.every((s) => s.days === undefined || s.days >= best.days!)) parts.push(`Soonest delivery of the ${n} offers compared (${totalText})`);
+  else if (goal === "top_rated" && pool.every((s) => s.rating <= best.rating)) parts.push(`Best rating for its review count of the ${n} offers compared (${totalText})`);
+  else if (cheapest) parts.push(`Lowest ${o.shipping === undefined ? "price" : "delivered total"} of the ${n} offers compared: ${totalText}`);
+  else parts.push(`${totalText}, best mix of price and rating of the ${n} offers compared`);
 
   if (o.shipping === undefined) parts.push("shipping not shown");
   else if (o.shipping.cents === 0) parts.push("free shipping");
   else parts.push(`${formatMoney(o.shipping)} shipping`);
   if (o.rating && o.rating.count > 0) parts.push(`${o.rating.stars.toFixed(1)} stars from ${o.rating.count.toLocaleString("en-US")} reviews`);
   else parts.push("no reviews shown");
-  if (o.deliveryText) parts.push(o.deliveryText.length > 40 ? o.deliveryText.slice(0, 40).trim() : o.deliveryText);
+  if (o.deliveryText) parts.push(clipWords(o.deliveryText, 60));
   const met = (item.mustHave ?? []).filter((r) => !best.missing.includes(r));
   if (met.length) parts.push(`lists ${met.join(", ")}`);
   if (best.missing.length) parts.push(`title does not list ${best.missing.join(", ")}`);
@@ -256,7 +283,8 @@ export function reasonFor(item: ItemRequest, best: ScoredOffer, pool: ScoredOffe
   if (o.condition && o.condition !== "new") parts.push(o.condition);
   if (o.sponsored) parts.push("sponsored");
   parts.push(o.store === "shopify" ? o.storeDomain : STORE_NAMES[o.store] ?? o.store);
-  return parts.join(", ");
+  const left = all ? leftOutText(all) : "";
+  return parts.join(", ") + (left ? `. ${all!.length} found, ${left}` : "");
 }
 
 export interface PickResult {

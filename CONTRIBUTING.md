@@ -11,11 +11,17 @@ git clone https://github.com/browsa-io/open-shopping-agent
 cd open-shopping-agent
 npm ci
 npm run build
-npm test
+npm test                # the default suite: no network, no browser, no Browsa key (about 25 s)
 npm run typecheck
+npm run test:browser    # optional: the browser suite, needs Chrome, Edge or Chromium on this computer
 ```
 
-Node 20 or later. Unit tests need no network, no browser and no Browsa key. To try a change for real, run it on your own Chrome, compare only:
+Node 20 or later. There are two test suites:
+
+- **`npm test`**, the default suite. It needs no network, no browser and no Browsa key, and it never launches Chrome. Stores are saved pages in `test/fixtures/`, browsers are fakes. Pull requests must keep it that way: a test that opens a real browser does not belong here.
+- **`npm run test:browser`**, the browser suite (`test/browser/*.browser.test.ts`). It launches the Chrome, Edge or Chromium installed on your computer, headless, against a test page served on 127.0.0.1: no store and no network. It is skipped when no browser is found (set `OSA_CHROME_PATH` to point at one). Every launch and every test has a timeout and the browser is closed, then killed, at the end, so it cannot hang. CI runs it in its own job on a runner with Chrome (`OSA_REQUIRE_CHROME=1` makes a missing Chrome a failure there).
+
+`npm run test:all` runs both. Live tests against real stores are separate again and opt-in (`OSA_LIVE=1`, see Rules). To try a change for real, run it on your own Chrome, compare only:
 
 ```bash
 npx tsx src/cli/index.ts --browser local --no-cart --stores amazon "aa batteries 24 pack"
@@ -35,6 +41,7 @@ npx tsx src/cli/index.ts --browser local --no-cart --stores amazon "aa batteries
 | `src/web/`, `src/cli/`, `src/mcp/` | web app, command line, MCP server |
 | `bench/` | measured results per store (the README store table) |
 | `test/` | unit tests, with saved pages in `test/fixtures/<store>/` |
+| `test/browser/` | the browser suite (`npm run test:browser`), the only tests that launch a real browser |
 
 ## Add a store
 
@@ -78,7 +85,8 @@ Before you add a store, read its terms. If a store forbids automated access, or 
 - TypeScript, ESM, Node 20+. `npm run build`, `npm test` and `npm run typecheck` must pass.
 - Keep changes small and focused. One store per pull request is easiest to review.
 - No new runtime dependency without a reason in the pull request.
-- Tests use saved fixtures. Live tests are opt-in with `OSA_LIVE=1` and stop at the cart or the first checkout page.
+- Tests use saved fixtures. A test that launches a browser goes in `test/browser/` and is named `*.browser.test.ts`. Live tests are opt-in with `OSA_LIVE=1` and stop at the cart or the first checkout page.
+- Fixtures must not say where they were saved from: no local currency, postcode, language or "ships to" country of the person who saved them. Use a US session, or rewrite the values to made-up ones and say so in a comment at the top.
 - **Never place a real order, never enter card details, and never commit a store account password** in tests, fixtures or examples.
 - Do not add code that solves captchas or gets around a store's access limits. Call `passBotCheck` or `browsaSolves` from `util.ts` and hand the rest to the person.
 - Call the browser **Phantom** in docs and UI text.
@@ -91,7 +99,7 @@ Before you add a store, read its terms. If a store forbids automated access, or 
 - [ ] Fixtures are trimmed and have no personal data.
 - [ ] Nothing in the change can place an order outside `placeOrder`, type card details or sign in.
 - [ ] For a new store: bench tasks added, `npm run bench -- --dry-run` passes, and the store's terms are mentioned.
-- [ ] Docs updated if behaviour or options changed.
+- [ ] Docs updated if behaviour or options changed, and a line added under "Unreleased" in `CHANGELOG.md`.
 
 ## Reporting a security problem
 

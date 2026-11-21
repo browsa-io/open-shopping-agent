@@ -246,7 +246,7 @@ function renderStores(el, run, d, ui, actions) {
   const picked = !!d.model.picks;
   const list = d.order.map((s) => d.stores.get(s));
   const states = list.map((st) => storeStatus(st, { running, picked, gates: run.gates, answered: run.answered }));
-  // "Amazon showed prices in IDR from your location; ...": those offers are listed, never picked.
+  // "Amazon showed prices in EUR from your location; ...": those offers are listed, never picked.
   const curNotes = new Map();
   for (const e of run.events) if (e.type === "log" && e.store && /showed prices in [A-Z]{3}/.test(e.message)) curNotes.set(e.store, e.message);
   const sig = JSON.stringify([list.map((st, i) => [st.store, st.domain, states[i].word, states[i].detail, st.failure?.hint, !!st.liveUrl && running, curNotes.get(st.store)]), ui.live]);

@@ -80,3 +80,19 @@ test("renderCompare prints the best pick first with its reason", async () => {
   assert.match(text, /\+ \d+ more/);
   assert.ok(!/\x1b\[/.test(text), "no colour when disabled");
 });
+
+test("renderCompare: a Per unit column when an offer has a price per unit, none otherwise; delivery text is cut at a word", () => {
+  const base = { storeDomain: "amazon.com", itemId: "item-1", url: "https://amazon.com/p/1", inStock: true, shipping: { cents: 0, currency: "USD" } };
+  const withUnit = { ...base, store: "amazon" as const, title: "AA batteries 24 pack", price: { cents: 1249, currency: "USD" }, perUnit: { cents: 52, currency: "USD", per: "count" as const, text: "$0.52 / count", source: "title" as const } };
+  const noUnit = { ...base, store: "walmart" as const, storeDomain: "walmart.com", url: "https://walmart.com/p/2", title: "AA batteries", price: { cents: 1999, currency: "USD" },
+    deliveryText: "FREE delivery Thu, Nov 26 on orders shipped by the seller over $35" };
+  const item = (offers: unknown[]) => [{ itemId: "item-1", label: "aa batteries", pick: undefined, rows: offers.map((offer) => ({ offer, best: false, alternative: false })) }];
+  const withCol = renderCompare(item([withUnit, noUnit]) as never, paint(false), { width: 140 });
+  assert.match(withCol.split("\n")[1], /Price\s+Per unit\s+Ship/);
+  assert.match(withCol, /\$12\.49\s+\$0\.52 \/ count/);
+  assert.match(withCol, /\$19\.99\s+–\s+Free/);
+  // the long delivery text ends at a whole word with an ellipsis
+  assert.match(withCol, /FREE delivery Thu, Nov 26 on orders shipped…$/m);
+  const without = renderCompare(item([noUnit]) as never, paint(false), { width: 140 });
+  assert.doesNotMatch(without, /Per unit/);
+});

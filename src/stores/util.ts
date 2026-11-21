@@ -11,13 +11,13 @@ export { BotCheckError, CaptchaHandoffError } from "./captcha.js";
 // Money and currencies
 //
 // OSA compares and buys in US dollars. A store can still show another currency: Amazon and eBay
-// convert prices for visitors outside the US ("IDR 182,704.89"). The parser reads the currency
+// convert prices for visitors outside the US ("EUR 1,827.04"). The parser reads the currency
 // from the symbol or ISO code next to the number and never assumes dollars when the text names
 // another currency. Amounts are kept in hundredths of the unit for every currency (JPY too), so
 // formatMoney and sums work the same way; only USD amounts are ever ranked or added up.
 // ---------------------------------------------------------------------------------------------
 
-/** ISO 4217 codes read from price text ("IDR 155,271.72", "1.234,56 EUR", "USD 1,234.56"). */
+/** ISO 4217 codes read from price text ("CAD 1,552.71", "1.234,56 EUR", "USD 1,234.56"). */
 const CODES = [
   "USD", "EUR", "GBP", "JPY", "CNY", "RMB", "INR", "IDR", "CAD", "AUD", "NZD", "MXN", "BRL", "CHF", "SEK", "NOK", "DKK", "PLN",
   "CZK", "HUF", "RON", "TRY", "ILS", "AED", "SAR", "QAR", "KWD", "EGP", "ZAR", "NGN", "KES", "SGD", "HKD", "TWD", "KRW", "THB",
@@ -63,7 +63,7 @@ function dollarFor(fallback: string): string {
 
 const SPACES = /[   ]/g;
 
-/** The currency a price text names ("IDR 182,704.89" -> "IDR", "$5" -> "USD"), or undefined when it names none. */
+/** The currency a price text names ("CAD 18.27" -> "CAD", "$5" -> "USD"), or undefined when it names none. */
 export function detectCurrency(text: string | null | undefined, fallback = "USD"): string | undefined {
   if (!text) return undefined;
   for (const m of text.replace(SPACES, " ").matchAll(PRICE_RE)) {
@@ -74,8 +74,8 @@ export function detectCurrency(text: string | null | undefined, fallback = "USD"
 }
 
 /**
- * "$1,299.99" -> { cents: 129999, currency: "USD" }; "IDR 182,704.89" -> { cents: 18270489,
- * currency: "IDR" }; "1.234,56 €" -> 123456 EUR; "¥1,980" -> 198000 JPY; "₹1,23,456.78" -> INR.
+ * "$1,299.99" -> { cents: 129999, currency: "USD" }; "CAD 1,827.04" -> { cents: 182704,
+ * currency: "CAD" }; "1.234,56 €" -> 123456 EUR; "¥1,980" -> 198000 JPY; "₹1,23,456.78" -> INR.
  * Takes the first price that names a currency (else the first number, in `currency`), so
  * "$12.99 ($0.65/count)" gives 1299. Returns undefined when there is no price. "Free" -> 0.
  * A text that names another currency is never read as dollars.

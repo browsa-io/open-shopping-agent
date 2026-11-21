@@ -3,6 +3,7 @@
 import type { Cart, CheckoutReview, Money, StoreId } from "../core/types.js";
 import type { CompareItem } from "../web/format.js";
 import { currencyMark, money, ratingText, shippingText, storeName, deliveredCents } from "../web/format.js";
+import { clipWords } from "../core/rank.js";
 
 export interface Paint {
   bold(s: string): string;
@@ -57,6 +58,9 @@ export function renderTable(columns: Column[], rows: string[][], indent = "  "):
   return [line(columns.map((c) => c.header)), indent + widths.map((w) => "─".repeat(w)).join("  "), ...cells.map(line)].join("\n");
 }
 
+/** A long delivery text is cut at a word, never mid-word. */
+const clipDelivery = (t: string) => clipWords(t, 44);
+
 /** The comparison per item: best pick first (marked), then the other offers by delivered price. */
 export function renderCompare(items: CompareItem[], p: Paint, opts: { maxRows?: number; width?: number } = {}): string {
   const maxRows = opts.maxRows ?? 6;
@@ -73,17 +77,22 @@ export function renderCompare(items: CompareItem[], p: Paint, opts: { maxRows?: 
       out.push(p.dim("  No offers found"), "");
       continue;
     }
-    const rows = item.rows.slice(0, maxRows).map((r) => [
+    const shown = item.rows.slice(0, maxRows);
+    // The price per unit ("$0.42 / count") gets a column only when some offer shown has one.
+    const units = shown.some((r) => r.offer.perUnit?.text);
+    const rows = shown.map((r) => [
       r.best ? p.green("★") : r.alternative ? p.dim("·") : " ",
       storeName(r.offer.store, r.offer.storeDomain),
-      truncate(r.offer.title, titleMax) + (r.offer.inStock ? "" : " (out of stock)") + (r.offer.currencyMismatch ? p.yellow(currencyMark(r.offer)) : ""),
+      truncate(r.offer.title, units ? Math.max(18, titleMax - 14) : titleMax) + (r.offer.inStock ? "" : " (out of stock)") + (r.offer.currencyMismatch ? p.yellow(currencyMark(r.offer)) : ""),
       money(r.offer.price),
+      ...(units ? [r.offer.perUnit?.text ?? "–"] : []),
       shippingText(r.offer),
-      (r.offer.deliveryText ?? "–").replace(/^Arrives\s+/i, ""),
+      clipDelivery((r.offer.deliveryText ?? "–").replace(/^Arrives\s+/i, "")),
       ratingText(r.offer),
     ]);
     out.push(renderTable([
       { header: "" }, { header: "Store" }, { header: "Product" }, { header: "Price", align: "right" },
+      ...(units ? [{ header: "Per unit", align: "right" as const }] : []),
       { header: "Ship", align: "right" }, { header: "Delivery" }, { header: "Rating" },
     ], rows));
     if (item.rows.length > maxRows) out.push(p.dim(`  + ${item.rows.length - maxRows} more`));

@@ -190,9 +190,13 @@ test("adapter addToCart (quantity 2 uses the cart API), reads the cart back and 
   assert.deepEqual(result.warnings, []);
 });
 
-test("adapter: a bot check that does not clear gives a clear error", async () => {
+test("adapter: a bot check that does not clear gives a clear error", async (t) => {
+  // The adapter waits on the clock for the challenge (2 x 12 s). The fake page's waits move a
+  // mocked clock instead, so this takes milliseconds and not 24 s of real time.
+  t.mock.timers.enable({ apis: ["Date"] });
   const px = '{"appId":"PX","blockScript":"https://captcha.px-cdn.net/PX/captcha.js"}';
   const { ctx } = fakeCtx(() => ({ status: 435, body: px }));
+  (ctx.page as unknown as { waitForTimeout: (ms: number) => Promise<void> }).waitForTimeout = async (ms) => { t.mock.timers.tick(Math.max(1, ms || 0)); };
   await assert.rejects(() => target.readCart(ctx), /bot check .* did not clear/);
 });
 

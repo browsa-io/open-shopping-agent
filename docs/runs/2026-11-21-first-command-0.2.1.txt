@@ -1,0 +1,59 @@
+# npx open-shopping-agent "usb-c hub with hdmi under \$40"   (0.2.1 tarball, empty folder, your Chrome with a window, no terminal input)
+# First and last line: start and end time (UTC). EXIT is the exit code. Nothing was added to a cart.
+2026-11-21T15:19:59Z
+Browser: your Chrome
+Looking for usb-c hub with hdmi under $40
+Amazon: Starting
+Walmart: Starting
+eBay: Starting
+Best Buy: Starting
+Target: Starting
+eBay: Searching
+Amazon: Searching
+Best Buy: Searching
+Walmart: Searching
+Target: Searching
+Target: Reading prices (8 offers)
+Amazon: Reading prices (8 offers)
+eBay: Blocked at search (403). eBay refused this browser. Try again later, or open the live browser and finish there.
+Best Buy: Reading prices (5 offers)
+Walmart: Needs you. This store showed a bot check. Solve it in the browser window, or run with Browsa to pass it automatically.
+Walmart: Blocked at search (bot check). Walmart refused this browser. Try again later, or open the live browser and finish there.
+Amazon: Found 8 offers
+Best Buy: Found 5 offers
+Target: Found 8 offers
+
+usb-c hub with hdmi under $40
+  Best pick Amazon, $8.49 plus shipping. Lowest price of the 13 offers compared: $8.49 plus shipping, shipping not shown, 4.6 stars from 8,210 reviews, FREE delivery Friday, November 27 on orders shipped by…, lists hdmi, sponsored, Amazon. 21 found, 8 left out: 8 out of stock
+     Store   Product                                                 Price       Ship  Delivery                                      Rating
+  ─  ──────  ─────────────────────────────────────────────────────  ──────  ─────────  ────────────────────────────────────────────  ───────────
+  ★  Amazon  BENFEI USB C Hub 5-in-1 with 4K HDMI(…                  $8.49  not shown  FREE delivery Friday, November 27 on orders…  4.6 (8,210)
+     Target  USB-C 4-in-1 Hub with 2-USB-C and 2-U… (out of stock)  $12.99  not shown  –                                             4.0 (30)
+     Target  USB-C to HDMI Adapter - dealworthy™ B… (out of stock)  $13.99  not shown  –                                             4.0 (80)
+     Target  USB-C to Ethernet Adapter - dealworth… (out of stock)  $13.99  not shown  –                                             4.5 (37)
+  ·  Amazon  Anker USB-C Hub, 5-in-1 USB Hub for L…                 $13.99  not shown  FREE delivery Friday, November 27 on orders…  4.5 (3,863)
+     Target  USB-C 6-in-1 Hub with 1-4K HDMI 3 USB… (out of stock)  $14.99  not shown  –                                             4.1 (40)
+  + 15 more
+
+Total for best picks $8.49 (plus shipping where not shown, tax at checkout)
+
+! AI fallback is off: no model key (set OSA_LLM and OSA_LLM_API_KEY, or run with Browsa)
+
+! Amazon, Target and Best Buy often block non-US or datacenter browsers; Browsa adds a US home-internet exit.
+
+! eBay blocked this browser. Browsa's Phantom passes it: browsa.io
+
+! Walmart blocked this browser. Browsa's Phantom passes it: browsa.io
+
+Next: fill the carts. You are asked per store, and nothing is bought without a y.
+  Walmart: No pick here; stopped this store's browser
+  eBay: No pick here; stopped this store's browser
+  Best Buy: No pick here; stopped this store's browser
+  Target: No pick here; stopped this store's browser
+Fill cart at Amazon (1 item, $8.49)? [y/N] n (no terminal input)
+  Amazon: Cart skipped
+
+Run run-20261121-151959-829f9f: 0 orders placed, 2 store failures.
+Exit code 3: eBay blocked at search (403); Walmart blocked at search (bot check).
+EXIT 3
+2026-11-21T15:22:18Z

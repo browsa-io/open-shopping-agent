@@ -25,6 +25,25 @@ export function money(m, fallback = NOT_SHOWN) {
 
 const STAGE_WORDS = { search: "searching", product: "reading the product", options: "choosing options", cart: "filling the cart", checkout: "at checkout", place_order: "placing the order" };
 
+const BLOCK_AT = { search: "at search", product: "at the product page", options: "at the product page", cart: "at the cart", checkout: "at checkout", place_order: "at checkout" };
+const BLOCK_RE = /status 40[13]|\bHTTP 40[13]\b|\b429\b|refused the (page|browser)|refused this browser|access denied|blocked|captcha|bot check|robot|are you a human|i am human|press (and|&) hold|unusual traffic|pardon our interruption/i;
+
+/** True when a store error means the store blocked the browser (403, a bot check, a captcha). */
+export function isBlock(error) {
+  return BLOCK_RE.test(String(error || ""));
+}
+
+/**
+ * A block in the words of the README's per-browser table: "blocked at search (403)",
+ * "blocked at the cart (bot check)", "blocked at search (page refused)".
+ */
+export function blockWords(error, stage) {
+  const raw = String(error || "");
+  const status = /\b(?:status|HTTP)\s*(40[13]|429)\b/i.exec(raw)?.[1] || /\b(429)\b/.exec(raw)?.[1];
+  const what = status || (/captcha|bot check|robot|are you a human|i am human|press (and|&) hold|unusual traffic|pardon our interruption/i.test(raw) ? "bot check" : "page refused");
+  return `blocked ${BLOCK_AT[stage] || "by the store"} (${what})`;
+}
+
 /**
  * A store failure in plain words: a short title, one sentence that says what to do next, and the
  * action the UI offers ("retry" this store, "live" browser, or none). The raw text stays available.
@@ -47,8 +66,10 @@ export function friendlyError(error, stage, store, domain) {
   if (/cart is empty/i.test(raw)) {
     return r("Cart came back empty", `Nothing stayed in the ${name} cart, so there is no checkout. Try ${name} again or choose another store.`, "retry");
   }
-  if (/status 40[13]|refused the page|access denied|blocked|captcha|robot|are you a human|unusual traffic/i.test(raw)) {
-    return r("Blocked by the store", `${name} refused the page. Try again later, or open the live browser and finish there.`, "retry");
+  if (isBlock(raw)) {
+    // The same words as the README's per-browser table: a block is reported as a block, never as "nothing found".
+    const words = blockWords(raw, stage);
+    return r(words[0].toUpperCase() + words.slice(1), `${name} refused this browser. Try again later, or open the live browser and finish there.`, "retry");
   }
   if (/timed? ?out|Timeout \d+ms|took too long/i.test(raw)) {
     return r("Too slow", `${name} took too long ${where ? where : "to answer"}. Try ${name} again.`, "retry");

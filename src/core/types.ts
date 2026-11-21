@@ -85,7 +85,7 @@ export interface Offer {
   variants?: Record<string, string[]>; // option name -> values offered
   /**
    * Added in 0.1.1: the store showed this price in another currency than the run's (USD), e.g.
-   * Amazon in IDR for a visitor outside the US. The offer is listed but never ranked, picked or
+   * Amazon in EUR for a visitor outside the US. The offer is listed but never ranked, picked or
    * added to a total. The engine sets it; adapters may too.
    */
   currencyMismatch?: boolean;

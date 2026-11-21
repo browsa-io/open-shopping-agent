@@ -31,6 +31,8 @@ export interface MockEngineOptions {
   liveBase?: string | null;
   /** Store whose demo order ends "unknown" (no order number shown) instead of placed; default none. */
   unknownStore?: StoreId | null;
+  /** Added in 0.2.1: a store that refuses the demo search with a 403, to see how a block is reported; default none. */
+  blockStore?: StoreId | null;
 }
 
 const DOMAINS: Record<StoreId, string> = {
@@ -230,10 +232,12 @@ export class MockEngine implements EnginePort {
   private signInStore: StoreId | null;
   private liveBase: string | null;
   private unknownStore: StoreId | null;
+  private blockStore: StoreId | null;
   private tracking = new Map<string, TrackingRecord>();
 
   constructor(opts: MockEngineOptions = {}) {
     this.unknownStore = opts.unknownStore ?? null;
+    this.blockStore = opts.blockStore ?? null;
     this.speed = opts.speed ?? 1;
     this.failStore = opts.failStore === undefined ? "target" : opts.failStore;
     this.signInStore = opts.signInStore === undefined ? "ebay" : opts.signInStore;
@@ -316,6 +320,10 @@ export class MockEngine implements EnginePort {
       for (const [ii, item] of request.items.entries()) {
         await this.wait(900 + ((si * 7 + ii * 3) % 5) * 450, run);
         if (run.cancelledAll || run.cancelled.has(store)) return;
+        if (store === this.blockStore && ii === 0) {
+          this.fail(run, store, "search", `Demo: ${storeNameOf(store, domainOf(store))} refused the page twice (Error Page, status 403)`);
+          return;
+        }
         if (store === this.failStore && ii === 0) {
           this.emit(run, { type: "log", store, message: "Search page did not finish loading, trying the AI fallback" });
           await this.wait(1200, run);

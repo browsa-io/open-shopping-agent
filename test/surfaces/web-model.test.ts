@@ -171,7 +171,7 @@ test("wording: friendly errors from real engine messages", () => {
     ["store timed out after 240s", "search", "Too slow"],
     ["this workspace is using all 6 of its browser slots (each running browser and each saved identity takes one).", "search", "No free browser"],
     ["target browser can cost up to 5 credits; this run has 0 of its 20 left (raise maxCreditsPerRun to allow it)", "search", "Run limit reached"],
-    ["\"USB C to HDMI\": eBay refused the page twice (Error Page | eBay, status 403) at https://www.ebay.com/itm/297", "cart", "Blocked by the store"],
+    ["\"USB C to HDMI\": eBay refused the page twice (Error Page | eBay, status 403) at https://www.ebay.com/itm/297", "cart", "Blocked at the cart (403)"],
     ["eBay cart is empty", "checkout", "Cart came back empty"],
     ["page.content: Target page, context or browser has been closed", "cart", "Browser closed"],
     ["something else", "search", "Did not finish"],

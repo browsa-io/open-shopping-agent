@@ -8,19 +8,19 @@ import { pathToFileURL } from "node:url";
 import type { RunEvent, StoreId } from "../core/types.js";
 import { cartPlan } from "./plan.js";
 import { listOrders, type OrderEntry } from "../core/orders.js";
-import { EXIT, classify, errorEnvelope, errorOf, exitCodeFor, okEnvelope, printJson, worstCode } from "./output.js";
+import { EXIT, classify, errorEnvelope, errorOf, exitCodeFor, okEnvelope, printJson, runExitCode, worstCode } from "./output.js";
 import { ConfigStore, DEFAULT_STORES, osaHome } from "../web/config.js";
-import { checkFor, createAlerts, createEngine } from "../web/engine-factory.js";
+import { NoBrowserError, checkFor, createAlerts, createEngine, noBrowserReason } from "../web/engine-factory.js";
 import { runWatchCli, whereText } from "../alerts/cli.js";
 import { WatchStore } from "../alerts/store.js";
 import { compareFromEvents, money, storeName } from "../web/format.js";
 import { RunHub, type Gate } from "../web/session.js";
-import { CliError, HELP, parseArgs, type CliArgs } from "./args.js";
+import { CliError, HELP, MCP_HELP, parseArgs, type CliArgs } from "./args.js";
 import { Progress, colorEnabled, paint, renderCompare, renderLines, renderReview, totalLine } from "./render.js";
-import { friendlyError, shortRaw } from "../../web/lib/wording.js";
+import { blockWords, friendlyError, isBlock, shortRaw } from "../../web/lib/wording.js";
 import { MandateError, boughtUnderMandateText, makeMandate, mandateLimits, mandateQuestion, mandateText, type Mandate } from "../core/mandate.js";
 
-const VERSION = "0.2.0";
+import { VERSION } from "../version.js";
 
 export async function main(argv: string[]): Promise<number> {
   if (argv[0] === "watch") return watchCommands(argv.slice(1));
@@ -45,7 +45,16 @@ export async function main(argv: string[]): Promise<number> {
       return exitCodeFor(code);
     }
   }
-  return dispatch(args);
+  try {
+    return await dispatch(args);
+  } catch (e) {
+    // No browser is set up and --demo was not passed: say what to set; never switch to demo data.
+    if (e instanceof NoBrowserError) {
+      process.stderr.write(`${e.message}\n`);
+      return EXIT.user;
+    }
+    throw e;
+  }
 }
 
 async function dispatch(args: CliArgs): Promise<number> {
@@ -53,7 +62,7 @@ async function dispatch(args: CliArgs): Promise<number> {
   if (args.browser) process.env.OSA_BROWSER = args.browser;
   if (args.headless) process.env.OSA_HEADLESS = "1";
   switch (args.command) {
-    case "help": process.stdout.write(HELP); return 0;
+    case "help": process.stdout.write(args.helpTopic === "mcp" ? MCP_HELP : HELP); return 0;
     case "version": process.stdout.write(`${VERSION}\n`); return 0;
     case "web": return web(args);
     case "mcp": {
@@ -84,8 +93,7 @@ async function orders(args: CliArgs): Promise<number> {
   const out = process.stdout;
   let list: OrderEntry[];
   if (args.refresh) {
-    const engine = await createEngine(await new ConfigStore().effective(), { demo: args.demo, browser: args.browser });
-    if (engine.demo && !args.demo) throw new CliError("Reading order pages needs a browser: set BROWSA_API_KEY (with saved store profiles), or use your own Chrome (--browser local).");
+    const engine = await createEngine(await new ConfigStore().effective(), { demo: args.demo, browser: args.browser, strict: true });
     list = await new RunHub(engine).refreshOrders({ runId: args.runId, store: args.stores?.[0], limit: args.limit });
   } else if (args.demo) {
     list = []; // the demo engine keeps its orders in memory only
@@ -127,6 +135,9 @@ async function web(args: CliArgs): Promise<number> {
   const { url, hub } = await startWebServer({ port: args.port, host: args.host, demo: args.demo });
   stopRunsOnExit(hub);
   process.stdout.write(`Open Shopping Agent web app: ${url}\n`);
+  // The web app can still open (Settings is where a key is saved), but say plainly that it shows demo data.
+  const why = hub.engine.demo && !args.demo ? noBrowserReason(await new ConfigStore().effective(), { browser: args.browser }) : undefined;
+  if (why) process.stderr.write(`No browser is set up, so the web app shows made-up demo data until one is. ${why.replace(/, or pass --demo.*$/, ".")} Or save a Browsa key in Settings.\n`);
   return -1;
 }
 
@@ -191,7 +202,8 @@ async function shop(args: CliArgs): Promise<number> {
   const config = new ConfigStore();
   const cfg = await config.effective();
   if (args.headless) process.env.OSA_HEADLESS = "1";
-  const engine = await createEngine(cfg, { demo: args.demo, browser: args.browser });
+  // Demo data only when asked for (--demo or OSA_DEMO=1): with no browser set up this throws NoBrowserError.
+  const engine = await createEngine(cfg, { demo: args.demo, browser: args.browser, strict: true });
   const hub = new RunHub(engine);
   const p = paint(colorEnabled(process.stdout));
   const err = process.stderr;
@@ -283,8 +295,10 @@ async function shop(args: CliArgs): Promise<number> {
     const next = !summary.picks.length ? ["Try simpler words, like \"usb-c hub\""]
       : overBudget ? [`osa --json --budget <higher> ${quoted}`]
       : [`osa ${quoted} (in a terminal: fills carts after a y per store; buys only after a y on the exact total)`, "osa runs --json"];
-    printJson(process.stdout, okEnvelope(data, next));
-    return EXIT.ok;
+    // Some stores gave picks and some failed: the reply is ok (the picks are real) and lists the
+    // failures; the exit code is the worst failure's, the same as without --json.
+    printJson(process.stdout, okEnvelope({ ...data, partial: summary.failures.length > 0 }, next));
+    return runExitCode({ failures: summary.failures, unknownOrders: 0 });
   }
 
   const progress = new Progress(out, p);
@@ -292,6 +306,7 @@ async function shop(args: CliArgs): Promise<number> {
   const exitWarnings: string[] = [];
   const offers = new Map<StoreId, number>();
   const failed = new Set<StoreId>();
+  const blockedAt = new Map<StoreId, string>();
 
   const onGate = async (g: Gate) => {
     const name = storeName(g.store);
@@ -329,6 +344,7 @@ async function shop(args: CliArgs): Promise<number> {
         // Same plain words as the web app: what happened and what to do next.
         const f = friendlyError(e.error, e.stage, e.store, e.domain);
         failed.add(e.store);
+        if (isBlock(e.error) && !blockedAt.has(e.store)) blockedAt.set(e.store, blockWords(e.error, e.stage));
         if (!compared) progress.set(e.store, { label: `${f.title}. ${f.hint}`, tone: "bad" });
         else out.write(p.red(`${storeName(e.store, e.domain)}: ${f.title}. `) + f.hint + p.dim(` (${shortRaw(f.raw, 120)})`) + "\n");
         // One plain line on a non-Browsa browser that a store blocked.
@@ -343,8 +359,10 @@ async function shop(args: CliArgs): Promise<number> {
         }
         for (const s of parsed?.request.stores ?? []) {
           const n = offers.get(s) ?? 0;
+          // A store that failed keeps its failure line (a block stays a block), also when another of its searches found offers.
+          if (failed.has(s)) continue;
           if (n) progress.set(s, { label: `Found ${n} offer${n === 1 ? "" : "s"}`, tone: "ok" });
-          else if (!failed.has(s)) progress.set(s, { label: "Nothing found", tone: "warn" });
+          else progress.set(s, { label: "Nothing found", tone: "warn" });
         }
         progress.stop();
         compared = true;
@@ -415,8 +433,14 @@ async function shop(args: CliArgs): Promise<number> {
   const unknown = summary.orders.filter((o) => o.state === "unknown");
   const upFront = placed.filter((o) => o.approval_source === "mandate").length;
   out.write(p.dim(`\nRun ${summary.runId}: ${placed.length} order${placed.length === 1 ? "" : "s"} placed${upFront ? ` (${upFront} under your up-front approval)` : ""}${unknown.length ? `, ${unknown.length} to check on the store` : ""}, ${summary.failures.length} store failure${summary.failures.length === 1 ? "" : "s"}${creditsText(summary)}.\n`));
-  // An order that may have gone through needs the person to look at the store.
-  return unknown.length ? EXIT.needsUser : EXIT.ok;
+  // An order that may have gone through needs the person to look at the store (3). Else a store
+  // that failed decides the code (2 store or network, 3 needs you, 4 safety), also when other stores gave results.
+  const code = runExitCode({ failures: summary.failures, unknownOrders: unknown.length });
+  if (code !== EXIT.ok && summary.failures.length) {
+    const names = [...new Set(summary.failures.map((f) => `${storeName(f.store, (f as { domain?: string }).domain)} ${isBlock(f.error) ? blockedAt.get(f.store) ?? blockWords(f.error, f.stage) : `did not finish ${f.stage === "search" ? "its search" : `at ${f.stage.replace("_", " ")}`}`}`))];
+    err.write(p.yellow(`Exit code ${code}: ${names.join("; ")}.\n`));
+  }
+  return code;
 }
 
 const isMain = (() => {

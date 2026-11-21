@@ -26,6 +26,34 @@ export interface EngineChoice {
   real?: Partial<RealEngineOptions>;
   /** Browser provider from the CLI (--browser); wins over OSA_BROWSER and the settings. */
   browser?: string;
+  /**
+   * Added in 0.2.1: never fall back to demo data. When no browser is set up and demo was not asked
+   * for, createEngine throws NoBrowserError with what to set. The CLI uses it.
+   */
+  strict?: boolean;
+}
+
+/** No browser is set up and demo data was not asked for. The message says what to set. */
+export class NoBrowserError extends Error {
+  readonly code = "setup_needed";
+}
+
+/** True when demo data was asked for: --demo or OSA_DEMO=1. */
+export function demoAsked(choice: EngineChoice = {}): boolean {
+  return !!choice.demo || process.env.OSA_DEMO === "1";
+}
+
+/**
+ * Why the real engine cannot run with these settings (and what to set), or undefined when it can
+ * or when demo data was asked for. Demo data is only for --demo / OSA_DEMO=1.
+ */
+export function noBrowserReason(config: OsaConfig, choice: EngineChoice = {}): string | undefined {
+  if (demoAsked(choice) || wantsReal(config, choice)) return undefined;
+  const p = providerFor(config, choice);
+  const demo = "pass --demo for made-up demo data";
+  if (p.id === "browsa") return `Browsa cloud browsers need a key: set BROWSA_API_KEY, or use --browser local (your own Chrome), or ${demo}.`;
+  if (p.id === "cdp") return `The cdp browser needs an address: set OSA_CDP_URL, or use --browser local (your own Chrome), or ${demo}.`;
+  return `No Chrome or Edge was found on this computer: install one or set OSA_CHROME_PATH, or set BROWSA_API_KEY, or ${demo}.`;
 }
 
 /** The browser provider for these settings: --browser, OSA_BROWSER, settings, then browsa with a key, else local. */
@@ -47,10 +75,16 @@ export function wantsReal(config: OsaConfig, choice: EngineChoice = {}): boolean
 
 export async function createEngine(config: OsaConfig, choice: EngineChoice = {}): Promise<EnginePort> {
   if (wantsReal(config, choice)) return new RealEngine(realOptions(config, choice));
+  if (choice.strict) {
+    const why = noBrowserReason(config, choice);
+    if (why) throw new NoBrowserError(why);
+  }
   const speed = choice.speed ?? (process.env.OSA_DEMO_SPEED ? Number(process.env.OSA_DEMO_SPEED) : 1);
   // OSA_DEMO_UNKNOWN_STORE=walmart: that store's demo order ends "unknown" (to see the check-the-store screens).
   const unknown = process.env.OSA_DEMO_UNKNOWN_STORE as StoreId | undefined;
-  return new MockEngine({ speed, liveBase: choice.demoLiveBase ?? null, ...(unknown ? { unknownStore: unknown } : {}) });
+  // OSA_DEMO_BLOCK_STORE=ebay: that store refuses the demo search with a 403 (to see how a block is reported).
+  const block = process.env.OSA_DEMO_BLOCK_STORE as StoreId | undefined;
+  return new MockEngine({ speed, liveBase: choice.demoLiveBase ?? null, ...(unknown ? { unknownStore: unknown } : {}), ...(block ? { blockStore: block } : {}) });
 }
 
 export function realOptions(config: OsaConfig, choice: EngineChoice = {}): RealEngineOptions {

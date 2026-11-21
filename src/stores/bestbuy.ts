@@ -272,7 +272,7 @@ export function parseCart(html: string): { store: "bestbuy"; storeDomain: string
   };
 }
 
-/** The ZIP the cart ships to ("Shipping to 96939"), when it shows one. */
+/** The ZIP the cart ships to ("Shipping to 12345"), when it shows one. */
 export function cartShipZip(html: string): string | undefined {
   for (const l of textLines(html)) {
     const m = /\bShipping to\s+(\d{5})\b/i.exec(l);
@@ -286,7 +286,7 @@ export function isCartUrl(url: string): boolean {
   return /bestbuy\.com\/cart(?:[/?#]|$)/.test(url);
 }
 
-/** Why the cart blocks checkout, from its alerts ("Shipping unavailable to 96939."), if it says so. */
+/** Why the cart blocks checkout, from its alerts ("Shipping unavailable to 12345."), if it says so. */
 export function cartBlocker(html: string): string | undefined {
   return textLines(html).map((l) => clean(l) ?? "").find((l) => l.length < 200 && /(unavailable|no longer available|not available)( to| for| in)\b|cannot be shipped|can't be shipped/i.test(l));
 }
@@ -301,7 +301,7 @@ export interface BbReview { total?: Money; subtotal?: Money; shipping?: Money; t
 /** The signed-in checkout review page (fast-track). Best effort: read the summary and the button. */
 export function parseReview(html: string): BbReview {
   const lines = textLines(firstWith(html, `class="order-summary`) ?? html);
-  // Only a dollar amount or "free" counts: "Shipping to 96939" on the cart page is a ZIP, not a price.
+  // Only a dollar amount or "free" counts: "Shipping to 12345" on the cart page is a ZIP, not a price.
   const after = (re: RegExp) => {
     const i = lines.findIndex((l) => re.test(l));
     if (i < 0) return undefined;
@@ -442,7 +442,7 @@ async function readCartNow(ctx: StoreContext, warnings: string[] = []) {
   return readCartFrom(html, warnings);
 }
 
-// --zip: Best Buy guesses a location from the exit address (a non-US one gave ZIP 96939 and "no
+// --zip: Best Buy guesses a location from the exit address (a non-US one gave ZIP 12345 and "no
 // longer available for shipping"). A guest can give a ZIP in the results' "Delivery Location" box
 // and in the cart's "Change" next to "Shipping to". Each step runs once per browser; the cart's
 // "Shipping to" says whether Best Buy took it, and the run notes say so when it did not.
@@ -745,7 +745,7 @@ export const adapter: StoreAdapter = {
       const nu = await needsUser(ctx, "sign_in", "Best Buy asks you to sign in or continue as guest. Open the live browser to choose; the agent does not sign in or type your details.");
       return { ...base, needsUser: nu, reviewedAt: nowIso() } satisfies CheckoutReview;
     }
-    // Still on the cart: Best Buy did not open checkout (for example "Shipping unavailable to 96939"
+    // Still on the cart: Best Buy did not open checkout (for example "Shipping unavailable to 12345"
     // for the location it guessed). The cart's summary is not an order review, so no Buy question.
     if (isCartUrl(ctx.page.url())) {
       const why = cartBlocker(s.html);

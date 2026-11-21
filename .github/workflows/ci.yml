@@ -14,7 +14,9 @@ concurrency:
 
 jobs:
   test:
+    name: Unit tests (no browser, no network), Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -29,13 +31,34 @@ jobs:
       - run: npm run build
       - name: Type-check bench and tests
         run: npx tsc -p bench/tsconfig.json
-      - name: Test
-        # Node 20 has no glob support in `node --test`, so list the files there.
-        run: |
-          if node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 21 ? 0 : 1)'; then
-            npm test
-          else
-            node --test --import tsx $(find test -name '*.test.ts' | sort)
-          fi
-      - name: Bench task file and adapters (no browser)
+      - name: Test (the default suite launches no browser)
+        run: npm test
+      - name: Bench task file and adapters (dry run, no browser, no numbers)
         run: npm run bench -- --dry-run
+
+  browser:
+    name: Browser suite (real Chrome, local test page only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Find the runner's Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$chrome" ]; then echo "::error title=No Chrome on the runner::The browser suite needs Chrome. ubuntu-latest ships google-chrome; if that changed, install it here."; exit 1; fi
+          "$chrome" --version
+          echo "OSA_CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+      - name: Let Chrome's sandbox start on the runner
+        # Ubuntu 24.04 runners restrict unprivileged user namespaces, which Chrome's sandbox needs.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Browser suite
+        # Opens a real headless Chrome against a page served on 127.0.0.1. No store, no network.
+        # OSA_REQUIRE_CHROME=1: a missing Chrome is a failure here, not a skip.
+        env:
+          OSA_REQUIRE_CHROME: "1"
+        run: npm run test:browser

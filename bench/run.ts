@@ -24,6 +24,9 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+/** Printed by every dry run (and shown in the bench workflow's summary). */
+export const DRY_RUN_NOTICE = "DRY RUN, NO NUMBERS: checked bench/tasks.json and that every store adapter loads. No browser was opened, no store was contacted, no result file or README table was written.";
+
 export interface RunOptions {
   tasks: TaskFile;
   loader: AdapterLoader;
@@ -236,6 +239,8 @@ async function main() {
 
   if (dry) {
     console.log(JSON.stringify(results.stores.map((s) => ({ store: s.store, status: s.status, note: s.note }))));
+    // A dry run measures nothing: say so in words nobody can read as fresh results.
+    console.log(DRY_RUN_NOTICE);
     return;
   }
   const outDir = values.out ?? join(here, "results");

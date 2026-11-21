@@ -18,6 +18,7 @@ const CODES = {
   bad_args: EXIT.user,
   not_found: EXIT.user,
   nothing_to_do: EXIT.user,
+  setup_needed: EXIT.user,
   // 2: the store or the network; trying again later may work
   store_error: EXIT.retry,
   network: EXIT.retry,
@@ -92,6 +93,7 @@ export function classify(message: string): ErrorCode {
 export function errorOf(e: unknown): { code: ErrorCode; message: string } {
   const message = e instanceof Error ? e.message : String(e);
   if (e instanceof CliError) return { code: "bad_args", message };
+  if ((e as { code?: unknown })?.code === "setup_needed") return { code: "setup_needed", message };
   if (e instanceof LimitError) {
     if (e.code === "budget") return { code: "over_budget", message };
     if (e.code === "credits") return { code: "credits_cap", message };
@@ -108,6 +110,20 @@ export function errorOf(e: unknown): { code: ErrorCode; message: string } {
 export function worstCode(codes: ErrorCode[]): ErrorCode | undefined {
   const rank = (c: ErrorCode) => ({ [EXIT.needsUser]: 4, [EXIT.safety]: 3, [EXIT.retry]: 2, [EXIT.user]: 1 } as Record<number, number>)[exitCodeFor(c)] ?? 0;
   return [...codes].sort((a, b) => rank(b) - rank(a))[0];
+}
+
+/**
+ * The exit code of a finished shopping run. An order that may have gone through comes first (3).
+ * Else any store that failed sets the code by its error (2 store or network, 3 needs the person,
+ * 4 safety), also when other stores gave results: a script must not read a blocked store as ok.
+ */
+export function runExitCode(r: { failures: { error: string }[]; unknownOrders: number }): number {
+  if (r.unknownOrders > 0) return EXIT.needsUser;
+  if (!r.failures.length) return EXIT.ok;
+  const worst = worstCode(r.failures.map((f) => classify(f.error))) ?? "store_error";
+  const code = exitCodeFor(worst);
+  // A failure classed as a user error (an unknown run id, say) still means a store did not finish.
+  return code === EXIT.user ? EXIT.retry : code;
 }
 
 export function printJson(out: NodeJS.WritableStream, env: Envelope): void {

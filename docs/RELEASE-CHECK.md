@@ -1,3 +1,30 @@
+# Release check
+
+## 0.2.1, 2026-11-21
+
+The packed 0.2.1 tarball installed into an empty folder, no settings, no key. No order was placed, no
+cart was filled, no store account was signed in to, no card or address was typed.
+
+- **`--help`, `--version`, `mcp --help`, `mcp --version`** print and exit (0.2.1).
+- **The README's first command**, exactly as written, on your Chrome with a window and no terminal
+  input: `npx open-shopping-agent "usb-c hub with hdmi under \$40"`. It took 139 s and ended with
+  exit code 3. Amazon 8 offers, Target 8 (all shown out of stock), Best Buy 5; "eBay: Blocked at
+  search (403)"; "Walmart: Blocked at search (bot check)". Best pick Amazon $8.49 plus shipping,
+  "Lowest price of the 13 offers compared ... 21 found, 8 left out: 8 out of stock". The question
+  "Fill cart at Amazon (1 item, $8.49)? [y/N]" was answered n because there was no terminal. Last
+  lines: "0 orders placed, 2 store failures." and "Exit code 3: eBay blocked at search (403);
+  Walmart blocked at search (bot check)." The full output is in
+  [runs/2026-11-21-first-command-0.2.1.txt](runs/2026-11-21-first-command-0.2.1.txt).
+- **`--browser browsa` without a key**: one line saying what to set, exit 1, no demo data.
+- **Web app** (`npx open-shopping-agent web`): listens on 127.0.0.1 only; requests with a `Host` of
+  another name or address get 403 "Open the agent at http://localhost"; a connection to the
+  machine's other address is refused.
+- **MCP** (`npx open-shopping-agent mcp` over stdio): protocol 2025-06-18, 7 tools, each with
+  annotations; `place_order` is marked destructive and answers `orders_disabled` without
+  `OSA_MCP_ALLOW_ORDERS=1`.
+- **Tests**: the default suite launches no browser; the browser suite (5 tests, real headless
+  Chrome on a local page) ran on its own.
+
 # Release check, 2026-11-18
 
 The first public release, checked the way people will run it: the npm package installed into an
@@ -12,7 +39,7 @@ day. No order was placed, no store account was signed in to, no card or address 
 | Machine | macOS 15.6.1, Node 26.0.0, npm 11.12.1 |
 | Your Chrome | Google Chrome 157.0.8103.79, through playwright-core 1.65.1 |
 | Phantom | Browsa cloud browsers through the `browsa` SDK 0.3.1, `OSA_MAX_BROWSERS` 1 or 2 |
-| Connection | a home connection outside the US (stores see a non-US address on your Chrome and CDP runs) |
+| Connection | a test connection that the stores did not see as a US address (on your Chrome and CDP runs) |
 | Request | `usb-c hub with hdmi and a 6 ft hdmi cable under $60`, `--zip 10001`, `--every-store` (a cart at every store), answers y to "Fill cart" and "Review checkout", Enter (N) to "Buy" |
 
 Install: `npm install ./open-shopping-agent-0.1.0.tgz` in an empty folder took 3 min 21 s the first
@@ -30,7 +57,7 @@ checkout stop for Phantom (stores took turns there, see below).
 | Amazon | 16 offers. Cart 2 lines $15.83. Stop: sign-in page, 419 s | 16 offers. Cart 1 of 2 lines $9.99, the second add hit a bot check. Checkout: bot check, 427 s | not run | 16 offers (US residential exit). Cart 2 lines $13.83. Checkout said an item is out of stock although the cart shows it: handed off with a live link, 127 s |
 | Walmart | 8 offers (the bot check cleared once after waiting). Cart: blocked, "Walmart shows a bot check that did not clear on this browser", 530 s | 0 offers: same bot check at search, 36 s | 16 offers. Cart: blocked by the same bot check, 41 s | 16 offers. Cart 2 lines $22.99. Stop: sign-in or create account, 59 s |
 | eBay | 0 offers: "eBay refused the page twice (Error Page, status 403)" | 0 offers, same 403 | not run | 16 offers. Cart 2 lines $9.94. Stop: guest checkout asks for email and address, 143 s |
-| Best Buy | 13 offers (product pages refused, added from results). Cart 2 lines $32.98. Checkout stayed on the cart, Best Buy guessed ZIP 96939 and "This item is no longer available for shipping". Before the fix this showed a false Buy question, see bugs | 4 offers. Cart: blocked, product page refused and no Add to cart button in the results | not run | 16 offers (US residential exit). Cart 1 of 2 lines $9.49 (the hub needed the AI fallback, which cannot act on a fresh browser). Stop: sign-in or guest page, 64 s |
+| Best Buy | 13 offers (product pages refused, added from results). Cart 2 lines $32.98. Checkout stayed on the cart, Best Buy guessed ZIP 12345 and "This item is no longer available for shipping". Before the fix this showed a false Buy question, see bugs | 4 offers. Cart: blocked, product page refused and no Add to cart button in the results | not run | 16 offers (US residential exit). Cart 1 of 2 lines $9.49 (the hub needed the AI fallback, which cannot act on a fresh browser). Stop: sign-in or guest page, 64 s |
 | Target | 16 offers, all shown out of stock: no pick | 8 offers (the press-and-hold check did not clear for the cable search). Cart 1 line $14.99. "Target did not open its checkout page", 468 s | not run | 16 offers. Cart 2 lines $23.98. Stop: $35 shipping minimum, then sign-in, 167 s |
 | satechi.com (Shopify) | 16 offers. Cart 2 lines $64.98. Stop: guest checkout (contact, address, payment), 387 s | 16 offers. Cart 2 lines $64.98. Stop: guest checkout, 385 s | 16 offers. Cart 2 lines $64.98. Stop: guest checkout, 25 s | 16 offers. Cart 2 lines $64.98. Stop: guest checkout, 27 s |
 | Whole run | 652 s, 0 credits | 519 s, 0 credits | 63 s, 0 credits | 1308 s with one browser at a time, 19 credits (Browsa ledger) |
@@ -43,9 +70,9 @@ On your Chrome a blocked store ends with one plain line, for example "Walmart bl
 Browsa's Phantom passes it: browsa.io". Headless runs say "Run without OSA_HEADLESS=1 to solve it
 in the browser window, or run with Browsa".
 
-Phantom on Browsa reached a checkout stop with a filled cart on all 6 stores. Your Chrome from this
-non-US connection reached one on Amazon (window only), Target (headless only) and satechi.com;
-Walmart and eBay blocked it. A US home connection may do better; that was not measured.
+Phantom on Browsa reached a checkout stop with a filled cart on all 6 stores. Your Chrome on this
+connection reached one on Amazon (window only), Target (headless only) and satechi.com;
+Walmart and eBay blocked it. A connection the stores see as a US home address may do better; that was not measured.
 
 ### Phantom run notes
 
@@ -91,7 +118,7 @@ Walmart and eBay blocked it. A US home connection may do better; that was not me
 ## Bugs fixed in this check (with tests)
 
 1. **Best Buy offered Buy from the cart page.** When the Checkout click stayed on the cart, the cart
-   summary was read as an order review, and "Shipping to 96939" became $96,939.00 shipping. Placing
+   summary was read as an order review, and "Shipping to 12345" became $12,345.00 shipping. Placing
    the order would still have been refused (no Place Your Order button), but the question was wrong.
    Now it hands off with the cart's own reason, and a ZIP is never read as a price. Re-checked live.
 2. **Ctrl-C took 3 to 4 minutes** while waiting for a free browser place or a busy Browsa slot.

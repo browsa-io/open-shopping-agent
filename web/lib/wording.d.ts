@@ -18,6 +18,10 @@ export interface FriendlyError {
   where: string;
 }
 export declare function friendlyError(error: string, stage: Stage | string, store: StoreId, domain?: string): FriendlyError;
+/** Added in 0.2.1: true when a store error means the store blocked the browser. */
+export declare function isBlock(error: string): boolean;
+/** Added in 0.2.1: "blocked at search (403)", "blocked at the cart (bot check)": the README table's words. */
+export declare function blockWords(error: string, stage: Stage | string): string;
 export declare function shortRaw(raw: string, max?: number): string;
 
 export interface StoreState {

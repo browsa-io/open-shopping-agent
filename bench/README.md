@@ -37,6 +37,12 @@ A store whose adapter is missing is recorded as "not installed".
 
 - `tasks.json`: the tasks, about 10 per store.
 - `results/<date>.json`: one file per run, with every stage's pass or fail, time in ms and the reason for a failure, plus the credits the run's own browsers and tasks used, per store and in total.
-- `results/latest.json`: the latest result per store, used for the README table.
+- `results/latest.json`: the latest result per store, used for the README table. When its stores come from more than one run (a later run of only some stores), it lists those runs under `runs`, each store says which run it came from (`run`), `creditsUsed` is the sum for the store results shown and `creditsAllRuns` is what those runs spent in all. The sentence under the README table gives the same two figures.
 
-[.github/workflows/bench.yml](../.github/workflows/bench.yml) runs it on a daily schedule once the repository has a `BROWSA_API_KEY` secret (without one it only checks the tasks) and commits the results and the README table.
+## Dry run and real run
+
+A dry run (`--dry-run`, or no `BROWSA_API_KEY`) measures nothing. It checks `tasks.json` and that every adapter loads, prints "DRY RUN, NO NUMBERS", and writes no result file and no README table.
+
+[.github/workflows/bench.yml](../.github/workflows/bench.yml) is scheduled daily. Without a `BROWSA_API_KEY` repository secret it runs only the job named "DRY RUN, no numbers", so a green run of that workflow is not a fresh measurement. With the secret it runs the job "REAL RUN on Phantom" and commits the results and the README table.
+
+**Maintainer step for a real daily bench:** add the repository secret `BROWSA_API_KEY` (Settings > Secrets and variables > Actions), with a key of a Browsa workspace kept for the bench. The full run of 18 Nov 2026 used 13 credits for 6 stores and 3 tasks each; the workflow caps a run at 40. Expect 15 to 40 credits a day.

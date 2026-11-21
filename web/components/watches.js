@@ -2,6 +2,7 @@
 
 import { api, h, toast } from "../lib/dom.js";
 import { ALL_STORES, STORE_NAMES, money } from "../lib/wording.js";
+import { priceChart } from "./price-chart.js";
 
 const WATCH_STATUS = { saved: "Not checked yet", active: "Watching", triggered: "Alert sent", paused: "Paused" };
 
@@ -11,7 +12,7 @@ export async function watchesView(main, app) {
   const list = h("div", { class: "card pad0" });
   const load = async () => {
     const watches = await api("/api/watches");
-    list.replaceChildren(watches.length ? h("ul", { class: "list" }, watches.map((w) => h("li", {},
+    list.replaceChildren(watches.length ? h("ul", { class: "list" }, watches.map((w) => { const panel = h("div", { class: "pchart-panel", id: `ph-${w.id}`, hidden: true }); return h("li", {},
       h("div", { class: "rowitem" },
         h("div", { class: "grow" },
           w.url ? h("a", { class: "title", href: w.url, target: "_blank", rel: "noopener noreferrer", title: w.item }, w.item) : h("div", { class: "title", title: w.item }, w.item),
@@ -35,10 +36,22 @@ export async function watchesView(main, app) {
             } catch (e) { toast(e.message, true); b.disabled = false; b.textContent = "Check now"; }
           },
         }, "Check now") : null,
+        // Price history (preview, OSA_PRICE_HISTORY=1): the best price of each check, kept on this computer.
+        meta.priceHistory && w.kind === "price_drop" ? h("button", {
+          class: "btn sm ghost", "aria-expanded": "false", "aria-controls": `ph-${w.id}`, "aria-label": `Price history of ${w.item}`,
+          onclick: async (ev) => {
+            const b = ev.currentTarget;
+            if (!panel.hidden) { panel.hidden = true; b.setAttribute("aria-expanded", "false"); return; }
+            try {
+              panel.replaceChildren(priceChart(await api(`/api/watches/${encodeURIComponent(w.id)}/history`), w.item));
+              panel.hidden = false; b.setAttribute("aria-expanded", "true");
+            } catch (e) { toast(e.message, true); }
+          },
+        }, "Price history") : null,
         h("button", {
           class: "btn sm ghost", "aria-label": `Delete watch ${w.item}`,
           onclick: async () => { try { await api(`/api/watches/${encodeURIComponent(w.id)}`, { method: "DELETE" }); toast("Watch deleted"); load(); } catch (e) { toast(e.message, true); } },
-        }, "Delete"))))) : h("div", { class: "empty" },
+        }, "Delete")), meta.priceHistory ? panel : null); })) : h("div", { class: "empty" },
       h("p", {}, "No watches yet."),
       h("p", { class: "faint small" }, "Add one below, or press Watch this price next to any offer in a search.")));
   };

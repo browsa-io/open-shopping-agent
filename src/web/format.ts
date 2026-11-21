@@ -24,7 +24,7 @@ export function dollarsToMoney(value: number | string, currency = "USD"): Money 
   return { cents: Math.round(n * 100), currency };
 }
 
-/** " (IDR, not compared)" for an offer a store priced in another currency than US dollars, else "". */
+/** " (EUR, not compared)" for an offer a store priced in another currency than US dollars, else "". */
 export function currencyMark(o: Offer): string {
   return o.currencyMismatch ? ` (${o.price.currency}, not compared)` : "";
 }

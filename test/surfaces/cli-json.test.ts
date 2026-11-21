@@ -149,8 +149,10 @@ test("osa orders: placed and unknown orders from the run history, with tracking"
 
 test("osa orders refresh without a browser says what it needs (exit 1)", withHome((home) => {
   seedHistory(home);
-  const r = osa(["orders", "refresh", "--json"], home, { OSA_DEMO: "1" });
-  // OSA_DEMO forces the demo engine: no browser to read the store's pages with.
+  // Browsa chosen but no key: there is no browser to read the store's pages with, and no demo data either.
+  const r = osa(["orders", "refresh", "--json", "--browser", "browsa"], home);
   assert.equal(r.code, 1);
-  assert.match(JSON.parse(r.out).error.message, /needs a browser/);
+  const e = JSON.parse(r.out).error;
+  assert.equal(e.code, "setup_needed");
+  assert.match(e.message, /set BROWSA_API_KEY, or use --browser local/);
 }));

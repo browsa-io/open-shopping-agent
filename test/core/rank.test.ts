@@ -48,7 +48,7 @@ test("cheapest picks the lowest delivered total, shipping included", () => {
   ];
   const p = pickForItem(item({ quantity: 2 }), offers, { goal: "cheapest", now: NOW })!;
   assert.equal(p.offer.title, "USB-C Hub A"); // 48 vs 50 vs 51
-  assert.match(p.reason, /^Lowest delivered total of 3 offers: \$48\.00 for 2 delivered/);
+  assert.match(p.reason, /^Lowest delivered total of the 3 offers compared: \$48\.00 for 2 delivered/);
   assert.equal(p.alternatives.length, 2);
 });
 
@@ -72,7 +72,7 @@ test("fastest prefers the soonest delivery", () => {
   ];
   const p = pickForItem(item(), offers, { goal: "fastest", now: NOW })!;
   assert.equal(p.offer.title, "USB-C Hub fast");
-  assert.match(p.reason, /^Soonest delivery of 2 offers/);
+  assert.match(p.reason, /^Soonest delivery of the 2 offers compared/);
   assert.match(p.reason, /Tomorrow/);
   assert.match(p.reason, /Best Buy$/);
 });

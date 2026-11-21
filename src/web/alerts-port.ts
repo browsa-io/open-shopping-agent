@@ -32,6 +32,8 @@ export interface Watch extends WatchInput {
   lastError?: string;
 }
 
+import { priceHistory, type PriceHistory } from "../alerts/price-history.js";
+
 export interface AlertsPort {
   /** True while watches are saved but never checked (the FileAlerts stand-in). */
   readonly demo: boolean;
@@ -40,6 +42,8 @@ export interface AlertsPort {
   remove(id: string): Promise<boolean>;
   /** Check one watch now (sends its alerts). Absent when this port cannot check. */
   check?(id: string): Promise<Watch>;
+  /** Added for the price history preview: the watch's best price per check, from the local history. Undefined for an unknown watch. */
+  priceHistory?(id: string): Promise<PriceHistory | undefined>;
 }
 
 export function validateWatch(input: unknown): WatchInput {
@@ -129,6 +133,11 @@ export class WatchAlerts implements AlertsPort {
   readonly store: WatchStore;
   constructor(private o: WatchAlertsOptions) {
     this.store = new WatchStore(o.dir);
+  }
+
+  async priceHistory(id: string): Promise<PriceHistory | undefined> {
+    if (!(await this.store.list()).some((w) => w.id === id)) return undefined;
+    return priceHistory(await this.store.history(id));
   }
 
   async list(): Promise<Watch[]> {

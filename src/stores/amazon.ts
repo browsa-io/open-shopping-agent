@@ -381,7 +381,7 @@ export function isAmazonErrorPage(title: string, html: string): boolean {
 
 /**
  * Amazon's currency preference cookie. Outside the US, amazon.com converts prices to the local
- * currency (seen live 2026-11-19 from a non-US connection: "IDR 182,704.89", i18n-prefs=IDR). With
+ * currency (seen live 2026-11-19: "EUR 1,827.04", with its i18n-prefs cookie set to that currency). With
  * i18n-prefs=USD it shows US dollars again (checked live; the currency=USD URL parameter does
  * not do it on search pages). Set before every navigation unless it already says USD.
  */
@@ -399,7 +399,7 @@ export async function preferUsd(ctx: StoreContext): Promise<void> {
   }
 }
 
-/** The non-USD currency of parsed offers, if any ("IDR"). */
+/** The non-USD currency of parsed offers, if any ("EUR"). */
 export function foreignCurrency(offers: Offer[]): string | undefined {
   return offers.find((o) => o.price.currency !== "USD")?.price.currency;
 }

@@ -1,11 +1,11 @@
 ---
 name: open-shopping-agent
-description: Shop across Amazon, Walmart, eBay, Best Buy, Target and Shopify stores with Open Shopping Agent (OSA). Use when the user wants to find, compare or buy a product online, fill store carts, check out with their approval, watch a price, or check an order's status. Searches every allowed store at once, compares delivered totals, fills carts only when asked, and places an order only after the human approves the exact total.
+description: Shop across Amazon, Walmart, eBay, Best Buy and Target (plus Shopify stores named by domain) with Open Shopping Agent (OSA). Use when the user wants to find, compare or buy a product online, fill store carts, check out with their approval, watch a price, or check an order's status. Searches every allowed store at once, compares delivered totals, fills carts only when asked, and places an order only after the human approves the exact total.
 license: MIT
 compatibility: Needs Node 20+ and the open-shopping-agent MCP server (npx -y open-shopping-agent mcp). A Browsa key (BROWSA_API_KEY) runs stores on Phantom cloud browsers; without one it uses the user's own Chrome.
 metadata:
   homepage: https://github.com/browsa-io/open-shopping-agent
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # Open Shopping Agent

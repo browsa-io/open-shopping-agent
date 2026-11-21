@@ -12,6 +12,7 @@ import type { AlertsPort } from "./alerts-port.js";
 import { validateWatch } from "./alerts-port.js";
 import { ConfigStore, osaHome } from "./config.js";
 import { checkFor, createAlerts, createEngine } from "./engine-factory.js";
+import { priceHistoryEnabled } from "../alerts/price-history.js";
 import { browserMeta, testModelKey, testProxyFromSettings } from "./byok-api.js";
 import type { EnginePort } from "./engine-port.js";
 import { STORE_IDS, dollarsToMoney } from "./format.js";
@@ -20,7 +21,8 @@ import { HubError, RunHub, type HubMessage } from "./session.js";
 import { IconCache, IconError, iconHeaders } from "./icons.js";
 import { MandateError, makeMandate, type Mandate } from "../core/mandate.js";
 
-export const VERSION = "0.2.0";
+export { VERSION } from "../version.js";
+import { VERSION } from "../version.js";
 
 export const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "web");
 
@@ -215,7 +217,7 @@ export function createApp(opts: AppOptions): Server {
     if (p === "/api/health") return send(res, 200, { ok: true });
     if (p === "/api/meta" && m === "GET") {
       const c = await config.effective();
-      return send(res, 200, { version: VERSION, demo: hub.engine.demo, alertsDemo: alerts.demo, canCheckWatches: !!alerts.check && !!checkFor(c), hasBrowsaApiKey: !!c.browsaApiKey, stores: STORE_IDS, ...browserMeta(c) });
+      return send(res, 200, { version: VERSION, demo: hub.engine.demo, alertsDemo: alerts.demo, canCheckWatches: !!alerts.check && !!checkFor(c), hasBrowsaApiKey: !!c.browsaApiKey, stores: STORE_IDS, priceHistory: priceHistoryEnabled() && !!alerts.priceHistory, ...browserMeta(c) });
     }
     if (p === "/api/icon" && (m === "GET" || m === "HEAD")) {
       let icon;
@@ -335,6 +337,12 @@ export function createApp(opts: AppOptions): Server {
       } catch (e) {
         throw new HubError(400, (e as Error).message);
       }
+    }
+    // Price history preview (0.3.0), off unless OSA_PRICE_HISTORY=1: read-only, from the local watch history.
+    if ((mm = /^\/api\/watches\/([\w-]+)\/history$/.exec(p)) && m === "GET") {
+      if (!priceHistoryEnabled() || !alerts.priceHistory) return send(res, 404, { error: "Not found" });
+      const hist = await alerts.priceHistory(mm[1]);
+      return hist ? send(res, 200, hist) : send(res, 404, { error: "Watch not found" });
     }
     if ((mm = /^\/api\/watches\/([\w-]+)\/check$/.exec(p)) && m === "POST") {
       if (!alerts.check) throw new HubError(409, "Watches cannot be checked here");

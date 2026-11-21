@@ -1,6 +1,6 @@
 {
   "date": "2026-11-18",
-  "startedAt": "2026-11-18T17:09:58.774Z",
+  "startedAt": "2026-11-18T16:48:49.867Z",
   "finishedAt": "2026-11-18T17:15:19.787Z",
   "stores": [
     {
@@ -68,7 +68,8 @@
       ],
       "ms": 268307,
       "date": "2026-11-18",
-      "credits": 2
+      "credits": 2,
+      "run": "2026-11-18T16:48:49.867Z"
     },
     {
       "store": "walmart",
@@ -137,7 +138,8 @@
       ],
       "ms": 153257,
       "date": "2026-11-18",
-      "credits": 1
+      "credits": 1,
+      "run": "2026-11-18T16:48:49.867Z"
     },
     {
       "store": "ebay",
@@ -204,7 +206,8 @@
       ],
       "ms": 252781,
       "date": "2026-11-18",
-      "credits": 1
+      "credits": 1,
+      "run": "2026-11-18T17:09:58.774Z"
     },
     {
       "store": "bestbuy",
@@ -271,7 +274,8 @@
       ],
       "ms": 258685,
       "date": "2026-11-18",
-      "credits": 5
+      "credits": 5,
+      "run": "2026-11-18T16:48:49.867Z"
     },
     {
       "store": "target",
@@ -338,7 +342,8 @@
       ],
       "ms": 203983,
       "date": "2026-11-18",
-      "credits": 3
+      "credits": 3,
+      "run": "2026-11-18T16:48:49.867Z"
     },
     {
       "store": "shopify",
@@ -405,10 +410,37 @@
       ],
       "ms": 66801,
       "date": "2026-11-18",
-      "credits": 1
+      "credits": 1,
+      "run": "2026-11-18T17:09:58.774Z"
     }
   ],
-  "maxCredits": 15,
-  "creditsUsed": 2,
-  "commit": "de6c249"
+  "commit": "de6c249",
+  "creditsUsed": 13,
+  "creditsAllRuns": 15,
+  "runs": [
+    {
+      "startedAt": "2026-11-18T16:48:49.867Z",
+      "finishedAt": "2026-11-18T17:08:39.399Z",
+      "commit": "de6c249",
+      "creditsUsed": 13,
+      "maxCredits": 40,
+      "stores": [
+        "amazon",
+        "walmart",
+        "bestbuy",
+        "target"
+      ]
+    },
+    {
+      "startedAt": "2026-11-18T17:09:58.774Z",
+      "finishedAt": "2026-11-18T17:15:19.787Z",
+      "commit": "de6c249",
+      "creditsUsed": 2,
+      "maxCredits": 15,
+      "stores": [
+        "ebay",
+        "shopify"
+      ]
+    }
+  ]
 }

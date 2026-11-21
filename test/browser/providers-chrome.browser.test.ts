@@ -1,7 +1,11 @@
-// The local and CDP providers on a real Chrome installed on this computer, against a local test
-// page (no network). Skipped when no Chrome, Edge or Chromium is found.
+// The browser suite (npm run test:browser): the local and CDP providers on a real Chrome installed
+// on this computer, against a local test page (no network, no store). Not part of `npm test`.
+// Skipped when no Chrome, Edge or Chromium is found; with OSA_REQUIRE_CHROME=1 (CI) that is a failure.
+//
+// Nothing here can hang: every launch has its own timeout, every test has a timeout, and cleanup
+// closes the browser with a deadline and then kills its process.
 
-import { test } from "node:test";
+import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { existsSync } from "node:fs";
@@ -12,8 +16,50 @@ import { chromium } from "playwright-core";
 import { CdpProvider, CapabilityMissing, LocalProvider, findChrome, runLocalAgent, type LoopAction } from "../../src/core/providers/index.js";
 import type { JSONRequest } from "../../src/core/llm.js";
 
+import type { Browser } from "playwright-core";
+
 const CHROME = findChrome();
 const skip = CHROME ? false : "no local Chrome, Edge or Chromium found";
+
+if (!CHROME && process.env.OSA_REQUIRE_CHROME === "1") {
+  test("a Chrome, Edge or Chromium is installed (OSA_REQUIRE_CHROME=1)", () => {
+    assert.fail("OSA_REQUIRE_CHROME=1 but no Chrome, Edge or Chromium was found; set OSA_CHROME_PATH");
+  });
+}
+
+const LAUNCH_MS = 30_000;
+const TEST_MS = 90_000;
+const launched = new Set<Browser>();
+const cleanups = new Set<() => Promise<unknown>>();
+
+/** Resolve with the promise, or give up after `ms` (never rejects, never hangs). */
+function within<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
+  let t: NodeJS.Timeout;
+  return Promise.race([
+    p.catch(() => undefined),
+    new Promise<undefined>((r) => { t = setTimeout(r, ms, undefined); }),
+  ]).finally(() => clearTimeout(t));
+}
+
+/** Launch headless Chrome with a launch timeout; it is closed (then killed) by shut(). */
+async function launch(args: string[] = []): Promise<Browser> {
+  const b = await chromium.launch({ executablePath: CHROME!, headless: true, args, timeout: LAUNCH_MS });
+  launched.add(b);
+  return b;
+}
+
+/** Close a launched browser within 5 s. */
+async function shut(b: Browser | undefined): Promise<void> {
+  if (!b) return;
+  launched.delete(b);
+  await within(b.close(), 5000);
+}
+
+// Whatever a failed or timed-out test left behind is closed here, so the run always ends.
+after(async () => {
+  await Promise.all([...cleanups].map((c) => within(c(), 5000)));
+  await Promise.all([...launched].map((b) => shut(b)));
+});
 
 const PAGE = `<!doctype html><html><head><title>Test shop</title></head><body>
 <h1>USB-C cable 6 ft</h1><p id="price">$9.99</p>
@@ -41,10 +87,11 @@ function scripted(actions: LoopAction[]) {
 
 const llm = { provider: "anthropic" as const, model: "fake", apiKey: "sk-fake" };
 
-test("local provider: launches your Chrome headless, opens the store page, keeps a profile per store", { skip, timeout: 120_000 }, async () => {
+test("local provider: launches your Chrome headless, opens the store page, keeps a profile per store", { skip, timeout: TEST_MS }, async () => {
   const { url, server } = await serve();
   const dataDir = await mkdtemp(join(tmpdir(), "osa-local-"));
   const prov = new LocalProvider({ dataDir, headless: true });
+  cleanups.add(() => prov.closeAll());
   assert.equal(prov.capabilities.liveLink, "none");
   assert.equal(prov.capabilities.captchaSolving, false);
   try {
@@ -62,12 +109,12 @@ test("local provider: launches your Chrome headless, opens the store page, keeps
     await sb.close();
     assert.ok(existsSync(join(dataDir, "browsers", "walmart")));
   } finally {
-    await prov.closeAll();
+    await within(prov.closeAll(), 10_000);
     server.close();
   }
 });
 
-test("local AI fallback loop: your model reads the snapshot, picks a quantity, adds to cart; never places the order", { skip, timeout: 120_000 }, async () => {
+test("local AI fallback loop: your model reads the snapshot, picks a quantity, adds to cart; never places the order", { skip, timeout: TEST_MS }, async () => {
   const { url, server } = await serve();
   const dataDir = await mkdtemp(join(tmpdir(), "osa-loop-"));
   const model = scripted([
@@ -77,6 +124,7 @@ test("local AI fallback loop: your model reads the snapshot, picks a quantity, a
     { action: "done", result: { added: true } },
   ]);
   const prov = new LocalProvider({ dataDir, headless: true, llm, complete: model.complete });
+  cleanups.add(() => prov.closeAll());
   assert.equal(prov.capabilities.aiFallback, true);
   try {
     const sb = await prov.open("shopify");
@@ -89,33 +137,37 @@ test("local AI fallback loop: your model reads the snapshot, picks a quantity, a
     assert.match(model.seen[2], /refused: the agent never places orders/);
     await sb.close();
   } finally {
-    await prov.closeAll();
+    await within(prov.closeAll(), 10_000);
     server.close();
   }
 });
 
-test("local AI fallback loop stops at its step budget", { skip, timeout: 60_000 }, async () => {
+test("local AI fallback loop stops at its step budget", { skip, timeout: TEST_MS }, async () => {
   const { url, server } = await serve();
-  const browser = await chromium.launch({ executablePath: CHROME!, headless: true });
+  let browser: Browser | undefined;
+  // The loop itself is stopped after 30 s, well inside the test's own timeout.
+  const stop = AbortSignal.timeout(30_000);
   try {
+    browser = await launch();
     const page = await browser.newPage();
-    await page.goto(url);
+    await page.goto(url, { timeout: 15_000 });
     const model = scripted(Array.from({ length: 10 }, () => ({ action: "scroll", direction: "down" }) as LoopAction));
-    await assert.rejects(runLocalAgent(page, "loop forever", { llm, complete: model.complete, maxSteps: 3 }), /did not finish in 3 steps/);
+    await assert.rejects(runLocalAgent(page, "loop forever", { llm, complete: model.complete, maxSteps: 3, signal: stop }), /did not finish in 3 steps/);
     assert.equal(model.seen.length, 3);
   } finally {
-    await browser.close();
+    await shut(browser);
     server.close();
   }
 });
 
-test("local AI fallback loop stops at once when the model API fails (no more of your calls)", { skip, timeout: 60_000 }, async () => {
+test("local AI fallback loop stops at once when the model API fails (no more of your calls)", { skip, timeout: TEST_MS }, async () => {
   // Seen live on 2026-11-18: an API that answered 429 got 7 more calls in 3 s, one per step.
   const { url, server } = await serve();
-  const browser = await chromium.launch({ executablePath: CHROME!, headless: true });
+  let browser: Browser | undefined;
   try {
+    browser = await launch();
     const page = await browser.newPage();
-    await page.goto(url);
+    await page.goto(url, { timeout: 15_000 });
     let calls = 0;
     const complete = async () => { calls++; throw new Error("openai: HTTP 429: rate limited"); };
     await assert.rejects(runLocalAgent(page, "add to cart", { llm, complete, maxSteps: 8 }), /model API failed: openai: HTTP 429/);
@@ -125,16 +177,17 @@ test("local AI fallback loop stops at once when the model API fails (no more of 
     await assert.rejects(runLocalAgent(page, "add to cart", { llm, complete: garbled, maxSteps: 3 }), /did not finish in 3 steps/);
     assert.equal(bad, 3, "a bad answer is still retried");
   } finally {
-    await browser.close();
+    await shut(browser);
     server.close();
   }
 });
 
-test("cdp provider: connects to the same local Chrome's DevTools endpoint and drives a tab", { skip, timeout: 120_000 }, async () => {
+test("cdp provider: connects to the same local Chrome's DevTools endpoint and drives a tab", { skip, timeout: TEST_MS }, async () => {
   const { url, server } = await serve();
   const port = 9300 + Math.floor(Math.random() * 500);
-  const browser = await chromium.launch({ executablePath: CHROME!, headless: true, args: [`--remote-debugging-port=${port}`] });
+  let browser: Browser | undefined;
   try {
+    browser = await launch([`--remote-debugging-port=${port}`]);
     const prov = new CdpProvider({ url: `http://127.0.0.1:${port}`, env: {} });
     const sb = await prov.open("ebay");
     const ctx = sb.context("ebay.com", { signal: new AbortController().signal });
@@ -144,7 +197,7 @@ test("cdp provider: connects to the same local Chrome's DevTools endpoint and dr
     await sb.close();
     assert.equal(browser.isConnected(), true); // closing the store only disconnects
   } finally {
-    await browser.close();
+    await shut(browser);
     server.close();
   }
 });

@@ -99,16 +99,16 @@ test("osa --watch \"...\" --stores satechi.com saves the watch on satechi.com", 
   assert.deepEqual(saved.shopifyDomains, ["satechi.com"]);
 });
 
-test("watches count US dollars only: an IDR price is never below a USD target", () => {
+test("watches count US dollars only: a EUR price is never below a USD target", () => {
   const w = normalizeWatch({ query: "usb-c hub", stores: ["amazon"], targetPrice: 50 });
-  const idr = offer(4999, { store: "amazon", storeDomain: "amazon.com", price: { cents: 4999, currency: "IDR" } });
+  const eur = offer(4999, { store: "amazon", storeDomain: "amazon.com", price: { cents: 4999, currency: "EUR" } });
   const marked = { ...offer(4999), currencyMismatch: true };
   const ok = offer(5500);
-  assert.deepEqual(eligible(w, [idr, marked, ok]), [ok]);
-  const r = evaluate(w, [idr, ok], []);
+  assert.deepEqual(eligible(w, [eur, marked, ok]), [ok]);
+  const r = evaluate(w, [eur, ok], []);
   assert.equal(r.entry.best?.price.currency, "USD");
-  assert.ok(!r.alerts.some((a) => a.kind === "below_target"), "IDR 49.99 is not below $50");
+  assert.ok(!r.alerts.some((a) => a.kind === "below_target"), "EUR 49.99 is not below $50");
   // Back-in-stock watch with no target: still USD only.
   const b = normalizeWatch({ query: "usb-c hub", stores: ["amazon"], backInStock: true });
-  assert.deepEqual(eligible(b, [idr, ok]), [ok]);
+  assert.deepEqual(eligible(b, [eur, ok]), [ok]);
 });

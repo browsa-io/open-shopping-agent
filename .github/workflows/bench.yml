@@ -1,7 +1,18 @@
-name: bench
+name: bench (dry run unless BROWSA_API_KEY is set)
 
-# Success rates per store, on a daily schedule once the BROWSA_API_KEY secret is set. Runs the fixed tasks in bench/tasks.json on Phantom browsers,
-# writes bench/results/<date>.json and updates the table in README.md. Never places an order.
+# A green run of this workflow is NOT fresh numbers unless the job that ran is "REAL RUN".
+#
+#   No BROWSA_API_KEY secret (the default): the job "DRY RUN, no numbers" runs. It only checks
+#     bench/tasks.json and that every store adapter loads. No browser, no store, no result file,
+#     no README change.
+#   With the secret: the job "REAL RUN on Phantom" runs the fixed tasks in bench/tasks.json on
+#     Phantom browsers, writes bench/results/<date>.json and latest.json and updates the README
+#     table. It never places an order.
+#
+# Owner step for a real daily bench: Settings > Secrets and variables > Actions > New repository
+# secret, name BROWSA_API_KEY, value a Browsa key of a workspace kept for the bench. Expected cost:
+# the full run of 18 Nov 2026 used 13 credits (6 stores, 3 tasks each); the cap below stops a run
+# at 40. Budget 15 to 40 credits a day.
 
 on:
   schedule:
@@ -18,16 +29,61 @@ on:
         default: "40"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: bench
   cancel-in-progress: false
 
 jobs:
-  bench:
+  mode:
+    name: Is there a Browsa key?
+    runs-on: ubuntu-latest
+    outputs:
+      real: ${{ steps.key.outputs.real }}
+    steps:
+      - id: key
+        env:
+          BROWSA_API_KEY: ${{ secrets.BROWSA_API_KEY }}
+        run: |
+          if [ -n "$BROWSA_API_KEY" ]; then echo "real=true" >> "$GITHUB_OUTPUT"; else echo "real=false" >> "$GITHUB_OUTPUT"; fi
+
+  dry-run:
+    name: DRY RUN, no numbers (no BROWSA_API_KEY secret)
+    needs: mode
+    if: needs.mode.outputs.real != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check the task file and the adapters (no browser, no numbers)
+        run: npm run bench -- --dry-run
+      - name: Say plainly that this was a dry run
+        run: |
+          {
+            echo "## DRY RUN, no numbers"
+            echo ""
+            echo "This run did **not** measure any store. It checked \`bench/tasks.json\` and that every store adapter loads."
+            echo "No browser was opened, no result file was written, and the README table was not changed."
+            echo ""
+            echo "The numbers in the README are from the run dated in its footnote (\`bench/results/latest.json\`)."
+            echo "For a real daily bench, add the repository secret \`BROWSA_API_KEY\` (about 15 to 40 Browsa credits a day)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=DRY RUN, no numbers::No BROWSA_API_KEY secret, so no store was measured and no result was written."
+
+  real:
+    name: REAL RUN on Phantom (results committed)
+    needs: mode
+    if: needs.mode.outputs.real == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: write
     env:
       BROWSA_API_KEY: ${{ secrets.BROWSA_API_KEY }}
     steps:
@@ -39,7 +95,6 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Run the bench
-        if: env.BROWSA_API_KEY != ''
         env:
           STORES: ${{ github.event.inputs.stores }}
           MAX_CREDITS: ${{ github.event.inputs.max_credits || '40' }}
@@ -47,11 +102,17 @@ jobs:
           args="--max-credits $MAX_CREDITS"
           if [ -n "$STORES" ]; then args="$args --stores $STORES"; fi
           npm run bench -- $args
-      - name: No key
-        if: env.BROWSA_API_KEY == ''
-        run: echo "Set the BROWSA_API_KEY repository secret to run the bench." && npm run bench -- --dry-run
+      - name: Summary
+        run: |
+          {
+            echo "## REAL RUN on Phantom"
+            echo ""
+            node -e '
+              const r = require("./bench/results/latest.json");
+              console.log(`Credits for the results shown: ${r.creditsUsed ?? "not read"}${r.creditsAllRuns !== undefined ? ` (${r.creditsAllRuns} for all runs behind them)` : ""}. Stores: ${r.stores.map((s) => `${s.store} ${s.status}`).join(", ")}.`);
+            '
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Commit results
-        if: env.BROWSA_API_KEY != ''
         run: |
           git config user.name "Browsa"
           git config user.email "support@browsa.io"

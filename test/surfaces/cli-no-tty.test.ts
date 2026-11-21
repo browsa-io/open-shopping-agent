@@ -14,7 +14,8 @@ const entry = fileURLToPath(new URL("../../src/cli/index.ts", import.meta.url));
 test("no terminal: every question is answered N, nothing is filled or bought", () => {
   const home = mkdtempSync(join(tmpdir(), "osa-notty-"));
   try {
-    const r = spawnSync(process.execPath, ["--import", "tsx", entry, "--demo", "usb-c hub with hdmi and a 6 ft hdmi cable", "--zip", "10001"], {
+    // The demo's Target search fails on purpose; leave Target out so this run has no store failure (exit 0).
+    const r = spawnSync(process.execPath, ["--import", "tsx", entry, "--demo", "--stores", "amazon,walmart,ebay,bestbuy", "usb-c hub with hdmi and a 6 ft hdmi cable", "--zip", "10001"], {
       input: "y\ny\ny\ny\ny\n", // typed answers on a pipe are not read: only a terminal can say y
       encoding: "utf8",
       timeout: 60_000,

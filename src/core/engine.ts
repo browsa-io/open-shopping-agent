@@ -352,7 +352,9 @@ export class ShoppingRun {
     } else if (blocked) {
       this.emit({ type: "needs_user", store, needs: { reason: "captcha_handoff", message: botCheckMessage(prov.id, prov.capabilities) }, ...(f.domain ? { domain: f.domain } : {}) });
     }
-    this.emit({ type: "store_failed", ...f, ...(blocked ? { hint: blockedNote(STORE_NAMES[store]) } : {}) });
+    // A plain refusal (403, the store's error page) has nothing to solve, but the same one-line note applies.
+    const refusedPage = !!prov && !prov.capabilities.captchaSolving && /status 40[13]|refused the (page|browser)|refused this browser/i.test(error);
+    this.emit({ type: "store_failed", ...f, ...(blocked || refusedPage ? { hint: blockedNote(STORE_NAMES[store]) } : {}) });
     return f;
   }
 
@@ -589,7 +591,7 @@ export class ShoppingRun {
     }
   }
 
-  /** Shops that already got the "showed prices in IDR" note in this run. */
+  /** Shops that already got the "showed prices in EUR" note in this run. */
   private currencyNoted = new Set<string>();
 
   /**

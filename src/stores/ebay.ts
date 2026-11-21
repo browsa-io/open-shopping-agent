@@ -98,15 +98,15 @@ function sellerText(s: SellerInfo | undefined): string | undefined {
 export function parseShipping(text: string | undefined): Money | undefined {
   if (!text) return undefined;
   if (/free (delivery|shipping)|^free\b/i.test(text)) return { cents: 0, currency: "USD" };
-  // "+$5.99 delivery", or converted for a visitor outside the US: "+IDR468,015.44 delivery".
+  // "+$5.99 delivery", or converted for a visitor outside the US: "+EUR46.80 delivery".
   const m = /\+\s*([^|+]{1,30}?)\s*(?:delivery|shipping)/i.exec(text) ?? /(\$[\d,]+(?:\.\d{2})?)\s*(?:delivery|shipping)/i.exec(text);
   return m ? parseMoney(m[1]) : undefined;
 }
 
 /**
  * eBay's dp1 cookie with the buyer location set to the US ("bbl/US..."). Outside the US, eBay
- * converts prices to the local currency ("IDR52,872.80"); with bbl/US it shows US dollars
- * (checked live 2026-11-19 from a non-US connection). Entries look like "bbl/IDen-US6ec12539^": key,
+ * converts prices to the local currency ("EUR52.87"); with bbl/US it shows US dollars
+ * (checked live 2026-11-19). Entries look like "bbl/DEen-US6ec12539^": key,
  * country, locale, hex expiry. Returns undefined when it already says US.
  */
 export function dp1WithUsBuyer(dp1: string | undefined, nowSec = Math.floor(Date.now() / 1000)): string | undefined {
@@ -498,6 +498,11 @@ async function goto(ctx: StoreContext, url: string, waitMs = 1500): Promise<{ ht
   }
 }
 
+/** True when an error says eBay refused the browser (its error page, 403, or a security check that did not clear). */
+export function isRefusal(e: unknown): boolean {
+  return /refused the page|status 40[13]|security (check|measure)|bot check|captcha/i.test(String((e as Error)?.message ?? e));
+}
+
 /** Load a page; on eBay's error or security page, wait for Phantom, warm up through the home page and retry once. */
 async function load(ctx: StoreContext, url: string, waitMs = 1500, warmQuery?: string): Promise<string> {
   let p = await goto(ctx, url, waitMs);
@@ -793,6 +798,8 @@ export const adapter: StoreAdapter = {
   async search(ctx, item, limit) {
     const url = searchUrlFor(item.query, { zip: ctx.zip, condition: wantedCondition(item) });
     let offers: Offer[] = [];
+    // eBay refusing the page (403, its error or security page) is a block, not "nothing found".
+    let refused: Error | undefined;
     await preferUsd(ctx);
     try {
       // Like a person: the home page, the typed search, then the filtered results from inside the
@@ -806,6 +813,7 @@ export const adapter: StoreAdapter = {
       offers = parseSearch(html, item.id).map((o) => ({ ...o, raw: { ...o.raw, searchUrl: url } }));
     } catch (e) {
       ctx.log(`eBay search direct path failed: ${(e as Error).message}`);
+      if (isRefusal(e)) refused = e as Error;
     }
     if (!offers.length) {
       ctx.log("eBay search found no Buy It Now results in the page; asking the AI fallback once");
@@ -819,6 +827,8 @@ export const adapter: StoreAdapter = {
         return price && id ? [{ store: "ebay" as const, storeDomain: DOMAIN, itemId: item.id, title: o.title, url: `https://www.ebay.com/itm/${id}`, productId: id, price, shipping: parseShipping(o.shipping), condition: conditionOf(o.condition), seller: o.seller, inStock: true, raw: { buyItNow: true, viaAi: true } }] : [];
       });
     }
+    // Still nothing after the fallback and eBay had refused the page: report the block as a block.
+    if (!offers.length && refused) throw refused;
     const max = item.maxPrice?.cents;
     return offers.filter((o) => max === undefined || o.price.cents <= max || !!o.raw?.priceRange).slice(0, limit);
   },
