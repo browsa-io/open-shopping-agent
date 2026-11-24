@@ -1,7 +1,7 @@
 {
   "name": "open-shopping-agent",
   "displayName": "Open Shopping Agent",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Search Amazon, Walmart, eBay, Best Buy and Target at once (plus Shopify stores you name), compare, fill carts and check out only with your approval of the exact total. MCP server plus a skill with the safety rules. Placing orders stays off unless OSA_MCP_ALLOW_ORDERS=1.",
   "author": { "name": "Browsa", "email": "support@browsa.io", "url": "https://browsa.io" },
   "homepage": "https://github.com/browsa-io/open-shopping-agent",

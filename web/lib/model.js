@@ -54,7 +54,7 @@ export function shippingShort(o) {
 export function pickWhy(pick, offers = []) {
   const o = pick.offer;
   const reason = String(pick.reason || "");
-  const n = /of (\d+) offers/.exec(reason)?.[1] ?? (offers.length || "");
+  const n = /of (?:the )?(\d+) offers/.exec(reason)?.[1] ?? (offers.length || "");
   const lead = /^lowest delivered total/i.test(reason)
     ? (shippingKnown(o) ? `Lowest delivered total of ${n} offers` : `Lowest price of ${n} offers`)
     : /best mix of price and rating/i.test(reason) ? `Best mix of price and rating of ${n} offers`
@@ -225,7 +225,10 @@ export function computePlan(model, plan = {}) {
     const quantity = clampQty(p.quantity ?? engineQty);
     const excluded = new Set(p.excludedStores || []);
     const offers = (model.offers[item.id] || []);
+    // The engine's accessories for the item (its case, charger) are never the next best.
+    const notTheItem = new Set(pick?.notTheItem || []);
     const eligible = offers.filter((o) => o.inStock && !o.subscription && !o.currencyMismatch && (o.price?.currency || "USD") === "USD" && !excluded.has(o.store));
+    const nextBest = eligible.filter((o) => !notTheItem.has(offerKey(o)));
     let offer = null;
     let source = "engine";
     if (p.skip) {
@@ -237,7 +240,7 @@ export function computePlan(model, plan = {}) {
       offer = pick.offer;
     } else if (pick || excluded.size) {
       const alts = (pick?.alternatives || []).filter((o) => !excluded.has(o.store) && o.inStock);
-      offer = alts[0] || eligible.slice().sort((a, b) => totalCents(a, quantity) - totalCents(b, quantity))[0] || null;
+      offer = alts[0] || (nextBest.length ? nextBest : eligible).slice().sort((a, b) => totalCents(a, quantity) - totalCents(b, quantity))[0] || null;
       source = offer ? "next" : "none";
     } else {
       source = "none";

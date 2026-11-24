@@ -1,6 +1,11 @@
 // Ranking: pure functions that score the offers found for one item and pick one, with a one-line
 // factual reason. Goals: best_value (default), cheapest, fastest, top_rated.
 //
+// An accessory for the item asked for ("ESR for AirPods Pro 3 Case" when the item is "AirPods Pro
+// 3") is left out when some offer is the item itself: a person who names a product wants the
+// product, not its case or charger. See accessoryOf(). With a model number in the query, offers
+// for another model, and offers priced far below the model's offers, are left out the same way.
+//
 // What counts: the delivered total (unit price x quantity + shipping), the rating weighted by how
 // many reviews back it (Bayesian average), the delivery date, whether the title matches the item
 // and its hard requirements. Sponsored, used and refurbished offers are penalized. Out of stock,
@@ -46,7 +51,129 @@ const WEIGHTS: Record<Goal, { price: number; rating: number; match: number; spee
 };
 
 const STOP = new Set(["a", "an", "the", "for", "of", "and", "or", "with", "in", "on", "to", "pack", "set", "new", "my", "me", "x"]);
+/** The exclusion reason of an accessory for the item (see accessoryOf). */
+export const ACCESSORY_REASON = "accessory, not the item itself";
+/** The exclusion reason of an offer without the model the query names ("AirPods 5" for "AirPods Pro 3"). */
+export const MODEL_REASON = "another model, not the item itself";
+/** The exclusion reason of an offer priced far below the named model's offers (see scoreOffers). */
+export const PRICE_REASON = "priced far below the item, not the item itself";
+const NOT_THE_ITEM = new Set([ACCESSORY_REASON, MODEL_REASON, PRICE_REASON]);
 const MEMBERSHIP = /\b(prime membership|amazon prime|walmart\+|walmart plus|membership|free trial|trial offer|subscription box|gift card)\b/i;
+
+// ---------- accessories ----------
+
+// Words that name an accessory (or an accessory-type product: a query with one of them asks for an
+// accessory, so nothing is left out). Singular forms; plurals are matched too.
+const ACCESSORY_WORDS = new Set([
+  "case", "cover", "charger", "cable", "cord", "protector", "strap", "band", "tip", "eartip", "skin", "sleeve",
+  "pouch", "holder", "mount", "stand", "dock", "hub", "adapter", "dongle", "splitter", "replacement", "refill",
+  "keychain", "lanyard", "hook", "clip", "decal", "sticker", "shell", "film", "cushion", "earpad", "bumper",
+  "folio", "holster", "grip", "bag", "battery", "batteries", "controller", "remote", "stylus", "keyboard", "accessory",
+  "accessories", "attachment", "part", "spare", "wrap", "guard",
+]);
+// "for", "compatible with" and the like: what follows is the product the accessory is for.
+const ACCESSORY_MARKER = /\b(?:compatible\s+(?:with|for)|designed\s+for|made\s+for|replacement\s+for|works\s+with|fits|for)\b/i;
+// One word allowed between the product name and the accessory word: "AirPods Pro 3 Silicone Case".
+const ACCESSORY_ADJ = "silicone|protective|carrying|leather|clear|hard|soft|magnetic|travel|shockproof|rugged|slim";
+
+function isAccessoryWord(w: string): boolean {
+  return ACCESSORY_WORDS.has(w) || ACCESSORY_WORDS.has(w.replace(/s$/, "")) || ACCESSORY_WORDS.has(w.replace(/es$/, ""));
+}
+
+/** True when the query itself asks for an accessory ("airpods pro 3 case", "usb c hub", "charger for pixel"). */
+export function asksForAccessory(query: string): boolean {
+  if (/\b(?:for|compatible|fits)\b/i.test(query)) return true;
+  return words(query).some(isAccessoryWord);
+}
+
+// Accessory words that name the thing sold even with no "for" ("Silicone AirPods Case with Clip"),
+// and the words before them that make them part of the product instead ("MagSafe Charging Case",
+// "Jet Black Aluminum Case").
+const ACCESSORY_HEAD = /\b(?:case|cover|sleeve|skin|protector|pouch|holster|folio|bumper|shell|decal|sticker|keychain|lanyard)(?:e?s)?\b/giu;
+const PART_OF_PRODUCT = new Set(["charging", "charge", "aluminum", "aluminium", "titanium", "steel", "ceramic", "gold", "silver"]);
+
+const escapeRe = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Is the title an accessory for the product the query names, not the product? Three shapes:
+ *   "ESR for AirPods Pro 3 Case", "Silicone Cover Compatible with AirPods Pro 3": an accessory word,
+ *     and the query's words come after "for" / "compatible with" while little of them comes before;
+ *   "AirPods Pro 3 Case", "Apple Watch Series 11 Band": the product's name directly followed by an
+ *     accessory word (one adjective allowed);
+ *   "AirPods Pro (3rd Generation) Case with Clip": a case, cover, sleeve, skin... word after at
+ *     least half of the query's words and before any "with" / "includes" / "+", not part of the
+ *     product ("Charging Case", "Aluminum Case") and not followed by "included".
+ * Never when the query asks for an accessory itself. "Apple AirPods Pro 3 ... with USB-C Charging
+ * Case" is the product (the case comes after "with", and the name comes first).
+ */
+export function accessoryOf(query: string, title: string): boolean {
+  if (asksForAccessory(query)) return false;
+  const q = words(query).filter((w) => !STOP.has(w));
+  if (!q.length) return false;
+  if (!words(title).some(isAccessoryWord)) return false;
+  const m = ACCESSORY_MARKER.exec(title);
+  if (m && titleMatch(query, title.slice(m.index + m[0].length)) >= 0.6 && titleMatch(query, title.slice(0, m.index)) < 0.5) return true;
+  // The query's words in order (or its last words, at least 60% of them, so "apple airpods pro 3"
+  // also finds "AirPods Pro 3 Case"), then an accessory word.
+  const sep = "[^\\p{L}\\p{N}]*";
+  const nouns = [...ACCESSORY_WORDS].map(escapeRe).join("|");
+  for (let from = 0; q.length - from >= Math.max(1, Math.ceil(q.length * 0.6)); from++) {
+    const name = q.slice(from).map(escapeRe).join(sep);
+    const re = new RegExp(`(?:^|[^\\p{L}\\p{N}])${name}[^\\p{L}\\p{N}]+(?:(?:${ACCESSORY_ADJ})[^\\p{L}\\p{N}]+)?(?:${nouns})(?:e?s)?(?![\\p{L}\\p{N}])`, "iu");
+    if (re.test(title)) return true;
+  }
+  for (const h of title.matchAll(ACCESSORY_HEAD)) {
+    const before = title.slice(0, h.index);
+    if (/\b(?:with|includes?|including|plus)\b|\+/i.test(before)) break;
+    if (PART_OF_PRODUCT.has(words(before).at(-1) ?? "")) continue;
+    if (/^[^\p{L}\p{N}]*(?:included|includes)\b/iu.test(title.slice(h.index! + h[0].length))) continue;
+    if (titleMatch(query, before) >= 0.5) return true;
+  }
+  return false;
+}
+
+// Words that make a model ("AirPods Pro 3", "iPhone 17 Pro Max"); they count only next to a model number.
+const MODEL_WORDS = new Set(["pro", "max", "mini", "plus", "ultra", "lite", "se", "xl", "fe"]);
+// Units: a number with one of these is a size or a count ("30 lb", "65w", "4k"), not a model.
+const UNIT = /^(?:lb|lbs|pound|pounds|oz|ounce|ounces|ml|l|liter|liters|litre|litres|g|kg|ft|feet|foot|in|inch|inches|pack|pk|packs|count|ct|pc|pcs|piece|pieces|w|watt|watts|mah|gb|tb|mb|mm|cm|m|v|volt|volts|hz|k|p|qt|gal|gallon|gallons|x|yd|yard|yards|sq|cup|cups|cu|ply|sheets|rolls)$/;
+const ORDINALS = ["zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+
+/**
+ * The words of the query that name a model: numbers that are not sizes or counts ("3" in "AirPods
+ * Pro 3", "17" and "ps5"), and with one of them "pro", "max", "mini"... [] for a generic query
+ * ("usb c hub hdmi", "dry dog food 30 lb").
+ */
+export function modelTokens(query: string): string[] {
+  const ws = words(query);
+  const nums: string[] = [];
+  for (let i = 0; i < ws.length; i++) {
+    const w = ws[i];
+    if (!/\d/.test(w)) continue;
+    if (/^\d+[a-z]+$/.test(w) && UNIT.test(w.replace(/^\d+/, ""))) continue;
+    if (/^\d+$/.test(w) && ((ws[i + 1] && UNIT.test(ws[i + 1])) || /^(?:size|sz|of|set|pack)$/.test(ws[i - 1] ?? ""))) continue;
+    nums.push(w);
+  }
+  if (!nums.length) return [];
+  return [...new Set([...nums, ...ws.filter((w) => MODEL_WORDS.has(w))])];
+}
+
+/** Does the title name this word? A number also matches its ordinal: "3" in "(3rd Generation)", "Third". */
+function hasWord(titleWords: Set<string>, flat: string, w: string): boolean {
+  if (titleWords.has(w) || (w.length >= 3 && flat.includes(w)) || titleWords.has(w.replace(/s$/, "")) || titleWords.has(`${w}s`)) return true;
+  if (/^\d+$/.test(w)) {
+    if ([...titleWords].some((t) => new RegExp(`^${w}(?:st|nd|rd|th)$`).test(t))) return true;
+    if (ORDINALS[Number(w)] && titleWords.has(ORDINALS[Number(w)])) return true;
+  }
+  return false;
+}
+
+/** True when the title names every model word of the query (see modelTokens). */
+export function hasModel(tokens: string[], title: string): boolean {
+  if (!tokens.length) return true;
+  const tw = new Set(words(title));
+  const flat = squash(title);
+  return tokens.every((t) => hasWord(tw, flat, t));
+}
 
 /** Delivered total for `quantity` units: unit price x quantity + shipping (unknown shipping counts as 0). */
 export function deliveredTotal(offer: Offer, quantity: number): Money {
@@ -81,9 +208,7 @@ export function titleMatch(query: string, title: string): number {
   const titleWords = new Set(words(title));
   const flat = squash(title);
   let hit = 0;
-  for (const w of q) {
-    if (titleWords.has(w) || (w.length >= 3 && flat.includes(w)) || titleWords.has(w.replace(/s$/, "")) || titleWords.has(`${w}s`)) hit++;
-  }
+  for (const w of q) if (hasWord(titleWords, flat, w)) hit++;
   return hit / q.length;
 }
 
@@ -150,6 +275,31 @@ export function scoreOffers(item: ItemRequest, offers: Offer[], opts: RankOption
   const eligible = all.filter((s) => !s.excluded);
   if (item.mustHave?.length && eligible.some((s) => s.missing.length === 0)) {
     for (const s of eligible) if (s.missing.length) s.excluded = `does not list ${s.missing.join(", ")}`;
+  }
+  // A named product, not something else that names it. Only when the query does not ask for an
+  // accessory, and only when some offer is the item itself; otherwise nothing changes.
+  //   - Accessories (its case, charger, cover) are left out when some offer is not an accessory
+  //     and names the item.
+  //   - With a model in the query ("AirPods Pro 3"), offers without it ("AirPods 5", "AirPods Pro
+  //     (1/2 Generation)", "EarPods") are left out when some offer names the model, and so are offers
+  //     under 40% of the median price of two or more offers that name it (a $10 "case" whose title
+  //     reads like the product).
+  if (!asksForAccessory(item.query)) {
+    const open = all.filter((s) => !s.excluded);
+    const acc = new Set(open.filter((s) => accessoryOf(item.query, s.offer.title)));
+    const products = open.filter((s) => !acc.has(s) && s.titleMatch >= 0.6);
+    if (acc.size && products.length) for (const s of acc) s.excluded = ACCESSORY_REASON;
+    const tokens = modelTokens(item.query);
+    const exact = products.filter((s) => hasModel(tokens, s.offer.title));
+    if (tokens.length && exact.length) {
+      for (const s of open) if (!s.excluded && !hasModel(tokens, s.offer.title)) s.excluded = MODEL_REASON;
+      if (exact.length >= 2) {
+        const prices = exact.map((s) => s.offer.price.cents).sort((a, b) => a - b);
+        const mid = prices.length >> 1;
+        const median = prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+        for (const s of open) if (!s.excluded && s.offer.price.cents < median * 0.4) s.excluded = PRICE_REASON;
+      }
+    }
   }
   const pool = all.filter((s) => !s.excluded);
   if (!pool.length) return all.map((s) => ({ ...s, score: -1 }));
@@ -218,12 +368,14 @@ export function pickForItem(item: ItemRequest, offers: Offer[], opts: RankOption
   const pool = scored.filter((s) => !s.excluded);
   if (!pool.length) return undefined;
   const best = pool[0];
+  const notTheItem = scored.filter((s) => NOT_THE_ITEM.has(s.excluded ?? "")).map((s) => `${s.offer.store}|${s.offer.url}`);
   return {
     itemId: item.id,
     offer: best.offer,
     score: best.score,
     reason: reasonFor(item, best, pool, opts.goal ?? "best_value", scored),
     alternatives: pool.slice(1, 5).map((s) => s.offer),
+    ...(notTheItem.length ? { notTheItem: notTheItem.slice(0, 50) } : {}),
   };
 }
 
@@ -246,9 +398,17 @@ export function leftOutText(all: ScoredOffer[]): string {
   for (const s of out) {
     // "currency_mismatch: priced in EUR, not USD" -> "priced in EUR, not USD"; "does not list a, b" is one group.
     const why = s.excluded!.replace(/^currency_mismatch:\s*/, "").replace(/^does not list .*/, "without what you asked for in the title");
+    // "3 accessories (not the item itself)": the count reads as a plural.
+    if (why === ACCESSORY_REASON) { counts.set("accessory", (counts.get("accessory") ?? 0) + 1); continue; }
+    if (why === MODEL_REASON) { counts.set("model", (counts.get("model") ?? 0) + 1); continue; }
+    if (why === PRICE_REASON) { counts.set("price", (counts.get("price") ?? 0) + 1); continue; }
     counts.set(why, (counts.get(why) ?? 0) + 1);
   }
-  const groups = [...counts].sort((a, b) => b[1] - a[1]).map(([why, n]) => `${n} ${why}`);
+  const groups = [...counts].sort((a, b) => b[1] - a[1]).map(([why, n]) =>
+    why === "accessory" ? `${n} ${n === 1 ? "accessory" : "accessories"} (not the item itself)`
+    : why === "model" ? `${n} ${n === 1 ? "other model" : "other models"}`
+    : why === "price" ? `${n} priced far below the item`
+    : `${n} ${why}`);
   return `${out.length} left out: ${groups.join(", ")}`;
 }
 

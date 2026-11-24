@@ -142,6 +142,8 @@ export interface Pick {
   score: number;
   reason: string;                     // "Cheapest delivered total that has HDMI 4K60, 4.6 stars from 12k reviews"
   alternatives: Offer[];              // next best, at most 4
+  /** Offers left out as accessories of the item (its case, charger, cover), as "store|url" keys. */
+  notTheItem?: string[];
 }
 
 export interface CartLine {

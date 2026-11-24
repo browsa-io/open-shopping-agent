@@ -7,6 +7,44 @@ versions follow [Semantic Versioning](https://semver.org/).
 No order has gone through Open Shopping Agent end to end yet. Placing orders, Buy without asking and
 order tracking are tested against fakes and saved store pages, not a live checkout.
 
+## [0.2.2] - 2026-11-24
+
+### Fixed
+
+- **An accessory no longer wins for a named product.** A live run for "AirPods Pro 3" (Amazon,
+  Walmart, Best Buy, Target) picked "ESR for AirPods Pro 3 Case (2025), Magnetic Lid" at $13.59 as
+  the "Lowest price of the 24 offers compared", and "Fill cart" put the case in the Amazon cart,
+  while Walmart had "Apple AirPods Pro 3" at $149.00. The title matched every word of the query, so
+  the case looked like the cheapest AirPods. Ranking now spots an accessory for the product you
+  asked for: an accessory word (case, cover, charger, cable, screen protector, strap, band, ear
+  tips, skin, replacement, ...) with the product named after "for", "compatible with", "designed
+  for" or "works with" ("ESR for AirPods Pro 3 Case"), or the product's name directly followed by
+  one ("AirPods Pro 3 Case", "Apple Watch Series 11 Band"). Those offers are left out of the pick
+  when some other offer is the product itself; they stay in the list, and the reason counts them
+  ("6 found, 4 left out: 4 accessories (not the item itself)"). If only accessories were found,
+  nothing is left out. A query that asks for an accessory ("airpods pro 3 case", "usb-c hub hdmi",
+  "65w charger") ranks as before. The CLI, MCP `find_and_compare` and the web app share this rule
+  (it is in the engine's ranking), and the web app's next best after you exclude a store skips
+  the accessories too.
+- **The named model wins, not a case or another model.** A second live run for "AirPods Pro 3"
+  (with the fix above) picked Target's "AirPods Pro (1/2 Generation) Silicone Airpods Case with
+  Clip - heyday™" at $10.00: a case with no "for", for another model. Now:
+  - A case, cover, sleeve, skin or protector named after the product is an accessory without a
+    "for" too ("AirPods Pro (3rd Generation) Case with Clip"), unless it comes with the product
+    ("with MagSafe Charging Case", "Charging Case Included", "Aluminum Case with Sport Band").
+  - A query with a model number names a model: "AirPods Pro 3" needs "pro" and "3" (or "3rd
+    Generation"). When an offer names the model, offers that do not ("Apple AirPods 5", "Apple
+    EarPods (USB-C)", "AirPods Pro (1/2 Generation)") are left out as other models. Sizes and
+    counts are not model numbers ("30 lb", "65W", "27 inch", "4K", "size 10", "2 pack").
+  - With two or more offers naming the model, an offer under 40% of their median price is left
+    out as not the item.
+  - The reason counts them: "7 found, 5 left out: 3 accessories (not the item itself), 2 other
+    models". The pick for that run is Walmart's "Apple AirPods Pro 3" at $149.00. Queries for an
+    accessory and queries without a model number rank as before.
+- **The web app's pick reason keeps the engine's count.** "Lowest delivered total of N offers"
+  used the number of offers found, not the number compared, since the reason started saying "of
+  the N offers compared" in 0.2.1.
+
 ## [0.2.1] - 2026-11-21
 
 A release about saying what happened. An independent audit of 0.2.0 found places where the output,
@@ -163,6 +201,7 @@ The first release on npm. The source was made public on 18 Nov 2026.
 - The web app listens on 127.0.0.1 and refuses requests with a non-local `Host` when no access
   token is set (DNS rebinding); on any other address it needs the token it prints.
 
+[0.2.2]: https://github.com/browsa-io/open-shopping-agent/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/browsa-io/open-shopping-agent/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/browsa-io/open-shopping-agent/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/browsa-io/open-shopping-agent/compare/v0.1.0...v0.1.1

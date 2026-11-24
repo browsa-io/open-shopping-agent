@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 20+ and the open-shopping-agent MCP server (npx -y open-shopping-agent mcp). A Browsa key (BROWSA_API_KEY) runs stores on Phantom cloud browsers; without one it uses the user's own Chrome.
 metadata:
   homepage: https://github.com/browsa-io/open-shopping-agent
-  version: "0.2.1"
+  version: "0.2.2"
 ---
 
 # Open Shopping Agent
