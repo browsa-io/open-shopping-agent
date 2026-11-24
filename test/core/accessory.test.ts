@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { accessoryOf, asksForAccessory, hasModel, modelTokens, pickAll, pickForItem, scoreOffers, titleMatch } from "../../src/core/rank.js";
+import { accessoryOf, asksForAccessory, hasModel, hasProductName, modelTokens, pickAll, pickForItem, productName, scoreOffers, titleMatch } from "../../src/core/rank.js";
 import { ShoppingAgent } from "../../src/core/engine.js";
 import type { ItemRequest, RunEvent, ShoppingRequest } from "../../src/core/types.js";
 import { FakeAdapter, fakeBrowsers, offer, usd } from "./fake-adapter.js";
@@ -224,7 +224,8 @@ test("second run: the pick is Walmart's AirPods Pro 3 at $149.00 for every goal"
   assert.deepEqual(p.alternatives.map((o) => o.title), [BESTBUY_SHORT]);
   assert.equal(p.notTheItem?.length, 5);
   assert.match(p.reason, /^Lowest delivered total of the 2 offers compared: \$149\.00 delivered/);
-  assert.match(p.reason, /7 found, 5 left out: 3 accessories \(not the item itself\), 2 other models/);
+  // "Apple EarPods" is another product (no "AirPods"); "Apple AirPods 5" is another model.
+  assert.match(p.reason, /7 found, 5 left out: 3 accessories \(not the item itself\), 1 other product, 1 other model$/);
   const cheapest = pickForItem(item("AirPods Pro 3"), run2(), { now: NOW, goal: "cheapest" })!;
   assert.equal(cheapest.offer.title, WALMART);
 });
@@ -286,4 +287,97 @@ test("engine (second run): the cart gets Walmart's AirPods Pro 3, not the heyday
   assert.equal(adapters.target.cart.length, 0, "no case in the Target cart");
   assert.equal(adapters.walmart.cart.length, 1);
   await run.close();
+});
+
+// ---------- third live run, 2026-11-24 13:42 UTC ----------
+// The pick was JBL's Live Beam 3 at $99.95: "pro" matched inside "waterproof" and "3" in "Beam 3",
+// and nothing asked for "AirPods".
+
+const JBL = "JBL Live Beam 3 - True Wireless Noise-Cancelling Stick-Closed Earbuds, 48Hrs Total Playback, Wireless Charging, 6 Mics for Perfect Calls, Multi-Point Connection, IP55 Waterproof and dustproof (Black)";
+const FIT_PRO = "Fit Pro (1st Gen) - True Wireless Noise Cancelling Earbuds";
+
+const run3 = () => [
+  offer("amazon", JBL, 99.95, { rating: { stars: 4.4, count: 3100 } }),
+  offer("amazon", FIT_PRO, 159.99, { rating: { stars: 4.4, count: 21000 } }),
+  offer("walmart", WALMART, 149, { listPrice: usd(249), rating: { stars: 4.7, count: 1450 } }),
+  offer("bestbuy", BESTBUY_SHORT, 149.99, { rating: { stars: 4.7, count: 1450 } }),
+  offer("target", HEYDAY_3, 10),
+  offer("target", EARPODS, 19.99),
+  offer("walmart", AIRPODS_5, 129),
+];
+
+test("whole words: \"pro\" is not in \"waterproof\", \"3\" is in \"3rd\" and \"Pro3\"", () => {
+  const t = modelTokens("AirPods Pro 3");
+  assert.equal(hasModel(t, JBL), false, "waterproof is not pro");
+  assert.equal(hasModel(t, "Waterproof Earbuds 3"), false);
+  assert.equal(hasModel(t, "AirPods Pro3"), true);
+  assert.equal(hasModel(t, HEYDAY_3), true);
+  assert.equal(productName("AirPods Pro 3"), "airpods");
+  assert.equal(productName("Apple AirPods Pro 3 wireless earbuds"), "airpods");
+  assert.equal(productName("iPhone 17 Pro Max 256GB"), "iphone");
+  assert.equal(productName("JBL Live Beam 3"), "beam");
+  assert.equal(productName("ps5"), undefined);
+  assert.equal(productName("usb-c hub with hdmi"), undefined);
+  assert.equal(hasProductName("AirPods Pro 3", JBL), false);
+  assert.equal(hasProductName("AirPods Pro 3", FIT_PRO), false);
+  assert.equal(hasProductName("AirPods Pro 3", EARPODS), false, "EarPods is not AirPods");
+  assert.equal(hasProductName("AirPods Pro 3", "Apple Air Pods Pro 3"), true);
+  assert.equal(hasProductName("AirPods Pro 3", WALMART), true);
+});
+
+test("third run: JBL Live Beam 3 loses to Walmart's Apple AirPods Pro 3 at $149.00", () => {
+  for (const goal of ["best_value", "cheapest", "top_rated", "fastest"] as const) {
+    const p = pickForItem(item("AirPods Pro 3"), run3(), { now: NOW, goal })!;
+    assert.ok([WALMART, BESTBUY_SHORT].includes(p.offer.title), `${goal}: ${p.offer.title}`);
+  }
+  const p = pickForItem(item("AirPods Pro 3"), run3(), { now: NOW })!;
+  assert.equal(p.offer.title, WALMART);
+  assert.deepEqual(p.alternatives.map((o) => o.title), [BESTBUY_SHORT]);
+  assert.match(p.reason, /7 found, 5 left out: 3 other products, 1 accessory \(not the item itself\), 1 other model$/);
+  const scored = scoreOffers(item("AirPods Pro 3"), run3(), { now: NOW });
+  const why = (title: string) => scored.find((s) => s.offer.title === title)!.excluded;
+  assert.equal(why(JBL), "another product, not the item itself");
+  assert.equal(why(FIT_PRO), "another product, not the item itself");
+  assert.equal(why(EARPODS), "another product, not the item itself");
+  assert.equal(why(AIRPODS_5), "another model, not the item itself");
+  assert.equal(why(HEYDAY_3), "accessory, not the item itself");
+  // A longer query from the parser asks for the same product: an AirPods Pro 3 offer still wins
+  // (Best Buy's title has "wireless earbuds" too), and Walmart's short title is not left out.
+  const long = scoreOffers(item("Apple AirPods Pro 3 wireless earbuds"), run3(), { now: NOW });
+  assert.ok([WALMART, BESTBUY_SHORT].includes(long[0].offer.title), long[0].offer.title);
+  assert.equal(long.find((s) => s.offer.title === WALMART)!.excluded, undefined);
+});
+
+test("all three live runs together: Walmart's Apple AirPods Pro 3", () => {
+  const p = pickForItem(item("AirPods Pro 3"), [...airpods(), ...run2(), ...run3()], { now: NOW })!;
+  assert.equal(p.offer.title, WALMART);
+  assert.equal(p.offer.price.cents, 14900);
+});
+
+test("no offer is the product itself: nothing is left out as another product", () => {
+  const offers = [offer("amazon", JBL, 99.95), offer("amazon", FIT_PRO, 159.99), offer("walmart", AIRPODS_5, 129)];
+  const scored = scoreOffers(item("AirPods Pro 3"), offers, { now: NOW });
+  assert.equal(scored.filter((s) => s.excluded).length, 0);
+});
+
+test("generic queries are never narrowed to one product", () => {
+  const plates = [
+    offer("amazon", "Dixie Paper Plates, 8.5 inch, 150 Count", 12.99),
+    offer("walmart", "Great Value Everyday Disposable Plates, 10 in, 100 Count", 6.98),
+    offer("target", "Hefty Everyday Foam Plates 50ct", 4.99),
+  ];
+  assert.equal(scoreOffers(item("paper plates"), plates, { now: NOW }).filter((s) => s.excluded).length, 0);
+  const chargers = [
+    offer("amazon", "Anker 65W USB C Charger, Nano II GaN", 35.99),
+    offer("walmart", "onn. 65W USB-C Wall Charger", 24.88),
+    offer("bestbuy", "Insignia 67W USB-C Power Adapter", 29.99),
+  ];
+  assert.equal(scoreOffers(item("65w charger"), chargers, { now: NOW }).filter((s) => s.excluded).length, 0);
+  const hubs = [
+    offer("amazon", "Anker USB C Hub, 7-in-1 Adapter with 4K HDMI, 100W PD", 29.99),
+    offer("walmart", "USB C Hub 5 in 1 with HDMI", 9.99),
+    offer("bestbuy", "Insignia USB-C to HDMI Adapter", 24.99),
+    offer("target", "Waterproof Pro Travel Organizer 3 Pack", 15.99),
+  ];
+  assert.equal(scoreOffers(item("usb-c hub with hdmi", { maxPrice: usd(40) }), hubs, { now: NOW }).filter((s) => s.excluded).length, 0);
 });

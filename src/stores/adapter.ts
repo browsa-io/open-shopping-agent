@@ -8,6 +8,26 @@ import type {
 } from "../core/types.js";
 import type { BrowserCapabilities } from "../core/providers/types.js";
 
+/** Options of StoreContext.aiTask. Adapters set the first four; the engine sets the rest. */
+export interface AiTaskOptions {
+  schema?: object;
+  maxSteps?: number;
+  startUrl?: string;
+  sameBrowser?: boolean;
+  /**
+   * Set by the engine (added in 0.2.3): cancels the task. On Browsa the task is cancelled there,
+   * so it stops charging, and no result is used.
+   */
+  signal?: AbortSignal;
+  /** Set by the engine (added in 0.2.3): told when the task waits for a free browser ("queued") and when it runs. */
+  onStatus?: (status: "queued" | "running") => void;
+  /**
+   * Set by the engine (added in 0.2.3): never stop this store's browser to free a browser slot for
+   * a task that runs in its own browser (outside the search the browser holds the cart).
+   */
+  keepBrowser?: boolean;
+}
+
 /** What the engine hands an adapter for one store in one run. */
 export interface StoreContext {
   store: StoreId;
@@ -29,7 +49,7 @@ export interface StoreContext {
    * must act on this browser's page or cart (add to cart, choose an option); on a fresh browser
    * those fail at once without spending credits.
    */
-  aiTask<T = unknown>(task: string, opts?: { schema?: object; maxSteps?: number; startUrl?: string; sameBrowser?: boolean }): Promise<T>;
+  aiTask<T = unknown>(task: string, opts?: AiTaskOptions): Promise<T>;
   /** A Phantom Live link with control, for handing the browser to the person. Opens once. */
   liveLink(): Promise<string>;
   /**

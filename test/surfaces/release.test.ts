@@ -17,7 +17,7 @@ const changelog = read("CHANGELOG.md");
 
 test("the changelog covers every version on npm, newest first, with a date", () => {
   const heads = [...changelog.matchAll(/^## \[([^\]]+)\] - (\d{4}-\d{2}-\d{2})$/gm)].map((m) => m[1]);
-  assert.deepEqual(heads, ["0.2.2", "0.2.1", "0.2.0", "0.1.1", "0.1.0"]);
+  assert.deepEqual(heads, ["0.2.3", "0.2.2", "0.2.1", "0.2.0", "0.1.1", "0.1.0"]);
   for (const v of heads) {
     const notes: string = notesFor(changelog, v);
     assert.ok(notes && notes.length > 200, `notes for ${v}`);

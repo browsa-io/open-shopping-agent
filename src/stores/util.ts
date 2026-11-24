@@ -183,6 +183,30 @@ export function isExitError(e: unknown): boolean {
   return /ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_SOCKS_CONNECTION_FAILED/i.test(String((e as Error)?.message ?? e));
 }
 
+/**
+ * The store refuses this browser or its exit address: an error page that does not clear, Access
+ * Denied, HTTP 403. Nothing to solve on the page. On Browsa the engine retries the search once in a
+ * fresh browser on a new address (ShoppingAgentOptions.freshExitsPerStore).
+ */
+export class StoreRefusedError extends Error {
+  override name = "StoreRefusedError";
+}
+
+/**
+ * True when an error says the store refused this browser or its address: StoreRefusedError, "refused
+ * this browser / the page", an error page, a bot check that did not clear after Browsa and OSA's
+ * own steps, Access Denied, HTTP 403/435/503 from the store. False for a check handed to the
+ * person (Browsa tried to solve it: CaptchaHandoffError), the exit's own tunnel errors and stops.
+ */
+export function isStoreRefusal(e: unknown): boolean {
+  if (!e) return false;
+  if (e instanceof CaptchaHandoffError || (e as { handoff?: unknown }).handoff) return false;
+  if (e instanceof StoreRefusedError || (e as Error).name === "StoreRefusedError") return true;
+  const m = String((e as Error)?.message ?? e);
+  if (/run stopped|^aborted$|this run is closed/i.test(m) || isExitError(e)) return false;
+  return /refused (this|the) (browser|page|address)|shows its error page|error page \(|bot check that did not clear|access denied|\b(?:HTTP|status)\s*(?:403|435|503)\b/i.test(m);
+}
+
 export function isTransientNetError(e: unknown): boolean {
   return /ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_SOCKS_CONNECTION_FAILED|ERR_NETWORK_CHANGED|ERR_CONNECTION_CLOSED|ERR_TIMED_OUT|is interrupted by another navigation/i.test(String((e as Error)?.message ?? e));
 }

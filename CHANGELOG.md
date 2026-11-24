@@ -7,6 +7,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 No order has gone through Open Shopping Agent end to end yet. Placing orders, Buy without asking and
 order tracking are tested against fakes and saved store pages, not a live checkout.
 
+## [0.2.3] - 2026-11-24
+
+### Fixed
+
+- Data saver no longer blocks Amazon's stylesheets and scripts. They are served from `m.media-amazon.com/images/...`, the same path as its photos, so on a residential exit Amazon pages drew as raw text in the live view. Photos and fonts are still not loaded.
+- **A store that refuses the browser's address gets a fresh one.** A live run for "AirPods Pro 3" on Browsa's residential US exit hit Amazon's "Sorry! Something went wrong" page, retried twice on the same browser and address, and failed Amazon, while other runs on other addresses worked. Now, when a store refuses the address at search (Amazon's error page or a "continue shopping" check that does not clear, Access Denied, HTTP 403/435/503), the agent stops that browser, opens a fresh one on a new address of the same exit (for example residential US) and searches again, logging "Amazon refused this address; trying a fresh one". Once per store per run by default (`freshExitsPerStore`, `OSA_FRESH_EXITS`; 0 turns it off). Only on Browsa's fresh browsers: never on your own Chrome, a CDP browser, a saved profile or your own proxy, never for a check Browsa solves or hands to you, never after a stop. When the fresh address is refused too, the store fails with one message saying both addresses were refused, and the store card says so instead of "Try again later".
+- **Best pick: the named product, not another one.** A third live run for "AirPods Pro 3" picked "JBL Live Beam 3 ... IP55 Waterproof" at $99.95: "pro" matched inside "waterproof" and "3" matched "Beam 3", and the product name was not required. Model and name words now match as whole words ("3rd"/"Third" still count as 3), and when an offer that is not an accessory names the product and the model, offers without the product's name ("JBL Live Beam 3", "Fit Pro (1st Gen)", "Apple EarPods (USB-C)") are left out as other products. The reason counts them ("7 found, 5 left out: 3 other products, 1 accessory (not the item itself), 1 other model"). Queries without a model number and accessory queries rank as before.
+- **The AI fallback gets its own time, and a fallback that is no longer wanted is cancelled.** A live run for "AirPods Pro 3" (Amazon, Walmart, Best Buy, Target; 4 browsers at once) had Best Buy and Target hand off to the AI fallback late in their 180 s search step. Each fallback task needed its own browser and waited behind the slot limit, both stores timed out, and the two tasks finished minutes later (8 credits each) with their results thrown away: 16 credits for nothing. Now:
+  - When a store's step hands off to the AI fallback, the step and the store's search deadline move to at least now + 150 s (`aiFallbackMs`, `OSA_AI_FALLBACK_MS`), and the store card says "Waiting for the AI fallback", or "Waiting for a free browser" while Browsa queues the task (new `store_waiting` run event).
+  - When that time runs out, the store is stopped or the run is stopped, the Browsa task is cancelled so it stops charging, logging "cancelled the AI task <id> (no result was used)". A task that cannot be cancelled and still finishes is logged as arriving too late, with its credits; it is never dropped silently.
+  - A fallback that runs in its own browser (fresh browsers) first stops the store's own browser when every browser slot is in use (another browser of the run waits for a slot, or the `maxBrowsers` cap is reached), or when Browsa keeps the task queued, so it is not stuck behind the slot limit. Product pages for that item are skipped and a fresh browser opens for the next item or the cart. Only during the search: a browser that holds a cart is never stopped for this.
+
 ## [0.2.2] - 2026-11-24
 
 ### Fixed
@@ -201,6 +213,7 @@ The first release on npm. The source was made public on 18 Nov 2026.
 - The web app listens on 127.0.0.1 and refuses requests with a non-local `Host` when no access
   token is set (DNS rebinding); on any other address it needs the token it prints.
 
+[0.2.3]: https://github.com/browsa-io/open-shopping-agent/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/browsa-io/open-shopping-agent/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/browsa-io/open-shopping-agent/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/browsa-io/open-shopping-agent/compare/v0.1.1...v0.2.0

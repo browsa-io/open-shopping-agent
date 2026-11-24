@@ -334,6 +334,9 @@ async function shop(args: CliArgs): Promise<number> {
         for (const s of e.request.stores) progress.set(s, { label: "Starting", tone: "busy" });
         break;
       case "store_started": progress.set(e.store, { label: "Searching", tone: "busy" }); break;
+      case "store_waiting":
+        if (!compared && !failed.has(e.store)) progress.set(e.store, { label: e.waiting ? e.message ?? "Waiting for the AI fallback" : "Searching", tone: "busy" });
+        break;
       case "offers": {
         const n = (offers.get(e.store) ?? 0) + e.offers.length;
         offers.set(e.store, n);

@@ -13,12 +13,12 @@ import type {
   Approval, ApprovalSource, Cart, CheckoutReview, ItemRequest, Limits, Money, NeedsUser, Offer, OrderResult, OrderState, Pick, RunEvent, RunSummary,
   ShoppingRequest, Stage, StoreId,
 } from "./types.js";
-import type { StoreAdapter, StoreContext } from "../stores/adapter.js";
+import type { AiTaskOptions, StoreAdapter, StoreContext } from "../stores/adapter.js";
 import { loadAdapter, STORE_NAMES } from "../stores/index.js";
-import { currencyNote, formatMoney, isDeadPageError, isExitError, nowIso } from "../stores/util.js";
+import { currencyNote, formatMoney, isDeadPageError, isExitError, isStoreRefusal, nowIso, StoreRefusedError } from "../stores/util.js";
 import { parseRequest, ALL_STORES } from "./parse.js";
 import { llmFromEnv, type LLMConfig } from "./llm.js";
-import { BrowserPool, defaultDomain, proxyFromText, type BrowserMode, type BrowsaClient, type StoreBrowser } from "./browsers.js";
+import { BrowserPool, defaultDomain, eitherSignal, proxyFromText, type BrowserMode, type BrowsaClient, type StoreBrowser } from "./browsers.js";
 import { deliveredTotal, markCurrency, pickAll, pickEveryStore, scoreOffers } from "./rank.js";
 import { labelSameItem } from "./identity.js";
 import { withUnits } from "./units.js";
@@ -76,6 +76,20 @@ export interface ShoppingAgentOptions {
   storeTimeoutMs?: number;
   /** Most time one adapter call may take. Default 2 minutes. */
   stepTimeoutMs?: number;
+  /**
+   * Time an AI fallback task gets of its own (added in 0.2.3). When a store's step hands off to
+   * the AI fallback, the step and the store's search deadline move to at least now + this, instead
+   * of the fallback getting whatever was left. When it runs out (or the run stops) the Browsa task
+   * is cancelled so it stops charging. Default 150000 (OSA_AI_FALLBACK_MS).
+   */
+  aiFallbackMs?: number;
+  /**
+   * When a store refuses the browser's address at search (an error page that does not clear,
+   * Access Denied, 403), open this many fresh browsers on new addresses (same exit kind) per store
+   * per run and search again. Only on Browsa's fresh browsers; never on your own Chrome, a CDP
+   * browser, a saved profile or your own proxy. Default 1 (OSA_FRESH_EXITS); 0 turns it off.
+   */
+  freshExitsPerStore?: number;
   /**
    * Most Phantom browsers open at once (OSA_MAX_BROWSERS). With a cap, stores wait their turn, a
    * fresh browser stops right after its search (it opens again for the cart) and after its checkout
@@ -256,6 +270,16 @@ interface Shop {
   browser: StoreBrowser;
   ctx: StoreContext;
   abort: AbortController;
+  /** The search stage's deadline (epoch ms); an AI fallback moves it later. */
+  deadline?: number;
+  /** The running step's timer: an AI fallback moves it later. */
+  clock?: { extendTo(at: number): void };
+  /** Cancels the AI fallback task in flight (its step timed out, the store or the run stopped). */
+  aiAbort?: AbortController;
+  /** True while the search stage runs on this shop (an AI fallback may then stop its browser for a slot). */
+  searching?: boolean;
+  /** What the store card says it waits for now (store_waiting). */
+  waitingFor?: "ai_fallback" | "browser";
 }
 
 /** One run: its state, and the steps after the search (carts, review, approval, close). */
@@ -512,7 +536,9 @@ export class ShoppingRun {
       }
       // Browser slots are shared and all in use (another store waits for one): a fresh browser
       // keeps nothing worth a slot, so stop it now; it opens again if this store gets a pick.
-      if (this.pool?.capped && (await this.pool.modeFor(store)) === "burner") {
+      if ((await this.browsers.get(store)?.catch(() => undefined))?.closed) {
+        await this.releaseStore(store, "This store's browser was stopped for the AI fallback; a fresh one opens for the cart");
+      } else if (this.pool?.capped && (await this.pool.modeFor(store)) === "burner") {
         await this.releaseStore(store, "Stopped this browser after the search to keep within the browser cap (a fresh one opens for the cart)");
       } else if (this.pool?.slotsShort && (await this.pool.modeFor(store)) === "burner") {
         await this.releaseStore(store, "Browser slots are short; stopped this browser after the search (a fresh one opens for the cart)");
@@ -542,8 +568,8 @@ export class ShoppingRun {
     const browser = await this.getBrowser(store, domain);
     const abort = new AbortController();
     this.runAbort.signal.addEventListener("abort", () => abort.abort(), { once: true });
-    const ctx = browser.context(domain, { zip: this.request.zip, signal: abort.signal, log: (m) => this.log(m, store) });
-    const shop: Shop = { store, domain, key, adapter, browser, ctx, abort };
+    const shop = { store, domain, key, adapter, browser, abort } as Shop;
+    shop.ctx = this.bindCtx(shop, browser);
     this.shops.set(key, shop);
     let liveUrl: string | undefined;
     if (this.o.watchLinks !== false && !this.o.openBrowser && this.pool) {
@@ -565,22 +591,47 @@ export class ShoppingRun {
       this.fail(store, "search", e, domain);
       return;
     }
-    const deadline = Date.now() + (this.o.storeTimeoutMs ?? 360_000);
+    shop.deadline = Date.now() + (this.o.storeTimeoutMs ?? 360_000);
+    shop.searching = true;
+    try {
+      await this.searchItems(shop, store, domain);
+    } finally {
+      shop.searching = false;
+    }
+  }
+
+  private async searchItems(shop: Shop, store: StoreId, domain: string): Promise<void> {
     const limit = this.o.searchLimit ?? 8;
     let failedItems = 0;
     for (const item of this.request.items) {
       if (shop.abort.signal.aborted) break;
-      const left = deadline - Date.now();
+      // The browser was stopped to give an AI fallback its slot: the next item needs a fresh one.
+      if (shop.browser.closed && !(await this.swapBrowser(shop))) {
+        this.fail(store, "search", new Error("the store's browser was stopped for the AI fallback and a fresh one could not be opened"), domain);
+        return;
+      }
+      const left = shop.deadline! - Date.now();
       if (left <= 0) {
         this.fail(store, "search", new Error(`store timed out after ${Math.round((this.o.storeTimeoutMs ?? 360_000) / 1000)}s`), domain);
         shop.abort.abort();
         return;
       }
       try {
-        let offers = await this.step(shop, () => shop.adapter.search(shop.ctx, item, limit), Math.min(left, this.o.stepTimeoutMs ?? 180_000), `searching ${STORE_NAMES[store]}`);
+        const search = (ms: number) => this.step(shop, () => shop.adapter.search(shop.ctx, item, limit), Math.min(ms, this.o.stepTimeoutMs ?? 180_000), `searching ${STORE_NAMES[store]}`);
+        let offers: Offer[];
+        for (let ms = left; ; ms = Math.max(60_000, shop.deadline! - Date.now())) {
+          try {
+            offers = await search(ms);
+            break;
+          } catch (e) {
+            // The store refused this browser's address: on Browsa, search again in a fresh browser
+            // on a new address (freshExitsPerStore, default once per store per run).
+            if (!(await this.freshExit(shop, e))) throw this.refusedOnFreshExits(shop, e);
+          }
+        }
         offers = (Array.isArray(offers) ? offers : []).filter(isOffer).map((o) => ({ ...o, itemId: item.id, store, storeDomain: o.storeDomain || domain }));
         offers = this.checkCurrency(store, domain, offers);
-        offers = this.checkCurrency(store, domain, await this.addDetails(shop, item, offers, deadline)).map(withUnits);
+        offers = this.checkCurrency(store, domain, await this.addDetails(shop, item, offers, shop.deadline!)).map(withUnits);
         this.offers.push(...offers);
         this.emit({ type: "offers", store, itemId: item.id, offers });
       } catch (e) {
@@ -677,6 +728,10 @@ export class ShoppingRun {
   private async addDetails(shop: Shop, item: ItemRequest, offers: Offer[], deadline: number): Promise<Offer[]> {
     const n = this.o.detailsTop ?? 2;
     if (!shop.adapter.details || n <= 0 || !offers.length) return offers;
+    if (shop.browser.closed) {
+      this.log("Product pages skipped: this store's browser was stopped to give the AI fallback a browser slot", shop.store);
+      return offers;
+    }
     const top = scoreOffers(item, offers, { goal: this.request.goal, currency: this.budget?.currency }).filter((s) => !s.excluded).slice(0, n).map((s) => s.offer);
     const out = [...offers];
     for (const o of top) {
@@ -735,11 +790,148 @@ export class ShoppingRun {
    */
   private async step<T>(shop: Shop, fn: () => Promise<T>, ms: number, what: string): Promise<T> {
     try {
-      return await withTimeout(fn(), ms, what);
+      return await this.timed(shop, fn, ms, what);
     } catch (e) {
       if (!(await this.renewDeadTab(shop, e)) && !(await this.renewBrowser(shop, e))) throw e;
-      return withTimeout(fn(), ms, what);
+      return this.timed(shop, fn, ms, what);
     }
+  }
+
+  /**
+   * withTimeout for one adapter call on a shop, whose limit an AI fallback can move later (see
+   * bindCtx). When it runs out, the AI fallback task in flight is cancelled.
+   */
+  private timed<T>(shop: Shop, fn: () => Promise<T>, ms: number, what: string): Promise<T> {
+    if (!Number.isFinite(ms) || ms <= 0) return fn();
+    const started = Date.now();
+    let until = started + ms;
+    let t: NodeJS.Timeout | undefined;
+    return new Promise<T>((resolve, reject) => {
+      const clock = { extendTo: (at: number) => { if (at > until) { until = at; arm(); } } };
+      const done = () => { clearTimeout(t); if (shop.clock === clock) shop.clock = undefined; };
+      const fire = () => {
+        if (Date.now() < until) return arm();
+        done();
+        shop.aiAbort?.abort();
+        reject(new Error(`${what} timed out after ${Math.round((Date.now() - started) / 1000)}s`));
+      };
+      const arm = () => { clearTimeout(t); t = setTimeout(fire, Math.max(0, until - Date.now())); };
+      shop.clock = clock;
+      arm();
+      let p: Promise<T>;
+      try { p = fn(); } catch (e) { done(); reject(e); return; }
+      p.then((v) => { done(); resolve(v); }, (e) => { done(); reject(e); });
+    });
+  }
+
+  /** Time an AI fallback gets of its own (aiFallbackMs, OSA_AI_FALLBACK_MS, default 150 s). */
+  private get aiFallbackMs(): number {
+    const o = this.o.aiFallbackMs;
+    if (typeof o === "number" && Number.isFinite(o) && o > 0) return o;
+    const env = Number(process.env.OSA_AI_FALLBACK_MS);
+    return Number.isFinite(env) && env > 0 ? env : 150_000;
+  }
+
+  /**
+   * The shop's StoreContext on `browser`, with the AI fallback on its own time: when the adapter
+   * hands off to ctx.aiTask, the running step and the store's search deadline move to at least
+   * now + aiFallbackMs, the store card says it waits for the AI fallback (or for a free browser
+   * when Browsa queues the task), and the task is cancelled when that time runs out, the store
+   * stops or the run stops.
+   */
+  private bindCtx(shop: Shop, browser: StoreBrowser): StoreContext {
+    const ctx = browser.context(shop.domain, { zip: this.request.zip, signal: shop.abort.signal, log: (m) => this.log(m, shop.store) });
+    const inner = ctx.aiTask.bind(ctx);
+    ctx.aiTask = async <T = unknown>(task: string, opts: AiTaskOptions = {}): Promise<T> => {
+      // A task that must act on a fresh browser fails at once without spending: nothing to wait for.
+      if (opts.sameBrowser && browser.mode === "burner") return inner<T>(task, opts);
+      const budget = this.aiFallbackMs;
+      const until = Date.now() + budget;
+      shop.clock?.extendTo(until);
+      if (shop.deadline !== undefined) shop.deadline = Math.max(shop.deadline, until);
+      const ac = new AbortController();
+      const stop = () => ac.abort();
+      if (shop.abort.signal.aborted) ac.abort();
+      else shop.abort.signal.addEventListener("abort", stop, { once: true });
+      shop.aiAbort = ac;
+      this.log(`The AI fallback gets its own ${Math.round(budget / 1000)} s`, shop.store);
+      this.waiting(shop, "ai_fallback");
+      try {
+        return await inner<T>(task, {
+          ...opts,
+          keepBrowser: opts.keepBrowser || !shop.searching,
+          signal: opts.signal ? eitherSignal(opts.signal, ac.signal) : ac.signal,
+          onStatus: (s) => { opts.onStatus?.(s); this.waiting(shop, s === "queued" ? "browser" : "ai_fallback"); },
+        });
+      } finally {
+        shop.abort.signal.removeEventListener("abort", stop);
+        if (shop.aiAbort === ac) shop.aiAbort = undefined;
+        this.waiting(shop);
+      }
+    };
+    return ctx;
+  }
+
+  /** Tell the store card what it waits for (nothing: the wait is over). */
+  private waiting(shop: Shop, kind?: "ai_fallback" | "browser"): void {
+    if (shop.waitingFor === kind) return;
+    shop.waitingFor = kind;
+    const message = kind === "browser" ? "Waiting for a free browser for the AI fallback"
+      : kind === "ai_fallback" ? `Waiting for the AI fallback (up to ${Math.round(this.aiFallbackMs / 1000)} s)` : undefined;
+    this.emit({ type: "store_waiting", store: shop.store, ...(shop.store === "shopify" ? { domain: shop.domain } : {}), ...(kind ? { waiting: kind, message } : {}) });
+  }
+
+  /** Fresh browsers on new addresses per store in this run, after the store refused an address. */
+  private freshExits = new Map<StoreId, number>();
+  /** Of those, the fresh browsers that opened (the final message counts the addresses really tried). */
+  private freshOpened = new Map<StoreId, number>();
+
+  private get freshExitMax(): number {
+    const o = this.o.freshExitsPerStore;
+    if (typeof o === "number" && Number.isFinite(o)) return Math.max(0, Math.floor(o));
+    const env = process.env.OSA_FRESH_EXITS?.trim();
+    return env && Number.isFinite(Number(env)) ? Math.max(0, Math.floor(Number(env))) : 1;
+  }
+
+  /**
+   * The store refused this browser's address (its error page, Access Denied, 403, a check that
+   * did not clear): stop the browser, open a fresh one on a new address of the same exit kind and
+   * rebind the store's shops to it. Only where a new address is possible (Browsa's fresh browsers:
+   * StoreBrowser.freshAddress), at most freshExitsPerStore times per store per run (default 1),
+   * never for a check Browsa can solve or hand over, never once the run is stopped.
+   */
+  private async freshExit(shop: Shop, e: unknown): Promise<boolean> {
+    if (!isStoreRefusal(e) || shop.abort.signal.aborted || this.runAbort.signal.aborted || this.closed) return false;
+    if (this.provider && this.provider.id !== "browsa") return false;
+    if (!shop.browser.freshAddress) return false;
+    const n = this.freshExits.get(shop.store) ?? 0;
+    if (n >= this.freshExitMax) return false;
+    this.freshExits.set(shop.store, n + 1);
+    const name = shop.store === "shopify" ? shop.domain : STORE_NAMES[shop.store];
+    this.log(`${name} refused this address${shop.browser.exit ? ` (${shop.browser.exit.label})` : ""}; trying a fresh one`, shop.store);
+    if (!(await this.swapBrowser(shop))) return false;
+    this.freshOpened.set(shop.store, (this.freshOpened.get(shop.store) ?? 0) + 1);
+    if (this.runAbort.signal.aborted || shop.abort.signal.aborted) return false;
+    const nb = shop.browser;
+    let liveUrl: string | undefined;
+    if (this.o.watchLinks !== false && !this.o.openBrowser && this.pool) {
+      try { liveUrl = (await this.pool.client.createLiveLink(nb.agentId, { scope: "view", ttlSeconds: 3600 }))?.live_url; } catch { /* optional */ }
+    }
+    this.emit({ type: "store_started", store: shop.store, ...(liveUrl ? { liveUrl } : {}), ...(shop.store === "shopify" ? { domain: shop.domain } : {}), ...(nb.exit ? { exit: nb.exit.label } : {}) });
+    return true;
+  }
+
+  /**
+   * The error to report after a search failed: when the store refused the fresh address too,
+   * say that every address was refused (the store's own reason stays in the text).
+   */
+  private refusedOnFreshExits(shop: Shop, e: unknown): unknown {
+    const n = this.freshOpened.get(shop.store) ?? 0;
+    if (!n || !isStoreRefusal(e)) return e;
+    const name = shop.store === "shopify" ? shop.domain : STORE_NAMES[shop.store];
+    const why = errText(e).replace(/\s*Try again later[^.]*\.?\s*$/i, "").replace(/\.$/, "");
+    const tried = n === 1 ? "both exit addresses (a fresh one was tried)" : `all ${n + 1} exit addresses (${n} fresh ones were tried)`;
+    return new StoreRefusedError(`${name} refused this browser on ${tried}. Last answer: ${why}. Try again in a while.`);
   }
 
   /** Browser renewals per store in this run (an exit that failed the tunnel). */
@@ -758,6 +950,14 @@ export class ShoppingRun {
     if (n >= 2) return false;
     this.renewals.set(shop.store, n + 1);
     this.log(`The exit could not reach the store (${errText(e).match(/net::ERR_\w+/)?.[0] ?? "proxy error"}); retrying in a fresh browser (new address)`, shop.store);
+    return this.swapBrowser(shop);
+  }
+
+  /**
+   * Stop the store's browser first (it frees a browser slot: the account has only a few), then
+   * open a fresh one and rebind every shop of the store to it. False when none could be opened.
+   */
+  private async swapBrowser(shop: Shop): Promise<boolean> {
     const old = this.browsers.get(shop.store);
     this.browsers.delete(shop.store);
     await old?.then((b) => b.close()).catch(() => {});
@@ -766,7 +966,7 @@ export class ShoppingRun {
       for (const s of this.shops.values()) {
         if (s.store !== shop.store) continue;
         s.browser = nb;
-        s.ctx = nb.context(s.domain, { zip: this.request.zip, signal: s.abort.signal, log: (m) => this.log(m, s.store) });
+        s.ctx = this.bindCtx(s, nb);
       }
       return true;
     } catch (x) {
@@ -861,20 +1061,20 @@ export class ShoppingRun {
         try {
           const ms = this.o.stepTimeoutMs ?? 180_000; // opening the item from the results takes longer on slow exits
           try {
-            cart = await withTimeout(shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
+            cart = await this.timed(shop, () => shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
           } catch (e) {
             if (!(await this.renewDeadTab(shop, e))) throw e;
             // The add may have gone through before the tab died: read the cart before adding again.
-            const now = await withTimeout(shop.adapter.readCart(shop.ctx), ms, "reading the cart");
+            const now = await this.timed(shop, () => shop.adapter.readCart(shop.ctx), ms, "reading the cart");
             const there = now.lines.some((l) => (p.offer.productId && l.productId === p.offer.productId) || l.url === p.offer.url);
-            cart = there ? now : await withTimeout(shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
+            cart = there ? now : await this.timed(shop, () => shop.adapter.addToCart(shop.ctx, p.offer, item?.quantity ?? 1, item?.options), ms, "adding to the cart");
           }
         } catch (e) {
           if (isExitError(e)) { exitErr = { e, p }; break; }
           // A slow page can time the step out after the add went through (seen live on Best Buy):
           // the cart decides.
           if (/timed out after/.test(errText(e)) && !shop.abort.signal.aborted) {
-            const now = await withTimeout(shop.adapter.readCart(shop.ctx), this.o.stepTimeoutMs ?? 120_000, "reading the cart").catch(() => undefined);
+            const now = await this.timed(shop, () => shop.adapter.readCart(shop.ctx), this.o.stepTimeoutMs ?? 120_000, "reading the cart").catch(() => undefined);
             if (now?.lines.some((l) => (p.offer.productId && l.productId === p.offer.productId) || l.url === p.offer.url)) {
               this.log(`Adding "${p.offer.title.slice(0, 60)}" timed out, but the cart shows it`, store);
               cart = now;
@@ -937,14 +1137,14 @@ export class ShoppingRun {
     try {
       const ms = this.o.stepTimeoutMs ?? 180_000;
       try {
-        review = await withTimeout(shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
+        review = await this.timed(shop, () => shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
       } catch (e) {
         if (await this.renewDeadTab(shop, e)) {
-          review = await withTimeout(shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
+          review = await this.timed(shop, () => shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
         } else if (await this.renewBrowser(shop, e)) {
           // A fresh browser has an empty cart: fill it again, then review.
           await this.fillOne(this.picks.filter((p) => shopKey(p.offer.store, p.offer.storeDomain) === shop.key));
-          review = await withTimeout(shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
+          review = await this.timed(shop, () => shop.adapter.reviewCheckout(shop.ctx), ms, "checkout review");
         } else throw e;
       }
     } catch (e) {

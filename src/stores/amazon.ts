@@ -13,7 +13,7 @@ import type { StoreAdapter, StoreContext } from "./adapter.js";
 import {
   aiSearchFallback, approvalMatches, CaptchaHandoffError, clean, clickFirstVisible, declineOffer, decodeEntities, formatMoney, gotoRetry, hasClass, jsonAfter, needsUser,
   nowIso, optionWarnings, parseCount, parseDeliveryDate, parseHtml, parseMoney, parseStars, passBotCheck, pickVariant, qs, qsa,
-  shortAddress, sumLines, textOf, type HNode, type VariantChoice,
+  shortAddress, StoreRefusedError, sumLines, textOf, type HNode, type VariantChoice,
 } from "./util.js";
 
 // ---------------------------------------------------------------------------------------------
@@ -418,7 +418,7 @@ async function settleAmazon(ctx: StoreContext, url: string): Promise<void> {
   for (let i = 0; i < 3; i++) {
     const title = await page.title().catch(() => "");
     if (!isAmazonErrorPage(title, title ? "" : await page.content().catch(() => ""))) break;
-    if (i === 2) throw new Error("Amazon shows its error page (\"Sorry! Something went wrong\") to this browser. Try again later, or from another exit address.");
+    if (i === 2) throw new StoreRefusedError("Amazon refused this browser: it shows its error page (\"Sorry! Something went wrong\") on this exit address. Try again later, or from another exit address.");
     ctx.log("Amazon: error page, waiting and retrying");
     await page.waitForTimeout(4000 + i * 6000);
     await page.goto(`${AMZ}/`, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);

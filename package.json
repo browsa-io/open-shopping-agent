@@ -1,6 +1,6 @@
 {
   "name": "open-shopping-agent",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "mcpName": "io.browsa/open-shopping-agent",
   "description": "Open-source AI shopping agent: compares Amazon, Walmart, eBay, Best Buy, Target and the Shopify stores you name, fills the carts, and never buys without your OK. Runs on your own Chrome; cloud browsers optional.",
   "license": "MIT",

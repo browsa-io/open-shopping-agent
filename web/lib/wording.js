@@ -69,6 +69,12 @@ export function friendlyError(error, stage, store, domain) {
   if (isBlock(raw)) {
     // The same words as the README's per-browser table: a block is reported as a block, never as "nothing found".
     const words = blockWords(raw, stage);
+    // On Browsa the engine already tried a fresh browser on a new address: say so, not just "try later".
+    const fresh = /\b(both|all \d+) exit addresses\b|fresh ones? (was|were) tried/i.exec(raw);
+    if (fresh) {
+      const n = /all (\d+) exit addresses/i.exec(raw)?.[1];
+      return r(words[0].toUpperCase() + words.slice(1), `${name} refused ${n ? `all ${n}` : "both"} addresses tried (a fresh one was opened after the first was refused). Try ${name} again in a while, or set your own proxy in Settings.`, "retry");
+    }
     return r(words[0].toUpperCase() + words.slice(1), `${name} refused this browser. Try again later, or open the live browser and finish there.`, "retry");
   }
   if (/timed? ?out|Timeout \d+ms|took too long/i.test(raw)) {
@@ -103,7 +109,7 @@ export function reduceStores(events, opts = {}) {
   let done = false;
   const get = (s) => {
     if (!stores.has(s)) {
-      stores.set(s, { store: s, domain: "", started: false, offers: 0, failure: null, failures: [], cart: null, review: null, needs: null, awaiting: null, order: null, orderState: null, liveUrl: null, exit: null, last: -1, lastKind: "" });
+      stores.set(s, { store: s, domain: "", started: false, offers: 0, failure: null, failures: [], cart: null, review: null, needs: null, awaiting: null, order: null, orderState: null, liveUrl: null, exit: null, waiting: null, last: -1, lastKind: "" });
       order.push(s);
     }
     return stores.get(s);
@@ -112,6 +118,7 @@ export function reduceStores(events, opts = {}) {
     switch (e.type) {
       case "parsed": for (const s of e.request.stores) get(s); break;
       case "store_started": { const st = get(e.store); st.started = true; st.liveUrl = e.liveUrl || st.liveUrl; st.exit = e.exit || st.exit; if (e.domain) st.domain = e.domain; break; }
+      case "store_waiting": { const st = get(e.store); st.waiting = e.waiting ? { kind: e.waiting, message: e.message || "" } : null; if (e.domain) st.domain = e.domain; break; }
       case "offers": { const st = get(e.store); st.started = true; st.offers += e.offers.length; if (e.offers[0]) st.domain = e.offers[0].storeDomain; break; }
       case "store_failed": { const st = get(e.store); st.failure = { stage: e.stage, error: e.error, at: i, hint: e.hint || null }; st.failures.push(st.failure); if (e.domain) st.domain = e.domain; st.last = i; st.lastKind = "failed"; break; }
       case "picks": picks = e.picks; break;
@@ -169,7 +176,7 @@ export function unknownText(st, stopped = false) {
 
 /**
  * The status word for one store: { word, tone, detail }. tone is "busy", "ok", "warn", "bad" or "idle".
- * Words: Starting, Searching, Reading prices, Found N offers, Nothing found, Filling cart, Cart filled,
+ * Words: Starting, Searching, AI fallback, Waiting for a browser, Reading prices, Found N offers, Nothing found, Filling cart, Cart filled,
  * Reviewing checkout, Needs you, Ready to buy, Ordered, and a failure title.
  */
 export function storeStatus(st, ctx) {
@@ -202,6 +209,7 @@ export function storeStatus(st, ctx) {
     if (st.offers) return { word: `Found ${plural(st.offers, "offer")}`, tone: "ok", detail: "" };
     return st.started ? { word: "Stopped", tone: "idle", detail: "" } : { word: "Not searched", tone: "idle", detail: "" };
   }
+  if (st.waiting) return { word: st.waiting.kind === "browser" ? "Waiting for a browser" : "AI fallback", tone: "busy", detail: st.waiting.message };
   if (st.offers) return { word: "Reading prices", tone: "busy", detail: plural(st.offers, "offer") + " so far" };
   if (st.started) return { word: "Searching", tone: "busy", detail: "" };
   return { word: "Starting", tone: "busy", detail: "Opening a browser" };

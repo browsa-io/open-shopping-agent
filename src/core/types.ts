@@ -270,6 +270,11 @@ export type RunEvent =
   /** approval_source and mandate (added in 0.2.0): how the order was approved, and the up-front limits when it was a mandate. */
   | { type: "order_state"; store: StoreId; domain?: string; state: OrderState; at: string; approvalId?: string; orderId?: string; orderUrl?: string; total?: Money; message?: string; approval_source?: ApprovalSource; mandate?: MandateLimits }
   | { type: "log"; store?: StoreId; message: string }
+  /**
+   * Added in 0.2.3: the store waits for its AI fallback ("ai_fallback") or for a free browser for
+   * it ("browser"); without `waiting` the wait is over. `message` is the card's line.
+   */
+  | { type: "store_waiting"; store: StoreId; domain?: string; waiting?: "ai_fallback" | "browser"; message?: string }
   | { type: "done"; summary: RunSummary };
 
 export type Stage = "search" | "product" | "options" | "cart" | "checkout" | "place_order";

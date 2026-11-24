@@ -110,7 +110,7 @@ General browser agents can do anything in a browser, so you write the shopping s
 
 **Same item across stores.** Product pages are read for the GTIN (UPC/EAN), brand and manufacturer part number (JSON-LD, the store's own data and spec tables). Relative to the item you chose, each offer is labelled **Exact match** (same GTIN, or same brand and part number) or **Similar** (not proven the same). Similar offers are never dropped; "Same item only" in the web app hides them if you want.
 
-**The product, not its case.** When you name a product ("AirPods Pro 3"), offers for its accessories ("ESR for AirPods Pro 3 Case", "Replacement Ear Tips for AirPods Pro 3", "iPhone 17 Pro Case") are left out of the pick when some offer is the product itself, and the pick reason counts them ("4 accessories (not the item itself)"). With a model number in the query, offers for another model ("AirPods 5", "AirPods Pro (1/2 Generation)") and offers under 40% of the model's median price are left out the same way. They stay in the list. A search for an accessory ("airpods pro 3 case", "usb-c hub") leaves nothing out.
+**The product, not its case.** When you name a product ("AirPods Pro 3"), offers for its accessories ("ESR for AirPods Pro 3 Case", "Replacement Ear Tips for AirPods Pro 3", "iPhone 17 Pro Case") are left out of the pick when some offer is the product itself, and the pick reason counts them ("4 accessories (not the item itself)"). With a model number in the query, offers for another product ("JBL Live Beam 3", "Apple EarPods") or another model ("AirPods 5", "AirPods Pro (1/2 Generation)"), matched on whole words, and offers under 40% of the model's median price are left out the same way. They stay in the list. A search for an accessory ("airpods pro 3 case", "usb-c hub") leaves nothing out.
 
 **Price per unit.** When a title or the store says what is in the pack ("Pack of 24", "2 x 1L", "500 ml", "12 Count (Pack of 2)"), the offer shows a comparable unit price such as "$0.42 / count". Titles with two sizes, ranges or unrelated counts get none instead of a guess. It is a sort you pick ("Unit price") and only breaks exact ties in the ranking; the default ranking does not change.
 
@@ -251,7 +251,7 @@ export OSA_LLM_API_KEY=your_model_key
 export OSA_LLM_BASE_URL=https://.../v1         # optional, any OpenAI-compatible API
 ```
 
-On Browsa the AI fallback runs as a Browsa task with your key (no markup), or with a saved Browsa key (`OSA_AI_LLM_KEY_ID`); without a key it uses Browsa's hosted model. On your Chrome or a CDP browser the fallback is a small loop on the store's own page: it reads the page, asks your model for one action, does it, and stops after 8 steps. It never clicks a final order or pay button, never signs in and never types card details. Without any model key, requests are read by a rule parser and the AI fallback is off on non-Browsa browsers (the run says so once).
+On Browsa the AI fallback runs as a Browsa task with your key (no markup), or with a saved Browsa key (`OSA_AI_LLM_KEY_ID`); without a key it uses Browsa's hosted model. On your Chrome or a CDP browser the fallback is a small loop on the store's own page: it reads the page, asks your model for one action, does it, and stops after 8 steps. It never clicks a final order or pay button, never signs in and never types card details. The fallback gets its own time (150 s, `OSA_AI_FALLBACK_MS`), not what is left of the store's step; when that runs out or you stop the run, its Browsa task is cancelled so it stops charging. Without any model key, requests are read by a rule parser and the AI fallback is off on non-Browsa browsers (the run says so once).
 
 Keys stay on your machine: the environment, or `.osa/config.json` (mode 0600) when saved in Settings. The web app only ever gets masked values. Settings has a Test key button.
 
@@ -273,6 +273,8 @@ Amazon, Target and Best Buy block Browsa's default exit, which is not in the US 
 3. Else the default exit, with a warning naming the stores that may block.
 
 Walmart, eBay and Shopify stores work on the default exit. The exit shows on each store card and in the CLI. `OSA_US_EXIT=0` turns step 2 off.
+
+When a store refuses the address at search (Amazon's "Sorry! Something went wrong" page, Access Denied, a 403), the agent stops that browser and searches again in a fresh one on a new address of the same exit, once per store per run (`OSA_FRESH_EXITS=0` turns it off, `2` allows two). This needs Browsa's fresh browsers: your own proxy, a saved profile, your own Chrome and CDP browsers keep their address.
 
 ## Price and stock watches
 

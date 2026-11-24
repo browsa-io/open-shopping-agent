@@ -9,13 +9,13 @@
     "id": "1462515749"
   },
   "websiteUrl": "https://github.com/browsa-io/open-shopping-agent",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "open-shopping-agent",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

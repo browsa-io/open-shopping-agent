@@ -8,8 +8,8 @@
 
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import type { StoreId } from "../types.js";
-import type { StoreContext } from "../../stores/adapter.js";
-import type { ExitInfo } from "../browsers.js";
+import type { AiTaskOptions, StoreContext } from "../../stores/adapter.js";
+import { eitherSignal, type ExitInfo } from "../browsers.js";
 import type { LLMConfig, JSONRequest } from "../llm.js";
 import { runLocalAgent } from "./agent-loop.js";
 import { CapabilityMissing, takeOverText, type BrowserCapabilities, type ProviderBrowser, type ProviderId } from "./types.js";
@@ -66,7 +66,7 @@ export function buildProviderBrowser(o: BuildOptions): ProviderBrowser {
         store: o.store, domain, zip: extra.zip, agentId: o.agentId, signal: extra.signal, log,
         capabilities: caps,
         get page() { return page; },
-        aiTask: async <T = unknown>(task: string, opts: { schema?: object; maxSteps?: number; startUrl?: string; sameBrowser?: boolean } = {}): Promise<T> => {
+        aiTask: async <T = unknown>(task: string, opts: AiTaskOptions = {}): Promise<T> => {
           if (!caps.aiFallback || !o.llm) {
             throw new CapabilityMissing("aiFallback", o.provider,
               "no AI fallback on this browser: bring your own model key (OSA_LLM and OSA_LLM_API_KEY) or run with Browsa");
@@ -81,7 +81,7 @@ export function buildProviderBrowser(o: BuildOptions): ProviderBrowser {
             log(`AI fallback with your model (${o.llm.provider}:${o.llm.model}): ${task.slice(0, 120)}`);
             const r = await runLocalAgent(page, task, {
               llm: o.llm, schema: opts.schema, maxSteps: Math.min(opts.maxSteps ?? o.aiMaxSteps ?? 8, o.aiMaxSteps ?? 8),
-              log, signal: extra.signal, complete: o.complete,
+              log, signal: opts.signal ? eitherSignal(extra.signal, opts.signal) : extra.signal, complete: o.complete,
             });
             return r.result as T;
           } finally {
@@ -125,3 +125,4 @@ function isClosed(p: Page): boolean {
 function safeUrl(page: Page): string {
   try { return page.url(); } catch { return ""; }
 }
+

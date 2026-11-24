@@ -24,9 +24,9 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
-import { Client } from "browsa";
+import { Client, type Job } from "browsa";
 import type { StoreId } from "./types.js";
-import type { StoreContext } from "../stores/adapter.js";
+import type { AiTaskOptions, StoreContext } from "../stores/adapter.js";
 import { STORE_NAMES } from "../stores/index.js";
 import { extractJSON } from "./llm.js";
 import type { SpendEvent } from "./credits.js";
@@ -37,7 +37,7 @@ export type BrowserMode = "auto" | "persistent" | "burner" | "session";
 export type BrowsaClient = Pick<Client,
   "createAgent" | "getAgent" | "destroyAgent" | "openSession" | "createLiveLink" | "runTask" | "createTask" |
   "waitForJob" | "createSession" | "runMessage" | "stopSession" | "credits" | "listIdentities">
-  & Partial<Pick<Client, "proxyNetwork" | "listLedger">>;
+  & Partial<Pick<Client, "proxyNetwork" | "listLedger" | "cancelJob">>;
 
 /** Stores that block Browsa's default exit (measured 2026-11-18) and get a US exit when one is available. */
 export const US_EXIT_STORES: readonly StoreId[] = ["amazon", "target", "bestbuy"];
@@ -77,7 +77,9 @@ export function proxyFromText(text: string | undefined | null): Record<string, u
 export const DATA_SAVER_BLOCKED = [
   "*.jpg*", "*.jpeg*", "*.png*", "*.gif*", "*.webp*", "*.avif*", "*.svg*", "*.ico*", "*.mp4*", "*.webm*", "*.m3u8*",
   "*.woff*", "*.woff2*", "*.ttf*", "*.otf*",
-  "*m.media-amazon.com/images*", "*i5.walmartimages.com*", "*i.ebayimg.com*", "*pisces.bbystatic.com/image2*", "*target.scene7.com*",
+  // Not "*m.media-amazon.com/images*": Amazon serves its CSS and JS from that path too (it blocked
+  // Amazon's stylesheets and the page drew as raw text, 2026-11-24). Its photos are caught above.
+  "*i5.walmartimages.com*", "*i.ebayimg.com*", "*pisces.bbystatic.com/image2*", "*target.scene7.com*",
   "*doubleclick.net*", "*googlesyndication.com*", "*googleadservices.com*", "*google-analytics.com*", "*googletagmanager.com*",
   "*facebook.net*", "*facebook.com/tr*", "*bat.bing.com*", "*criteo*", "*adsafeprotected.com*", "*contentsquare.net*",
   "*tiktok*", "*pinterest*", "*snapchat*", "*quantummetric*", "*clarity.ms*", "*adtrafficquality*", "*amazon-adsystem.com*",
@@ -149,10 +151,20 @@ export interface StoreBrowser {
   page: Page;
   /** The exit this browser uses (optional for custom openBrowser hooks). */
   exit?: ExitInfo;
+  /**
+   * True when a fresh browser for this store gets a new exit address: a fresh Phantom browser on
+   * one of Browsa's exits. Unset for a saved profile, your own proxy, your own Chrome or a CDP browser.
+   */
+  freshAddress?: boolean;
   /** Build a StoreContext for one domain on this browser (Shopify domains share one browser). */
   context(domain: string, extra: { zip?: string; signal: AbortSignal; log?: (m: string) => void }): StoreContext;
   /** Stop the browser (a saved identity is kept). Safe to call twice. */
   close(): Promise<void>;
+  /**
+   * True once the browser is stopped (added in 0.2.3): close() ran, or the pool stopped it to free
+   * a browser slot for an AI fallback task that runs in its own browser.
+   */
+  readonly closed?: boolean;
 }
 
 interface SavedAgent { agentId: string; persona: string; createdAt: string; exit?: ExitKind }
@@ -193,6 +205,8 @@ export class BrowserPool {
   private waiters: (() => void)[] = [];
   /** Stores that already got a second residential browser after a tunnel failure at open. */
   private tunnelRetried = new Set<StoreId>();
+  /** Opens waiting right now for a free browser slot (Browsa answered 429). */
+  private slotWaiting = 0;
 
   constructor(opts: BrowserPoolOptions) {
     if (!opts.apiKey && !opts.client) throw new Error("BROWSA_API_KEY is missing: get a key at https://app.browsa.io/dashboard/keys");
@@ -274,6 +288,16 @@ export class BrowserPool {
 
   /** True when this pool caps the browsers open at once (OSA_MAX_BROWSERS). */
   get capped(): boolean { return (this.o.maxBrowsers ?? 0) > 0; }
+
+  /**
+   * True when every browser slot is in use right now: another browser of this run is waiting for
+   * a slot (Browsa answered 429), or the pool's cap (maxBrowsers) is reached. A new browser (an AI
+   * task's own browser too) would wait behind them.
+   */
+  slotsFull(): boolean {
+    const max = this.o.maxBrowsers ?? 0;
+    return this.slotWaiting > 0 || (max > 0 && this.held >= max);
+  }
 
   /** Open the store's browser and attach Playwright; with maxBrowsers, wait for a free place first. */
   async openStore(store: StoreId, domain = defaultDomain(store)): Promise<StoreBrowser> {
@@ -393,23 +417,30 @@ export class BrowserPool {
 
     const sb: StoreBrowser = {
       store, agentId, mode, exit,
+      freshAddress: mode !== "persistent" && exit.kind !== "own",
       get page() { return page; },
+      get closed() { return closed; },
       context(dom, extra): StoreContext {
         const log = extra.log ?? ((m: string) => pool.log(store, m));
         return {
           store, domain: dom, zip: extra.zip, agentId, signal: extra.signal, log,
           get page() { return page; },
-          aiTask: async <T = unknown>(task: string, opts: { schema?: object; maxSteps?: number; startUrl?: string; sameBrowser?: boolean } = {}): Promise<T> => {
+          aiTask: async <T = unknown>(task: string, opts: AiTaskOptions = {}): Promise<T> => {
             if (running) throw new Error("an AI task is already running on this browser");
-            if (extra.signal.aborted) throw new Error("run stopped");
+            if (extra.signal.aborted || opts.signal?.aborted) throw new Error("run stopped");
+            if (closed) throw new Error("the store's browser is closed");
             if (opts.sameBrowser && mode === "burner") {
               // A standalone task has its own browser and cart: it cannot act on ours. Do not pay for it.
               throw new Error("the AI fallback cannot act on this fresh browser's page or cart (it would run in a separate browser); use saved store profiles (persistent) or session browsers for that");
             }
             running = true;
             try {
-              const r = await pool.runAiTask(store, mode, { agentId, sessionId, page, browser, proxy: exitProxy, exit }, task, opts, log,
-                (b, p) => { browser = b; page = p; });
+              const r = await pool.runAiTask(store, mode, { agentId, sessionId, page, browser, proxy: exitProxy, exit }, task,
+                { ...opts, signal: opts.signal ? eitherSignal(extra.signal, opts.signal) : extra.signal }, log,
+                (b, p) => { browser = b; page = p; },
+                // The task runs in its own browser; this one is replaced by it anyway. Stopping it
+                // frees a browser slot so the task does not wait behind the slot limit.
+                async (why) => { if (closed) return; log(why); await sb.close(); });
               return r.result as T;
             } finally {
               running = false;
@@ -548,26 +579,32 @@ export class BrowserPool {
   private async waitForSlot<T>(store: StoreId, create: () => Promise<T>): Promise<T> {
     const until = Date.now() + (this.o.slotWaitMs ?? 240_000);
     let starts = 0;
+    let waiting = false; // counted in slotWaiting from the first 429 until this open ends
     const signal = this.o.signal;
-    for (let i = 0; ; i++) {
-      stopIfAborted(signal);
-      try {
-        return await create();
-      } catch (e) {
-        if (signal?.aborted) throw e;
-        if (isStartFailure(e) && starts < 5 && !isSlotsBusy(e)) {
-          // Browsa could not start the browser (refunded, "try again"): wait a little and ask again.
-          starts++;
-          this.log(store, `Browsa could not start the browser (${String((e as Error)?.message ?? e).slice(0, 80)}); trying again`);
-          await sleep(this.o.startRetryMs ?? 6000 * starts);
-          continue;
+    try {
+      for (let i = 0; ; i++) {
+        stopIfAborted(signal);
+        try {
+          return await create();
+        } catch (e) {
+          if (signal?.aborted) throw e;
+          if (isStartFailure(e) && starts < 5 && !isSlotsBusy(e)) {
+            // Browsa could not start the browser (refunded, "try again"): wait a little and ask again.
+            starts++;
+            this.log(store, `Browsa could not start the browser (${String((e as Error)?.message ?? e).slice(0, 80)}); trying again`);
+            await sleep(this.o.startRetryMs ?? 6000 * starts);
+            continue;
+          }
+          if (!isSlotsBusy(e) || Date.now() >= until) throw e;
+          this.slotsShort = true;
+          if (!waiting) { waiting = true; this.slotWaiting++; }
+          const waitS = Math.min(60, Math.max(1, Number((e as { retryAfter?: number }).retryAfter) || 20));
+          if (i === 0) this.log(store, `all browser slots are in use; waiting for one (up to ${Math.round((until - Date.now()) / 1000)} s)`);
+          await sleep(Math.min(waitS * 1000, Math.max(0, until - Date.now())), signal);
         }
-        if (!isSlotsBusy(e) || Date.now() >= until) throw e;
-        this.slotsShort = true;
-        const waitS = Math.min(60, Math.max(1, Number((e as { retryAfter?: number }).retryAfter) || 20));
-        if (i === 0) this.log(store, `all browser slots are in use; waiting for one (up to ${Math.round((until - Date.now()) / 1000)} s)`);
-        await sleep(Math.min(waitS * 1000, Math.max(0, until - Date.now())), signal);
       }
+    } finally {
+      if (waiting) this.slotWaiting--;
     }
   }
 
@@ -619,9 +656,11 @@ export class BrowserPool {
   private async runAiTask(
     store: StoreId, mode: Exclude<BrowserMode, "auto">,
     cur: { agentId: string; sessionId?: string; page: Page; browser: Browser; proxy?: Record<string, unknown>; exit?: ExitInfo },
-    task: string, opts: { schema?: object; maxSteps?: number; startUrl?: string }, log: (m: string) => void,
+    task: string, opts: AiTaskOptions, log: (m: string) => void,
     swap: (browser: Browser, page: Page) => void,
+    stopOwn?: (why: string) => Promise<void>,
   ): Promise<{ result: unknown }> {
+    if (opts.signal?.aborted) throw new Error("run stopped");
     const cap = await this.spend(this.o.aiMaxCredits, `${store} AI task`);
     const startUrl = opts.startUrl ?? safeUrl(cur.page);
     const text = aiTaskText(task, opts.schema);
@@ -655,16 +694,23 @@ export class BrowserPool {
       // agents"), so on a fresh browser the AI task is a standalone Browsa task: its own browser on
       // the same exit, starting at the current page. Its cookies and cart are separate from ours.
       log("this browser keeps no profile, so the AI task runs in its own browser (separate cookies and cart)");
-      let job: Awaited<ReturnType<BrowsaClient["runTask"]>>;
+      // The task's browser counts against the cap like any other.
+      const full = this.slotsFull();
+      const place = this.capped;
+      if (place) this.held++;
       try {
-        job = await this.client.runTask({
-          task: text, ...llm, maxCredits: cap, maxSteps, initialUrl: startUrl, country: this.o.country, timeoutMs: 600_000,
+        // Every slot is taken: stop this store's browser first (the task replaces it) instead of
+        // queueing the task behind the slot limit.
+        if (stopOwn && full && !opts.keepBrowser) await stopOwn("all browser slots are in use; stopped this store's browser so the AI fallback gets a slot (a fresh one opens if needed)");
+        const job = await this.runCancellable(store, {
+          task: text, ...llm, maxCredits: cap, maxSteps, initialUrl: startUrl, country: this.o.country,
           ...(cur.proxy ? { proxy: cur.proxy } : {}),
-        } as never);
-      } catch (e) { failed(e); throw e; }
-      tracked(job);
-      logJob(log, job);
-      return { result: jobResult(job) };
+        }, cap, opts, log, failed, tracked, opts.keepBrowser ? undefined : stopOwn);
+        logJob(log, job);
+        return { result: jobResult(job) };
+      } finally {
+        if (place) this.releasePlace();
+      }
     }
     // persistent: the task opens its own session on the identity, which stops ours. Disconnect,
     // save the cookies, run the task, then attach to the browser again.
@@ -673,12 +719,10 @@ export class BrowserPool {
     let job: Awaited<ReturnType<BrowsaClient["runTask"]>> | undefined;
     let err: unknown;
     try {
-      job = await this.client.runTask({ task: text, ...llm, maxCredits: cap, maxSteps, initialUrl: startUrl, agentId: cur.agentId, timeoutMs: 600_000 } as never);
+      job = await this.runCancellable(store, { task: text, ...llm, maxCredits: cap, maxSteps, initialUrl: startUrl, agentId: cur.agentId }, cap, opts, log, failed, tracked);
     } catch (e) {
       err = e;
-      failed(e);
     }
-    if (job) tracked(job);
     // Attach again whatever happened, so the adapter keeps a working page.
     const re = await this.reattachIdentity(store, cur.agentId);
     if (cur.exit) await this.saveData(re.browser, cur.exit, store, true);
@@ -686,6 +730,81 @@ export class BrowserPool {
     if (err) throw err;
     logJob(log, job!);
     return { result: jobResult(job!) };
+  }
+
+  /**
+   * Run a Browsa task and wait for it, cancellable: when `opts.signal` aborts (the store's time
+   * ran out, the store was stopped, the run was stopped) the task is cancelled on Browsa so it
+   * stops charging, and its result is never used. A task that still finishes is logged as too
+   * late, with its credits, never dropped silently. Tells `opts.onStatus` when the task waits for
+   * a free browser ("queued" after the first wait) and when it runs. A client without createTask
+   * and cancelJob runs the task with runTask (not cancellable).
+   */
+  private async runCancellable(
+    store: StoreId, create: Record<string, unknown>, cap: number, opts: AiTaskOptions, log: (m: string) => void,
+    failed: (e: unknown) => void, tracked: (job: Job) => void, stopOwn?: (why: string) => Promise<void>,
+  ): Promise<Job> {
+    const c = this.client;
+    const signal = opts.signal;
+    if (typeof c.cancelJob !== "function" || typeof c.createTask !== "function" || typeof c.waitForJob !== "function") {
+      let job: Job;
+      try { job = await c.runTask({ ...create, timeoutMs: 600_000 } as never); } catch (e) { failed(e); throw e; }
+      tracked(job);
+      return job;
+    }
+    if (signal?.aborted) { this.track({ type: "released", reserved: cap }); throw new Error("run stopped"); }
+    let first: Job;
+    try { first = await c.createTask(create as never); } catch (e) { failed(e); throw e; }
+    const id = String(first.id ?? "");
+    // Known from now on: the run counts this task's charges, whatever happens next.
+    this.track({ type: "job", id, reserved: cap, agentIds: first.agentId ? [first.agentId] : [], done: false });
+    let said: "queued" | "running" | undefined;
+    if (first.status === "running") { said = "running"; opts.onStatus?.("running"); }
+    let checked = false;
+    const progress = (j: Job) => {
+      if (j.status === "queued" && !checked) {
+        // Still queued after the first wait: Browsa has no free browser slot for it.
+        checked = true;
+        if (said !== "queued") { said = "queued"; opts.onStatus?.("queued"); }
+        log("the AI task is waiting for a free browser slot");
+        if (stopOwn) void stopOwn("the AI task is waiting for a free browser slot; stopped this store's browser to free one").catch(() => {});
+      } else if (j.status === "running" && said !== "running") {
+        said = "running";
+        opts.onStatus?.("running");
+      }
+    };
+    let gaveUp = false;
+    const ended: Promise<Job | undefined> = c.waitForJob(id, { timeoutMs: 600_000, onProgress: progress }).then((j) => {
+      tracked(j);
+      if (gaveUp && j.status === "completed") {
+        log(`AI task ${id} finished after ${STORE_NAMES[store]} had given up on it; its result arrived too late and was not used${typeof j.creditsCharged === "number" ? ` (${j.creditsCharged} credits)` : ""}`);
+      }
+      return j;
+    }, (e) => { if (!gaveUp) throw e; return undefined; });
+    if (!signal) return (await ended)!;
+    return new Promise<Job>((resolve, reject) => {
+      const onAbort = () => {
+        gaveUp = true;
+        void (async () => {
+          try {
+            await c.cancelJob!(id);
+            log(`cancelled the AI task ${id} (no result was used)`);
+          } catch (e) {
+            log(`cancelling the AI task ${id} failed (${String((e as Error)?.message ?? e).slice(0, 120)}); its result will not be used`);
+          }
+        })();
+        reject(new Error("the AI task was cancelled (the store's time ran out or the run stopped); no result was used"));
+      };
+      if (signal.aborted) return onAbort();
+      signal.addEventListener("abort", onAbort, { once: true });
+      ended.then((j) => {
+        signal.removeEventListener("abort", onAbort);
+        if (!gaveUp && j) resolve(j);
+      }, (e) => {
+        signal.removeEventListener("abort", onAbort);
+        if (!gaveUp) reject(e);
+      });
+    });
   }
 
   /** Open a new session on a saved profile and attach to it. */
@@ -841,4 +960,14 @@ const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((r) => {
 
 function stopIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new Error("run stopped");
+}
+
+/** A signal that aborts when either one does (the store's stop, or the engine's cancel of one AI task). */
+export function eitherSignal(a: AbortSignal, b: AbortSignal): AbortSignal {
+  if (a.aborted || b.aborted) return AbortSignal.abort();
+  const c = new AbortController();
+  const stop = () => c.abort();
+  a.addEventListener("abort", stop, { once: true });
+  b.addEventListener("abort", stop, { once: true });
+  return c.signal;
 }

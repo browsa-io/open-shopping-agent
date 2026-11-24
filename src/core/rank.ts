@@ -57,7 +57,9 @@ export const ACCESSORY_REASON = "accessory, not the item itself";
 export const MODEL_REASON = "another model, not the item itself";
 /** The exclusion reason of an offer priced far below the named model's offers (see scoreOffers). */
 export const PRICE_REASON = "priced far below the item, not the item itself";
-const NOT_THE_ITEM = new Set([ACCESSORY_REASON, MODEL_REASON, PRICE_REASON]);
+/** The exclusion reason of an offer without the product's name ("JBL Live Beam 3" for "AirPods Pro 3"). */
+export const PRODUCT_REASON = "another product, not the item itself";
+const NOT_THE_ITEM = new Set([ACCESSORY_REASON, MODEL_REASON, PRICE_REASON, PRODUCT_REASON]);
 const MEMBERSHIP = /\b(prime membership|amazon prime|walmart\+|walmart plus|membership|free trial|trial offer|subscription box|gift card)\b/i;
 
 // ---------- accessories ----------
@@ -167,12 +169,57 @@ function hasWord(titleWords: Set<string>, flat: string, w: string): boolean {
   return false;
 }
 
-/** True when the title names every model word of the query (see modelTokens). */
+/**
+ * The query's product name: the word before its model number, past "pro", "max"... ("airpods" in
+ * "AirPods Pro 3", "iphone" in "iPhone 17 Pro Max", "beam" in "JBL Live Beam 3"); else the word after
+ * the model. undefined without a model number or when the query is only a model ("ps5").
+ */
+export function productName(query: string): string | undefined {
+  const ws = words(query);
+  const tokens = new Set(modelTokens(query));
+  const first = ws.findIndex((w) => /\d/.test(w) && tokens.has(w));
+  if (first < 0) return undefined;
+  const isName = (w: string | undefined) => !!w && !tokens.has(w) && !MODEL_WORDS.has(w) && !STOP.has(w) && !/\d/.test(w) && !UNIT.test(w);
+  for (let i = first - 1; i >= 0; i--) {
+    if (isName(ws[i])) return ws[i];
+    if (!MODEL_WORDS.has(ws[i])) break;
+  }
+  for (let i = first + 1; i < ws.length; i++) {
+    if (isName(ws[i])) return ws[i];
+    if (!tokens.has(ws[i])) break;
+  }
+  return undefined;
+}
+
+/**
+ * The title's whole words for matching a product: its words, their letter and number runs ("pro3"
+ * -> "pro", "3"; "3rd" -> "3"), and two neighbours joined ("Air Pods" -> "airpods"). Never a part of
+ * a word: "pro" is not in "waterproof".
+ */
+function wholeWords(title: string): Set<string> {
+  const ws = words(title);
+  const out = new Set(ws);
+  for (const w of ws) for (const p of w.match(/\p{L}+|\p{N}+/gu) ?? []) out.add(p);
+  for (let i = 0; i + 1 < ws.length; i++) out.add(ws[i] + ws[i + 1]);
+  return out;
+}
+
+function hasWholeWord(parts: Set<string>, w: string): boolean {
+  if (parts.has(w) || parts.has(w.replace(/s$/, "")) || parts.has(`${w}s`)) return true;
+  return /^\d+$/.test(w) && !!ORDINALS[Number(w)] && parts.has(ORDINALS[Number(w)]);
+}
+
+/** True when the title names every model word of the query as a whole word (see modelTokens). */
 export function hasModel(tokens: string[], title: string): boolean {
   if (!tokens.length) return true;
-  const tw = new Set(words(title));
-  const flat = squash(title);
-  return tokens.every((t) => hasWord(tw, flat, t));
+  const parts = wholeWords(title);
+  return tokens.every((t) => hasWholeWord(parts, t));
+}
+
+/** True when the title names the query's product name as a whole word (see productName). */
+export function hasProductName(query: string, title: string): boolean {
+  const name = productName(query);
+  return !name || hasWholeWord(wholeWords(title), name);
 }
 
 /** Delivered total for `quantity` units: unit price x quantity + shipping (unknown shipping counts as 0). */
@@ -280,19 +327,25 @@ export function scoreOffers(item: ItemRequest, offers: Offer[], opts: RankOption
   // accessory, and only when some offer is the item itself; otherwise nothing changes.
   //   - Accessories (its case, charger, cover) are left out when some offer is not an accessory
   //     and names the item.
-  //   - With a model in the query ("AirPods Pro 3"), offers without it ("AirPods 5", "AirPods Pro
-  //     (1/2 Generation)", "EarPods") are left out when some offer names the model, and so are offers
-  //     under 40% of the median price of two or more offers that name it (a $10 "case" whose title
-  //     reads like the product).
+  //   - With a model in the query ("AirPods Pro 3"), when some offer that is not an accessory
+  //     names the product and the model as whole words, offers without the product's name ("JBL
+  //     Live Beam 3", "Apple EarPods") are left out as other products, offers without the model
+  //     ("AirPods 5", "AirPods Pro (1/2 Generation)") as other models, and offers under 40% of the
+  //     median price of two or more such offers (a $10 "case" whose title reads like the product).
+  //     Queries without a model number ("usb c hub hdmi", "paper plates") are never narrowed.
   if (!asksForAccessory(item.query)) {
     const open = all.filter((s) => !s.excluded);
     const acc = new Set(open.filter((s) => accessoryOf(item.query, s.offer.title)));
     const products = open.filter((s) => !acc.has(s) && s.titleMatch >= 0.6);
     if (acc.size && products.length) for (const s of acc) s.excluded = ACCESSORY_REASON;
     const tokens = modelTokens(item.query);
-    const exact = products.filter((s) => hasModel(tokens, s.offer.title));
+    const exact = open.filter((s) => !acc.has(s) && hasModel(tokens, s.offer.title) && hasProductName(item.query, s.offer.title));
     if (tokens.length && exact.length) {
-      for (const s of open) if (!s.excluded && !hasModel(tokens, s.offer.title)) s.excluded = MODEL_REASON;
+      for (const s of open) {
+        if (s.excluded) continue;
+        if (!hasProductName(item.query, s.offer.title)) s.excluded = PRODUCT_REASON;
+        else if (!hasModel(tokens, s.offer.title)) s.excluded = MODEL_REASON;
+      }
       if (exact.length >= 2) {
         const prices = exact.map((s) => s.offer.price.cents).sort((a, b) => a - b);
         const mid = prices.length >> 1;
@@ -402,12 +455,14 @@ export function leftOutText(all: ScoredOffer[]): string {
     if (why === ACCESSORY_REASON) { counts.set("accessory", (counts.get("accessory") ?? 0) + 1); continue; }
     if (why === MODEL_REASON) { counts.set("model", (counts.get("model") ?? 0) + 1); continue; }
     if (why === PRICE_REASON) { counts.set("price", (counts.get("price") ?? 0) + 1); continue; }
+    if (why === PRODUCT_REASON) { counts.set("product", (counts.get("product") ?? 0) + 1); continue; }
     counts.set(why, (counts.get(why) ?? 0) + 1);
   }
   const groups = [...counts].sort((a, b) => b[1] - a[1]).map(([why, n]) =>
     why === "accessory" ? `${n} ${n === 1 ? "accessory" : "accessories"} (not the item itself)`
     : why === "model" ? `${n} ${n === 1 ? "other model" : "other models"}`
     : why === "price" ? `${n} priced far below the item`
+    : why === "product" ? `${n} ${n === 1 ? "other product" : "other products"}`
     : `${n} ${why}`);
   return `${out.length} left out: ${groups.join(", ")}`;
 }

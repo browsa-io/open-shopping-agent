@@ -9,6 +9,7 @@ import type { Browser } from "playwright-core";
 import { BrowserPool, exitWarningText, proxyDisplay, proxyFromText, type BrowsaClient } from "../../src/core/browsers.js";
 import { ShoppingAgent } from "../../src/core/engine.js";
 import type { RunEvent } from "../../src/core/types.js";
+import { StoreRefusedError } from "../../src/stores/util.js";
 import { FakeAdapter, offer } from "./fake-adapter.js";
 
 interface FakeOpts { network?: { enabled: boolean; tiers: { network: string; countries: string[] }[] } | "missing" | "error"; refuseNetwork?: boolean }
@@ -419,4 +420,55 @@ test("engine: with browser slots short, a fresh browser stops after its search a
   assert.equal(c.calls.filter((x) => x.fn === "createAgent").length, 2);
   await run.close();
   assert.equal(c.calls.filter((x) => x.fn === "destroyAgent").length, 2);
+});
+
+test("freshAddress: Browsa's fresh browsers can get a new address; your own proxy and saved profiles cannot", async () => {
+  const { p } = await pool({});
+  const a = await p.openStore("amazon");
+  assert.equal(a.exit?.kind, "residential_us");
+  assert.equal(a.freshAddress, true);
+  await a.close();
+  const w = await p.openStore("walmart");
+  assert.equal(w.freshAddress, true);
+  await w.close();
+  const own = await pool({}, { proxy: { server: "http://u:p@1.2.3.4:8080" } });
+  const o = await own.p.openStore("amazon");
+  assert.equal(o.exit?.kind, "own");
+  assert.equal(o.freshAddress, false);
+  await o.close();
+  const saved = await pool({}, { mode: "persistent" });
+  const s = await saved.p.openStore("amazon");
+  assert.equal(s.freshAddress, false);
+});
+
+test("engine on Browsa: Amazon refuses the residential address -> destroy it, open a fresh residential browser, search again", async () => {
+  const c = fakeClient({});
+  const events: RunEvent[] = [];
+  const seen: string[] = [];
+  class Refusing extends FakeAdapter {
+    override async search(ctx: Parameters<FakeAdapter["search"]>[0], item: Parameters<FakeAdapter["search"]>[1], limit: number) {
+      seen.push(ctx.agentId);
+      if (seen.length === 1) throw new StoreRefusedError("Amazon refused this browser: it shows its error page (\"Sorry! Something went wrong\") on this exit address. Try again later, or from another exit address.");
+      return super.search(ctx, item, limit);
+    }
+  }
+  const agent = new ShoppingAgent({
+    llm: false, client: c.client, apiKey: "agt_test", watchLinks: false, screenshots: false, history: false, browserMode: "burner",
+    dataDir: await mkdtemp(join(tmpdir(), "osa-xf-")),
+    adapters: { amazon: new Refusing("amazon", { catalog: { airpods: [offer("amazon", "Apple AirPods Pro 3", 219)] } }) },
+  });
+  const make = agent.makePool.bind(agent);
+  agent.makePool = (spend, log) => {
+    const pl = make(spend, log)!;
+    (pl as unknown as { o: { connect: typeof connect } }).o.connect = connect;
+    return pl;
+  };
+  const run = await agent.run("AirPods Pro 3 on amazon", { onEvent: (e) => events.push(e), until: "picks" });
+  assert.deepEqual(seen, ["agt_1", "agt_2"]);
+  const fns = c.calls.filter((x) => x.fn === "createAgent" || x.fn === "destroyAgent").map((x) => (x.fn === "destroyAgent" ? `destroy ${x.args.id}` : x.fn));
+  assert.deepEqual(fns.slice(0, 3), ["createAgent", "destroy agt_1", "createAgent"], "the refused browser is stopped before the fresh one opens");
+  for (const x of c.calls.filter((x) => x.fn === "createAgent")) assert.deepEqual(x.args.proxy, { network: "residential", country: "us" }, "same exit kind");
+  assert.ok(events.some((e) => e.type === "log" && e.message === "Amazon refused this address (Browsa residential (US)); trying a fresh one"));
+  assert.equal(run.picks.length, 1);
+  await run.close();
 });
