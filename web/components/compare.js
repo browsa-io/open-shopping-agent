@@ -206,7 +206,7 @@ function itemSection(item, planItem, ctx) {
   const excluded = new Set(planItem.excluded);
   const visible = filterOffers(all, view.filters, planItem.offer).filter((o) => !excluded.has(o.store));
   const pick = model.picks?.find((p) => p.itemId === item.id);
-  const rows = sortOffers(visible, view.sort, { chosenKey: planItem.offer ? offerKey(planItem.offer) : undefined, alternatives: pick?.alternatives });
+  const rows = sortOffers(visible, view.sort, { chosenKey: planItem.offer ? offerKey(planItem.offer) : undefined, alternatives: pick?.alternatives, notTheItem: pick?.notTheItem });
   const open = ui.expanded.has(item.id);
   const limit = ctx.narrow ? PAGE.narrow : PAGE.wide;
   const shown = open ? rows : rows.slice(0, limit);

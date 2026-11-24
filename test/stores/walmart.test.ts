@@ -102,3 +102,12 @@ test("adapter shape and ids", () => {
   assert.equal(walmartIdFromUrl("https://www.walmart.com/ip/Sabrent-Hub/718006726?classType=REGULAR"), "718006726");
   assert.equal(walmartIdFromUrl("/ip/702801513"), "702801513");
 });
+
+test("search: (Open Box) and Restocked listings are used, not new", () => {
+  const html = fx("search-usb-c-hub.html");
+  const first = parseWalmartSearch(html, "item-1", NOW)[0];
+  const name = JSON.stringify(first.title).slice(1, -1);
+  const boxed = parseWalmartSearch(html.split(name).join(`(Open Box) ${name}`), "item-1", NOW).find((o) => o.productId === first.productId);
+  assert.equal(first.condition, "new");
+  assert.equal(boxed?.condition, "used");
+});

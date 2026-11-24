@@ -59,7 +59,20 @@ export const MODEL_REASON = "another model, not the item itself";
 export const PRICE_REASON = "priced far below the item, not the item itself";
 /** The exclusion reason of an offer without the product's name ("JBL Live Beam 3" for "AirPods Pro 3"). */
 export const PRODUCT_REASON = "another product, not the item itself";
-const NOT_THE_ITEM = new Set([ACCESSORY_REASON, MODEL_REASON, PRICE_REASON, PRODUCT_REASON]);
+/** The exclusion reason of a marketplace seller (eBay) with few ratings or a low positive share. */
+export const SELLER_REASON = "from a seller with under 100 ratings or under 97% positive";
+/** Marketplace sellers are trusted with at least this many ratings and this positive share. */
+const SELLER_MIN_RATINGS = 100;
+const SELLER_MIN_POSITIVE = 97;
+/** Left out as not the item (or not from a seller to buy it from): never the next best, listed last. */
+const NOT_THE_ITEM = new Set([ACCESSORY_REASON, MODEL_REASON, PRICE_REASON, PRODUCT_REASON, SELLER_REASON]);
+
+/** False for a marketplace listing (seller feedback known) from a new or poorly rated seller. */
+export function trustedSeller(o: Offer): boolean {
+  const n = o.raw?.sellerFeedbackCount, p = o.raw?.sellerPositivePercent;
+  if (typeof n !== "number" && typeof p !== "number") return true;
+  return (typeof n === "number" ? n : 0) >= SELLER_MIN_RATINGS && (typeof p === "number" ? p : 0) >= SELLER_MIN_POSITIVE;
+}
 const MEMBERSHIP = /\b(prime membership|amazon prime|walmart\+|walmart plus|membership|free trial|trial offer|subscription box|gift card)\b/i;
 
 // ---------- accessories ----------
@@ -199,7 +212,12 @@ export function productName(query: string): string | undefined {
 function wholeWords(title: string): Set<string> {
   const ws = words(title);
   const out = new Set(ws);
-  for (const w of ws) for (const p of w.match(/\p{L}+|\p{N}+/gu) ?? []) out.add(p);
+  // "3rd" -> "3", "pro3" -> "3"; never inside a part number ("MLWK3AM/A" is not model 3: three
+  // or more letter/number runs are kept whole).
+  for (const w of ws) {
+    const runs = w.match(/\p{L}+|\p{N}+/gu) ?? [];
+    if (runs.length <= 2) for (const p of runs) out.add(p);
+  }
   for (let i = 0; i + 1 < ws.length; i++) out.add(ws[i] + ws[i + 1]);
   return out;
 }
@@ -354,6 +372,13 @@ export function scoreOffers(item: ItemRequest, offers: Offer[], opts: RankOption
       }
     }
   }
+  // Marketplace sellers (eBay) with few ratings or under 97% positive are where fakes and "new"
+  // used items come from (seen live 2026-11-24: "AirPods Pro 3" at $85 from a 0-rating seller).
+  // Left out only when some other offer is still in.
+  {
+    const open = all.filter((s) => !s.excluded);
+    if (open.some((s) => trustedSeller(s.offer))) for (const s of open) if (!trustedSeller(s.offer)) s.excluded = SELLER_REASON;
+  }
   const pool = all.filter((s) => !s.excluded);
   if (!pool.length) return all.map((s) => ({ ...s, score: -1 }));
 
@@ -367,7 +392,8 @@ export function scoreOffers(item: ItemRequest, offers: Offer[], opts: RankOption
     const speed = s.days === undefined ? 0.35 : 1 / (1 + Math.max(0, s.days - (minDays ?? 0)) / 2);
     let score = w.price * price + w.rating * rating + w.match * s.titleMatch + w.speed * speed;
     if (s.offer.sponsored) score -= 0.05;
-    if (!used && s.offer.condition && s.offer.condition !== "new") score -= 0.15;
+    // Not known to be new: used/refurbished, or an Amazon card with no buy box (new and used offers mixed).
+    if (!used && ((s.offer.condition && s.offer.condition !== "new") || s.offer.raw?.noFeaturedOffer)) score -= 0.15;
     if (s.offer.shipping === undefined) score -= 0.02;
     if (s.missing.length) score -= Math.min(0.3, 0.12 * s.missing.length);
     if (s.titleMatch < 0.34) score -= 0.25;
@@ -456,6 +482,7 @@ export function leftOutText(all: ScoredOffer[]): string {
     if (why === MODEL_REASON) { counts.set("model", (counts.get("model") ?? 0) + 1); continue; }
     if (why === PRICE_REASON) { counts.set("price", (counts.get("price") ?? 0) + 1); continue; }
     if (why === PRODUCT_REASON) { counts.set("product", (counts.get("product") ?? 0) + 1); continue; }
+    if (why === SELLER_REASON) { counts.set("seller", (counts.get("seller") ?? 0) + 1); continue; }
     counts.set(why, (counts.get(why) ?? 0) + 1);
   }
   const groups = [...counts].sort((a, b) => b[1] - a[1]).map(([why, n]) =>
@@ -463,6 +490,7 @@ export function leftOutText(all: ScoredOffer[]): string {
     : why === "model" ? `${n} ${n === 1 ? "other model" : "other models"}`
     : why === "price" ? `${n} priced far below the item`
     : why === "product" ? `${n} ${n === 1 ? "other product" : "other products"}`
+    : why === "seller" ? `${n} from little-known sellers`
     : `${n} ${why}`);
   return `${out.length} left out: ${groups.join(", ")}`;
 }

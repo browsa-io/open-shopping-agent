@@ -281,7 +281,7 @@ Environment
   OSA_PROXY_AMAZON   a proxy for one store (also WALMART, EBAY, BESTBUY, TARGET, SHOPIFY)
   OSA_PROXIES        a pool rotated per store and run: host1:port,host2:port or @proxies.txt
   OSA_US_EXIT=0      no Browsa residential US exit for Amazon, Target and Best Buy
-  OSA_FRESH_EXITS    fresh addresses per store when a store refuses one (default 1, 0 = off)
+  OSA_FRESH_EXITS    fresh addresses per store when a store refuses one (default 2, 0 = off)
   OSA_AI_FALLBACK_MS time an AI fallback gets of its own, in ms (default 150000); then its task is cancelled
   OSA_MAX_CREDITS    Browsa credits cap per run (default 40)
   OSA_PRICE_HISTORY=1  preview: a price history chart per watch in the web app (from the local watch history)

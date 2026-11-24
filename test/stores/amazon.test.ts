@@ -178,3 +178,26 @@ test("adapter shape", () => {
   assert.equal(adapter.searchUrl("usb c hub", "amazon.com"), "https://www.amazon.com/s?k=usb+c+hub");
   assert.ok(adapter.details && adapter.clearCart);
 });
+
+test("search: no buy box kept at its from-price, brand line joined to the name, ad label stripped", () => {
+  const offers = parseAmazonSearch(fx("search-no-featured-offer.html"), "item-1", NOW);
+  const pro = offers.find((o) => o.productId === "B0FQFB8FMG");
+  assert.ok(pro, "the AirPods Pro 3 card without a featured offer is kept");
+  assert.equal(pro!.price.cents, 13873);
+  assert.equal(pro!.condition, undefined, "new or used is not known from the card");
+  assert.equal(pro!.raw?.noFeaturedOffer, true);
+  assert.match(pro!.title, /^Apple AirPods Pro 3 Wireless Earbuds/);
+  const fit = offers.find((o) => o.productId === "B09JL5QGCZ");
+  assert.match(fit!.title, /^Beats Fit Pro/);
+  const ad = offers.find((o) => o.productId === "B0HJB76H2V");
+  assert.ok(ad && !/Sponsored Ad/i.test(ad.title) && ad.sponsored);
+});
+
+test("product: a buy box that sells only used is read as used, with its price", () => {
+  const p = parseAmazonProduct(fx("product-used-only.html"), NOW);
+  assert.equal(p.asin, "B0FQFB8FMG");
+  assert.equal(p.condition, "used");
+  assert.equal(p.usedCondition, "Used: Like New");
+  assert.equal(p.price?.cents, 14155);
+  assert.equal(p.canAddToCart, true);
+});

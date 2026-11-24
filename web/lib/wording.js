@@ -109,7 +109,7 @@ export function reduceStores(events, opts = {}) {
   let done = false;
   const get = (s) => {
     if (!stores.has(s)) {
-      stores.set(s, { store: s, domain: "", started: false, offers: 0, failure: null, failures: [], cart: null, review: null, needs: null, awaiting: null, order: null, orderState: null, liveUrl: null, exit: null, waiting: null, last: -1, lastKind: "" });
+      stores.set(s, { store: s, domain: "", shops: [], started: false, offers: 0, failure: null, failures: [], cart: null, review: null, needs: null, awaiting: null, order: null, orderState: null, liveUrl: null, exit: null, waiting: null, last: -1, lastKind: "" });
       order.push(s);
     }
     return stores.get(s);
@@ -117,10 +117,16 @@ export function reduceStores(events, opts = {}) {
   events.forEach((e, i) => {
     switch (e.type) {
       case "parsed": for (const s of e.request.stores) get(s); break;
-      case "store_started": { const st = get(e.store); st.started = true; st.liveUrl = e.liveUrl || st.liveUrl; st.exit = e.exit || st.exit; if (e.domain) st.domain = e.domain; break; }
-      case "store_waiting": { const st = get(e.store); st.waiting = e.waiting ? { kind: e.waiting, message: e.message || "" } : null; if (e.domain) st.domain = e.domain; break; }
-      case "offers": { const st = get(e.store); st.started = true; st.offers += e.offers.length; if (e.offers[0]) st.domain = e.offers[0].storeDomain; break; }
-      case "store_failed": { const st = get(e.store); st.failure = { stage: e.stage, error: e.error, at: i, hint: e.hint || null }; st.failures.push(st.failure); if (e.domain) st.domain = e.domain; st.last = i; st.lastKind = "failed"; break; }
+      case "store_started": { const st = get(e.store); st.started = true; st.liveUrl = e.liveUrl || st.liveUrl; st.exit = e.exit || st.exit; if (e.domain && st.shops.length <= 1) st.domain = e.domain; break; }
+      case "store_waiting": { const st = get(e.store); st.waiting = e.waiting ? { kind: e.waiting, message: e.message || "" } : null; if (e.domain && st.shops.length <= 1) st.domain = e.domain; break; }
+      case "offers": {
+        const st = get(e.store); st.started = true; st.offers += e.offers.length;
+        // Several Shopify shops share one card: it says "Shopify" and lists the shops, not the last one.
+        for (const o of e.offers) if (o.storeDomain && !st.shops.includes(o.storeDomain)) st.shops.push(o.storeDomain);
+        st.domain = st.shops.length > 1 ? "" : (e.offers[0]?.storeDomain || st.domain);
+        break;
+      }
+      case "store_failed": { const st = get(e.store); st.failure = { stage: e.stage, error: e.error, at: i, hint: e.hint || null }; st.failures.push(st.failure); if (e.domain && st.shops.length <= 1) st.domain = e.domain; st.last = i; st.lastKind = "failed"; break; }
       case "picks": picks = e.picks; break;
       case "cart": { const st = get(e.cart.store); st.cart = e.cart; st.last = i; st.lastKind = "cart"; break; }
       case "checkout_review": { const st = get(e.review.store); st.review = e.review; st.last = i; st.lastKind = "review"; break; }
@@ -130,7 +136,7 @@ export function reduceStores(events, opts = {}) {
         // proposed -> awaiting_approval -> placing -> placed | failed | unknown (the order event follows the last three)
         const st = get(e.store);
         st.orderState = e;
-        if (e.domain) st.domain = e.domain;
+        if (e.domain && st.shops.length <= 1) st.domain = e.domain;
         if (e.state === "placing") { st.awaiting = null; st.order = null; st.last = i; st.lastKind = "placing"; }
         break;
       }

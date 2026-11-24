@@ -39,6 +39,11 @@ function firstPrice(scope: HNode | undefined): Money | undefined {
   return undefined;
 }
 
+/** "Sponsored Ad - Beats Fit Pro" -> "Beats Fit Pro" (the label is read out in aria-label). */
+function stripAdPrefix(t: string | undefined): string {
+  return (t ?? "").replace(/^Sponsored Ad\s*[-–]\s*/i, "").trim();
+}
+
 function listPriceFrom(text: string): Money | undefined {
   const m = /(?:List(?: Price)?|Typical(?: price)?|Was(?: Price)?)\s*:?\s*(\$[\d,]+(?:\.\d{2})?)/i.exec(text);
   return m ? parseMoney(m[1]) : undefined;
@@ -80,18 +85,28 @@ export function parseAmazonSearch(html: string, itemId: string, now = new Date()
     const asin = card.attrs["data-asin"];
     if (!asin || seen.has(asin)) continue;
     const titleBox = qs(card, "[data-cy=\"title-recipe\"]") ?? card;
-    let title = "";
-    for (const h of qsa(titleBox, "h2")) {
-      const t = clean(h.attrs["aria-label"]) ?? textOf(h);
-      if (t.length > title.length) title = t;
-    }
+    const heads = qsa(titleBox, "h2").map((h) => stripAdPrefix(clean(h.attrs["aria-label"]) ?? textOf(h))).filter(Boolean);
+    let title = heads.reduce((a, b) => (b.length > a.length ? b : a), "");
     if (!title) continue;
+    // Amazon shows the brand as its own line above the name ("Beats" / "Fit Pro (1st Gen) ...").
+    const brand = heads.find((h) => h !== title && h.length <= 40 && !h.includes(" - "));
+    if (brand && !title.toLowerCase().startsWith(brand.toLowerCase())) title = `${brand} ${title}`;
     const priceBox = qs(card, "[data-cy=\"price-recipe\"]") ?? card;
     const priceText = textOf(priceBox);
     let price = firstPrice(priceBox);
-    if (!price) continue;
-    const listPrice = listPriceFrom(priceText);
     const raw: Record<string, unknown> = {};
+    if (!price) {
+      // No buy box ("No featured offers available"): Amazon lists only other sellers' offers, new
+      // and used, from a price. Kept so the product is not missing; the product page tells what
+      // the buy box actually sells (often used only).
+      const second = textOf(qs(card, "[data-cy=\"secondary-offer-recipe\"]"));
+      const m = /No featured offers available\s*(\$[\d,]+(?:\.\d{2})?)\s*\((\d+)\s+used\s*&(?:amp;)?\s*new offers?\)/i.exec(second);
+      price = m ? parseMoney(m[1]) : undefined;
+      if (!price) continue;
+      raw.noFeaturedOffer = true;
+      raw.priceNote = `no featured offer on Amazon; ${m![2]} new and used offers from ${m![1]}`;
+    }
+    const listPrice = listPriceFrom(priceText);
     if (/Prime (member )?price|Exclusive Prime price/i.test(priceText)) {
       raw.primePrice = price;
       if (listPrice) price = listPrice;
@@ -110,13 +125,13 @@ export function parseAmazonSearch(html: string, itemId: string, now = new Date()
     if (ship.freeOver) raw.freeShippingOver = ship.freeOver;
     const sponsored = hasClass(card, "AdHolder") || qsa(card, "span, a").some((x) => x.children.length <= 2 && textOf(x) === "Sponsored") || !!qs(card, ".puis-sponsored-label-text, .s-sponsored-label-text, .s-widget-sponsored-label-text, a[href*=\"/sspa/click\"], [data-component-type=\"sp-sponsored-result\"]");
     const subscribeAndSaveAvailable = /Subscribe (&|and) Save|when you subscribe/i.test(cardText) || undefined;
-    const condition = /\b(Renewed|Refurbished)\b/i.test(title) ? "refurbished" : "new";
+    const condition = /\b(Renewed|Refurbished)\b/i.test(title) ? "refurbished" : raw.noFeaturedOffer ? undefined : "new";
     out.push({
       store: "amazon", storeDomain: DOMAIN, itemId, title, url: amazonProductUrl(asin), productId: asin,
       image: qs(card, "img.s-image")?.attrs.src,
       price, listPrice, unitPrice: unitPriceFrom(priceText), shipping: ship.shipping,
       deliveryText: delivery?.slice(0, 200), deliveryDate: parseDeliveryDate(relevant, now),
-      rating, condition, inStock: !/Currently unavailable|Temporarily out of stock/i.test(cardText),
+      rating, ...(condition ? { condition } : {}), inStock: !/Currently unavailable|Temporarily out of stock/i.test(cardText),
       sponsored, subscription: false, ...(subscribeAndSaveAvailable ? { subscribeAndSaveAvailable } : {}), raw,
     });
     seen.add(asin);
@@ -144,6 +159,9 @@ export interface AmazonProduct {
   primeOnlyDefault: boolean;
   canAddToCart: boolean;
   image?: string;
+  /** "used" when the buy box sells only a used copy (no new offer on the page). */
+  condition?: "new" | "used";
+  usedCondition?: string;
 }
 
 export function parseAmazonProduct(html: string, now = new Date()): AmazonProduct {
@@ -179,7 +197,12 @@ export function parseAmazonProduct(html: string, now = new Date()): AmazonProduc
     else if (parseMoney(dp)) ship = { shipping: parseMoney(dp) };
   }
   const availText = textOf(qs(scope, "#availability") ?? qs(doc, "#availability"));
-  const canAddToCart = !!qs(doc, "#add-to-cart-button");
+  // A buy box that sells only a used copy ("Buy Used: $141.55", "Used: Like New"): no new offer.
+  const usedBox = !newRow ? qs(doc, "#usedBuySection") : undefined;
+  const usedCondition = usedBox ? /Used:\s*(Like New|Very Good|Good|Acceptable)/i.exec(textOf(qs(doc, "#buybox") ?? doc))?.[0] : undefined;
+  const condition: "new" | "used" | undefined = usedBox ? "used" : undefined;
+  if (usedBox) price = firstPrice(usedBox) ?? parseMoney(textOf(qs(usedBox, ".offer-price"))) ?? price;
+  const canAddToCart = !!qs(doc, "#add-to-cart-button, #add-to-cart-button-ubb");
   const inStock = /currently unavailable|out of stock/i.test(availText) ? false : canAddToCart || /in stock|left in stock/i.test(availText);
   const starsAttr = qs(doc, "#acrPopover")?.attrs.title ?? textOf(qs(doc, "#acrPopover .a-icon-alt"));
   const stars = parseStars(starsAttr) ?? parseStars(textOf(qs(doc, "#acrPopover")).split(" ")[0]);
@@ -208,7 +231,7 @@ export function parseAmazonProduct(html: string, now = new Date()): AmazonProduc
   return {
     asin, title, price, listPrice, seller, deliveryText, deliveryDate, shipping: ship.shipping, freeShippingOver: ship.freeOver,
     inStock, rating: stars !== undefined ? { stars, count: count ?? 0 } : undefined,
-    variants, selected, variantChoices, subscribeAndSave: sns, hasAccordion, primeOnlyDefault, canAddToCart,
+    variants, selected, variantChoices, subscribeAndSave: sns, hasAccordion, primeOnlyDefault, canAddToCart, condition, usedCondition,
     image: qs(doc, "#landingImage")?.attrs["data-old-hires"] || qs(doc, "#landingImage")?.attrs.src,
   };
 }
@@ -558,8 +581,12 @@ const adapter: StoreAdapter = {
     if (p.selected) raw.selectedOptions = p.selected;
     if (p.primeOnlyDefault) raw.primePriceShownFirst = true;
     if (p.freeShippingOver) raw.freeShippingOver = p.freeShippingOver;
+    if (p.usedCondition) raw.usedCondition = p.usedCondition;
+    if (p.condition === "used") raw.priceNote = `Amazon sells this only used here (${p.usedCondition ?? "used"})`;
+    else if (raw.noFeaturedOffer && p.price) { delete raw.noFeaturedOffer; delete raw.priceNote; }
     return {
       ...offer,
+      ...(p.condition === "used" ? { condition: "used" as const } : p.price && offer.raw?.noFeaturedOffer ? { condition: "new" as const } : {}),
       title: p.title ?? offer.title,
       productId: p.asin ?? offer.productId,
       url: p.asin ? amazonProductUrl(p.asin) : offer.url,

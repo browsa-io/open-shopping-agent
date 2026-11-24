@@ -257,7 +257,8 @@ function renderStores(el, run, d, ui, actions) {
       const f = s.failure;
       return h("section", { class: `card store tone-${s.tone}`, "aria-label": `${storeName(st.store, st.domain)}: ${s.word}` },
         h("div", { class: "name", title: st.exit ? `Connects through ${st.exit}` : null }, storeIcon(st.store, st.domain, "lg"),
-          h("span", { class: "nm", title: st.store === "shopify" && st.domain ? `Shopify store ${st.domain}` : null }, storeName(st.store, st.domain))),
+          h("span", { class: "nm", title: st.store === "shopify" && st.domain ? `Shopify store ${st.domain}` : st.shops?.length > 1 ? `Shopify stores: ${st.shops.join(", ")}` : null },
+            st.store === "shopify" && st.shops?.length > 1 ? `Shopify (${st.shops.length})` : storeName(st.store, st.domain))),
         h("div", { class: `status ${s.tone}`, role: "status" }, h("span", { class: `dot${s.tone === "busy" ? " pulse" : ""}`, "aria-hidden": "true" }), s.word),
         s.detail ? h("p", { class: "detail" }, s.detail) : null,
         st.failure?.hint ? h("p", { class: "blocked-note" }, hintText(st.failure.hint)) : null,

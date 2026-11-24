@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 No order has gone through Open Shopping Agent end to end yet. Placing orders, Buy without asking and
 order tracking are tested against fakes and saved store pages, not a live checkout.
 
+## [0.2.4] - 2026-11-24
+
+### Fixed
+
+- **Amazon finds the named product when it has no buy box.** A live run for "AirPods Pro 3" listed only Beats and other earbuds for Amazon: Amazon showed AirPods Pro 3 with "No featured offers available, $138.73 (16 used & new offers)" and no main price, and cards without a main price were skipped. Such a card is now kept at its from-price, its condition is left unknown, and it ranks as not new. The product page then tells what the buy box sells: when it sells only a used copy ("Buy Used: $141.55", "Used: Like New"), the offer is marked used with that price and note.
+- Amazon titles keep the brand line Amazon shows above the name ("Beats Fit Pro (1st Gen) ..." instead of "Fit Pro (1st Gen) ..."), and the "Sponsored Ad -" label read out in a card's title is dropped (the offer stays marked sponsored).
+- **Best Buy fills its cart again.** Its product page shows Add to cart about 12 s after the page loads; the adapter looked after 3 s, found no button and asked an AI fallback, which cannot act on a fresh browser's cart. It now waits for the button (up to 25 s), and when there is still none it adds from the search results card, as it already did when the product page is refused.
+- **Best Buy search without prices is a refused address.** A results page whose products have no prices (or no products, without Best Buy's "no results" wording) is how Best Buy refuses an address it distrusts. On Browsa this now counts as a refusal, so the store gets a fresh address, instead of an AI fallback that fails the same way on the same kind of exit. Your own Chrome keeps the AI fallback.
+- **Two fresh addresses per store by default** (`OSA_FRESH_EXITS`, was 1). Amazon refused two residential addresses in a row in a live run and worked on others.
+- **A part number is not a model number.** With two Shopify stores in the run, "Apple AirPods Pro 1st Generation ... MLWK3AM/A" at $69.99 was the best pick for "AirPods Pro 3": the 3 inside the part number counted as the model. Words with three or more letter/number runs (part numbers) are no longer split; "3rd" and "Pro3" still match 3.
+- Walmart listings named "(Open Box)" or "Restocked" are used, not new.
+- **Marketplace sellers with few ratings are not picked.** eBay results for "AirPods Pro 3" had "new" listings at $85 to $115 from sellers with 0 to 4 ratings or 95.9% positive, below every store's price. Listings from sellers with under 100 ratings or under 97% positive are left out when another offer remains ("3 from little-known sellers").
+- Web app: in "Best match" order, offers left out as not the item (cases, other models and products, little-known marketplace sellers) come after the item's own offers instead of mixing in by price, and are never the next best.
+- Web app: several Shopify shops in one run share a card titled "Shopify (2)" (the shops listed on hover) instead of the last shop's name.
+
 ## [0.2.3] - 2026-11-24
 
 ### Fixed

@@ -300,3 +300,26 @@ test("wording: order states per store (placing, placed, not placed, check the st
   assert.equal(W.orderStateOf(failed, false), "failed");
   assert.equal(W.storeStatus(failed, { running: false, picked: true }).word, "Not ordered");
 });
+
+test("best match lists offers left out as not the item (cases, other models) after the item's own", () => {
+  const o = (title: string, cents: number) => ({ store: "target", storeDomain: "target.com", title, url: `https://t/${cents}`, price: { cents, currency: "USD" }, inStock: true });
+  const pick = o("Apple AirPods Pro 3", 14999), alt = o("AirPods Pro 3 Open Box", 16900), item2 = o("AirPods Pro 3rd Gen", 24900);
+  const case1 = o("AirPods Pro 3 Case", 1000), earpods = o("Apple EarPods", 1999);
+  const rows = M.sortOffers([case1, item2, earpods, alt, pick], { key: "best", dir: 1 }, {
+    chosenKey: M.offerKey(pick), alternatives: [alt], notTheItem: [M.offerKey(case1), M.offerKey(earpods)],
+  });
+  assert.deepEqual(rows.map((r: { price: { cents: number } }) => r.price.cents), [14999, 16900, 24900, 1000, 1999]);
+});
+
+test("one Shopify card for several shops: no single shop's name, the shops listed", () => {
+  const off = (d: string) => ({ store: "shopify", storeDomain: d, title: "x", url: `https://${d}/p`, price: { cents: 100, currency: "USD" }, inStock: true });
+  const one = W.reduceStores([{ type: "offers", store: "shopify", itemId: "i", offers: [off("a.com")] }]).stores.get("shopify");
+  assert.equal(one.domain, "a.com");
+  const two = W.reduceStores([
+    { type: "offers", store: "shopify", itemId: "i", offers: [off("a.com")] },
+    { type: "offers", store: "shopify", itemId: "i", offers: [off("b.com")] },
+    { type: "store_started", store: "shopify", domain: "b.com" },
+  ]).stores.get("shopify");
+  assert.equal(two.domain, "");
+  assert.deepEqual(two.shops, ["a.com", "b.com"]);
+});

@@ -13,8 +13,11 @@ import { idsFromHtml } from "../core/identity.js";
 import {
   attr, browsaSolves, clean, elementAt, elementsWith, firstWith, jsonAfterMarker as jsonAfter, jsonLd, moneyFromNumeric as moneyFromNumber,
   isDeadPageError, needsUser, nowIso, pageIsDead, parseCount, parseMoney, parseStars, replacePage, sameOption, textLines, textOfHtml as textOf,
-  typeZip, zipNotTaken,
+  StoreRefusedError, typeZip, zipNotTaken,
 } from "./util.js";
+
+/** Best Buy's own "no results" wording on a search page. */
+const NO_RESULTS = /couldn.t find (?:anything|any results)|no results for|0 results/i;
 
 const DOMAIN = "bestbuy.com";
 const ORIGIN = "https://www.bestbuy.com";
@@ -506,6 +509,9 @@ async function openProduct(ctx: StoreContext, sku: string, url?: string): Promis
   return { html, prod: parseProduct(html) };
 }
 
+/** How long the product page may take to show its Add to cart button. */
+const ADD_BUTTON_WAIT_MS = 25_000;
+
 /** Browsers (agent ids) whose product pages Best Buy refused: later steps skip them. */
 const pdpBlocked = new Set<string>();
 
@@ -548,6 +554,7 @@ async function addFromResults(ctx: StoreContext, offer: Offer, sku: string, quan
   for (const url of urls) {
     await load(ctx, url, 3500);
     const btn = ctx.page.locator(`[data-testid="plp-add-to-cart-${sku}"]`).first();
+    await btn.waitFor({ state: "attached", timeout: 15_000 }).catch(() => {});
     for (let i = 0; i < 6 && !(await btn.count().catch(() => 0)); i++) {
       await ctx.page.mouse.wheel(0, 1400).catch(() => {});
       await ctx.page.waitForTimeout(900);
@@ -585,17 +592,30 @@ export const adapter: StoreAdapter = {
 
   async search(ctx, item, limit) {
     let offers: Offer[] = [];
+    let unpriced = false;
     try {
       const searchUrl = adapter.searchUrl(item.query, DOMAIN);
       await load(ctx, searchUrl, 3500);
       await searchZip(ctx, searchUrl);
-      const html = await hydrateResults(ctx, limit);
-      const missing = searchSkus(html).filter((s) => !s.priced).map((s) => s.sku).slice(0, limit + 4);
+      let html = await hydrateResults(ctx, limit);
+      // Results render late on a slow exit (8-12 s measured live 2026-11-24): give the prices time.
+      for (let i = 0; i < 3 && !searchSkus(html).some((s) => s.priced) && !NO_RESULTS.test(textOf(html) ?? ""); i++) {
+        await ctx.page.waitForTimeout(4000);
+        html = await ctx.page.content();
+      }
+      const skus = searchSkus(html);
+      const missing = skus.filter((s) => !s.priced).map((s) => s.sku).slice(0, limit + 4);
       offers = parseSearch(html, item.id, missing.length ? await fetchPrices(ctx, missing) : {}).map((o) => ({ ...o, raw: { ...o.raw, searchUrl } }));
+      unpriced = !offers.length && !NO_RESULTS.test(textOf(html) ?? "");
     } catch (e) {
       if (/refused the browser|queue/.test((e as Error).message)) throw e;
       ctx.log(`Best Buy search direct path failed: ${(e as Error).message}`);
     }
+    // Products without prices (or no products) on a results page that does not say "no results"
+    // is how Best Buy refuses an address it distrusts: a fresh address works, an AI task on the
+    // same exit kind does not (seen live 2026-11-24). Phantom on Browsa only (capabilities unset);
+    // your own Chrome keeps its address, so it still gets the AI fallback.
+    if (unpriced && !ctx.capabilities) throw new StoreRefusedError("Best Buy refused the browser: its search loaded without prices or products on this exit address");
     if (!offers.length) {
       ctx.log("Best Buy search found no priced results in the page; asking the AI fallback once");
       const res = await ctx.aiTask<{ offers?: { title: string; url: string; sku?: string; price: string; rating?: number; reviews?: number }[] }>(
@@ -684,9 +704,15 @@ export const adapter: StoreAdapter = {
     if (!prod.inStock) throw new Error(`Best Buy SKU ${sku} cannot be added (${prod.buttonState ?? "not available"})`);
 
     const btn = ctx.page.locator(`[data-testid="pdp-add-to-cart-${sku}"]`).first();
+    // The product page renders its buy box late (12 s measured live 2026-11-24): wait for it.
+    await btn.waitFor({ state: "visible", timeout: ADD_BUTTON_WAIT_MS }).catch(() => {});
     let clicked = false;
     if (await btn.count()) {
       await btn.click({ timeout: 15_000, noWaitAfter: true }).then(() => { clicked = true; }).catch((e: Error) => ctx.log(`Add to cart click: ${e.message.split("\n")[0]}`));
+    }
+    if (!clicked && canAddFromResults(options, "refused the browser")) {
+      ctx.log("Best Buy product page shows no usable Add to cart button; adding from the search results");
+      return addFromResults(ctx, offer, sku, quantity, warnings);
     }
     if (!clicked) {
       ctx.log("Best Buy Add to cart button not usable; asking the AI fallback once");

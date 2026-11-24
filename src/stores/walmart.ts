@@ -94,7 +94,7 @@ export function parseWalmartSearch(html: string, itemId: string, now = new Date(
         shipping, deliveryText: delivery, deliveryDate: parseDeliveryDate(delivery, now),
         rating: typeof stars === "number" ? { stars, count: Number(it.rating?.numberOfReviews ?? it.numberOfReviews ?? 0) } : undefined,
         seller: it.sellerName ?? undefined,
-        condition: /\b(restored|refurbished)\b/i.test(it.name) ? "refurbished" : it.isPreowned ? "used" : "new",
+        condition: /\b(restored|refurbished|renewed)\b/i.test(it.name) ? "refurbished" : it.isPreowned || /\bopen[- ]?box\b|\brestocked\b/i.test(it.name) ? "used" : "new",
         inStock: status ? status === "IN_STOCK" : !it.isOutOfStock,
         sponsored: !!it.isSponsoredFlag, subscription: false, ...(sns ? { subscribeAndSaveAvailable: true } : {}),
         variants: Object.keys(variants).length ? variants : undefined, raw,

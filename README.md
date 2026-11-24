@@ -274,7 +274,7 @@ Amazon, Target and Best Buy block Browsa's default exit, which is not in the US 
 
 Walmart, eBay and Shopify stores work on the default exit. The exit shows on each store card and in the CLI. `OSA_US_EXIT=0` turns step 2 off.
 
-When a store refuses the address at search (Amazon's "Sorry! Something went wrong" page, Access Denied, a 403), the agent stops that browser and searches again in a fresh one on a new address of the same exit, once per store per run (`OSA_FRESH_EXITS=0` turns it off, `2` allows two). This needs Browsa's fresh browsers: your own proxy, a saved profile, your own Chrome and CDP browsers keep their address.
+When a store refuses the address at search (Amazon's "Sorry! Something went wrong" page, Access Denied, a 403), the agent stops that browser and searches again in a fresh one on a new address of the same exit, up to twice per store per run (`OSA_FRESH_EXITS=0` turns it off, `1` allows one). This needs Browsa's fresh browsers: your own proxy, a saved profile, your own Chrome and CDP browsers keep their address.
 
 ## Price and stock watches
 

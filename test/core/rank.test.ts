@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  bayesianRating, deliveredTotal, exclusionReason, missingRequirements, pickAll, pickForItem, scoreOffers, titleMatch,
+  bayesianRating, deliveredTotal, exclusionReason, leftOutText, missingRequirements, pickAll, pickForItem, scoreOffers, SELLER_REASON, titleMatch,
 } from "../../src/core/rank.js";
 import type { ItemRequest, ShoppingRequest } from "../../src/core/types.js";
 import { offer, usd } from "./fake-adapter.js";
@@ -143,4 +143,35 @@ test("an unknown shipping cost is never called delivered", () => {
   const p = pickForItem(item(), offers, { goal: "cheapest", now: NOW })!;
   assert.doesNotMatch(p.reason, /delivered/);
   assert.match(p.reason, /plus shipping/);
+});
+
+test("marketplace sellers with few ratings or under 97% positive are left out when others remain", () => {
+  const airpods = item({ query: "AirPods Pro 3", description: "AirPods Pro 3" });
+  const seller = (n: number, p: number) => ({ raw: { sellerFeedbackCount: n, sellerPositivePercent: p } });
+  const all = scoreOffers(airpods, [
+    offer("walmart", "Apple AirPods Pro 3", 149),
+    offer("ebay", "Apple AirPods Pro 3 Wireless Earbuds", 85, seller(0, 0)),
+    offer("ebay", "Apple AirPods Pro 3 brand new", 100, seller(4, 100)),
+    offer("ebay", "New Sealed Apple AirPods Pro 3rd Generation", 115, seller(1100, 95.9)),
+    offer("ebay", "Apple AirPods Pro 3 NEW in box", 139.99, seller(732, 100)),
+  ]);
+  const out = all.filter((s) => s.excluded === SELLER_REASON).map((s) => s.offer.price.cents).sort((a, b) => a - b);
+  assert.deepEqual(out, [8500, 10000, 11500]);
+  assert.equal(all[0].offer.price.cents, 13999, "the trusted eBay seller stays and is cheapest");
+  assert.match(leftOutText(all), /3 from little-known sellers/);
+  // Only untrusted sellers: nothing is left out for that.
+  const only = scoreOffers(airpods, [offer("ebay", "Apple AirPods Pro 3", 85, seller(0, 0))]);
+  assert.equal(only[0].excluded, undefined);
+});
+
+test("a part number is not a model number: MLWK3AM/A is not AirPods Pro 3", () => {
+  const airpods = item({ query: "AirPods Pro 3", description: "AirPods Pro 3" });
+  const all = scoreOffers(airpods, [
+    offer("walmart", "Apple AirPods Pro 3", 149),
+    offer("shopify", "Apple AirPods Pro 1st Generation with Magsafe Charging Case - White MLWK3AM/A", 69.99),
+    offer("shopify", "Apple Airpods Pro 2 Wireless Active Noise Cancelling Earbuds - USB-C MTJV3AM/A", 99.99),
+    offer("shopify", "Apple AirPods Pro 3rd Wireless Active Noise Cancelling Earbuds - White MFHP4LL/A", 136.99),
+  ]);
+  const kept = all.filter((s) => !s.excluded).map((s) => s.offer.price.cents).sort((a, b) => a - b);
+  assert.deepEqual(kept, [13699, 14900]);
 });

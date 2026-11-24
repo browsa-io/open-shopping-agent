@@ -89,10 +89,10 @@ test("engine: Amazon refuses the address -> the browser is stopped, a fresh one 
 
 test("engine: the fresh address is refused too -> one clear failure that names both addresses", async () => {
   const amazon = new RefusingAmazon(99);
-  const { agent, log } = await agentWith(amazon, { browsa: true });
+  const { agent, log } = await agentWith(amazon, { browsa: true, extra: { freshExitsPerStore: 1 } });
   const events: RunEvent[] = [];
   const run = await agent.run("AirPods Pro 3 on amazon", { onEvent: (e) => events.push(e), until: "picks" });
-  assert.equal(amazon.agents.length, 2, "one fresh address, not more (default 1)");
+  assert.equal(amazon.agents.length, 2, "one fresh address, not more (freshExitsPerStore 1)");
   assert.equal(log.opened.length, 2);
   const f = events.filter((e) => e.type === "store_failed");
   assert.equal(f.length, 1);
@@ -166,4 +166,11 @@ test("engine: a stopped run does not open a fresh browser", async () => {
   await agent.run("AirPods Pro 3 on amazon", { onEvent: (e) => events.push(e), until: "picks", signal: ac.signal }).catch(() => undefined);
   assert.equal(log.opened.length, 1);
   assert.ok(!logs(events).some((m) => /trying a fresh one/.test(m)));
+});
+
+test("engine: by default a store gets two fresh addresses after refusals", async () => {
+  const amazon = new RefusingAmazon(99);
+  const { agent } = await agentWith(amazon, { browsa: true });
+  await agent.run("AirPods Pro 3 on amazon", { until: "picks" });
+  assert.equal(amazon.agents.length, 3);
 });

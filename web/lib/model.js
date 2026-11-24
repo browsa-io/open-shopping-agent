@@ -175,7 +175,8 @@ function sortValue(o, key, per) {
 
 /**
  * Sort offers. key "best": the chosen offer, then the engine's alternatives in its order, then the
- * rest by total. Other keys sort by that value (dir 1 ascending, -1 descending), unknown values
+ * rest by total, with the offers the engine left out as not the item (ctx.notTheItem: its cases,
+ * other models) last. Other keys sort by that value (dir 1 ascending, -1 descending), unknown values
  * last, ties by total then title so the order is stable while offers stream in.
  */
 export function sortOffers(offers, sort = { key: "best", dir: 1 }, ctx = {}) {
@@ -186,10 +187,13 @@ export function sortOffers(offers, sort = { key: "best", dir: 1 }, ctx = {}) {
     const rank = new Map();
     if (ctx.chosenKey) rank.set(ctx.chosenKey, 0);
     (ctx.alternatives || []).forEach((o, i) => { if (!rank.has(offerKey(o))) rank.set(offerKey(o), i + 1); });
+    const notItem = new Set(ctx.notTheItem || []);
     return offers.slice().sort((a, b) => {
       const ra = rank.get(offerKey(a)) ?? Infinity;
       const rb = rank.get(offerKey(b)) ?? Infinity;
       if (ra !== rb) return ra - rb;
+      const na = notItem.has(offerKey(a)), nb = notItem.has(offerKey(b));
+      if (na !== nb) return Number(na) - Number(nb);
       return Number(!!a.currencyMismatch) - Number(!!b.currencyMismatch) || Number(b.inStock) - Number(a.inStock) || tie(a, b);
     });
   }

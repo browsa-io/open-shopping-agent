@@ -87,7 +87,7 @@ export interface ShoppingAgentOptions {
    * When a store refuses the browser's address at search (an error page that does not clear,
    * Access Denied, 403), open this many fresh browsers on new addresses (same exit kind) per store
    * per run and search again. Only on Browsa's fresh browsers; never on your own Chrome, a CDP
-   * browser, a saved profile or your own proxy. Default 1 (OSA_FRESH_EXITS); 0 turns it off.
+   * browser, a saved profile or your own proxy. Default 2 (OSA_FRESH_EXITS); 0 turns it off.
    */
   freshExitsPerStore?: number;
   /**
@@ -625,7 +625,7 @@ export class ShoppingRun {
             break;
           } catch (e) {
             // The store refused this browser's address: on Browsa, search again in a fresh browser
-            // on a new address (freshExitsPerStore, default once per store per run).
+            // on a new address (freshExitsPerStore, default twice per store per run).
             if (!(await this.freshExit(shop, e))) throw this.refusedOnFreshExits(shop, e);
           }
         }
@@ -890,14 +890,14 @@ export class ShoppingRun {
     const o = this.o.freshExitsPerStore;
     if (typeof o === "number" && Number.isFinite(o)) return Math.max(0, Math.floor(o));
     const env = process.env.OSA_FRESH_EXITS?.trim();
-    return env && Number.isFinite(Number(env)) ? Math.max(0, Math.floor(Number(env))) : 1;
+    return env && Number.isFinite(Number(env)) ? Math.max(0, Math.floor(Number(env))) : 2;
   }
 
   /**
    * The store refused this browser's address (its error page, Access Denied, 403, a check that
    * did not clear): stop the browser, open a fresh one on a new address of the same exit kind and
    * rebind the store's shops to it. Only where a new address is possible (Browsa's fresh browsers:
-   * StoreBrowser.freshAddress), at most freshExitsPerStore times per store per run (default 1),
+   * StoreBrowser.freshAddress), at most freshExitsPerStore times per store per run (default 2),
    * never for a check Browsa can solve or hand over, never once the run is stopped.
    */
   private async freshExit(shop: Shop, e: unknown): Promise<boolean> {
