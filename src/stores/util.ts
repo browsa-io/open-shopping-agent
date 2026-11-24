@@ -853,9 +853,30 @@ export async function aiSearchFallback(
  * it with real mouse events until the check clears (up to about 20 s). Returns true when a check
  * was found. `name` goes into the log lines.
  */
+/**
+ * HUMAN (PerimeterX) draws this instead of its check when the check's script did not load (a request dropped on the
+ * way): "Before we continue... Please check your internet connection or disable your ad-blocker." It has no
+ * #px-captcha, so it must not read as a passed check (Target, 2026-11-24). Loading the page again brings the check.
+ */
+export const PX_SCRIPT_FAILED = "text=/check your internet connection or disable your ad-?blocker/i";
+
+/** Is HUMAN's "check your internet connection" page showing (the check's script did not load)? */
+export async function pxScriptFailed(page: Page): Promise<boolean> {
+  try {
+    return await page.locator(PX_SCRIPT_FAILED).first().isVisible();
+  } catch {
+    return false;
+  }
+}
+
 export async function pressAndHold(ctx: StoreContext, o: { name: string; selector?: string; waitMs?: number }): Promise<boolean> {
   const page = ctx.page;
   const sel = o.selector ?? "#px-captcha";
+  if (await pxScriptFailed(page)) {
+    ctx.log(`${o.name}: the bot check did not load ("check your internet connection"); loading the page again`);
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => null);
+    await page.waitForTimeout(2500);
+  }
   // count() does not wait; boundingBox() would wait up to 30 s for an element that is usually absent.
   const holder = page.locator(sel).first();
   // The challenge can take a few seconds to draw on a slow exit: look for it for up to `waitMs`.
@@ -898,15 +919,18 @@ export async function pressAndHold(ctx: StoreContext, o: { name: string; selecto
  */
 export async function passPressAndHold(ctx: StoreContext, o: { name: string; selector?: string; waitMs?: number; timeoutMs?: number }): Promise<boolean> {
   const sel = o.selector ?? "#px-captcha";
-  const shown = async () => (await ctx.page.locator(sel).count().catch(() => 0)) > 0;
+  // HUMAN's "check your internet connection" page is the check whose script did not load: a check, not a pass
+  const shown = async () => (await ctx.page.locator(sel).count().catch(() => 0)) > 0 || (await pxScriptFailed(ctx.page));
   for (let until = Date.now() + (o.waitMs ?? 0); !(await shown()); ) {
     if (Date.now() >= until) return false;
     await ctx.page.waitForTimeout(1000);
   }
   // Ask once the challenge has drawn its button (an iframe inside #px-captcha), as pressAndHold does.
-  await ctx.page.locator(`${sel} iframe`).first().waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+  if (!(await pxScriptFailed(ctx.page))) {
+    await ctx.page.locator(`${sel} iframe`).first().waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
+  }
   // After a pass PerimeterX reloads the page; a leftover empty #px-captcha does not count.
-  const blocked = async () => ctx.page.locator(sel).first().isVisible().catch(() => false);
+  const blocked = async () => (await ctx.page.locator(sel).first().isVisible().catch(() => false)) || (await pxScriptFailed(ctx.page));
   if (await browsaSolves(ctx, o.name, blocked, { check: "a press-and-hold check", kind: "press_hold", timeoutMs: o.timeoutMs })) return true;
   return pressAndHold(ctx, { name: o.name, selector: sel });
 }

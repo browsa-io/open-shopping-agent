@@ -42,8 +42,16 @@ function fakeSession(answer: () => Promise<unknown>) {
 }
 
 /** A fake page with a press-and-hold box (#px-captcha) that is shown while `blocked.on`. */
-function fakePage(session: ReturnType<typeof fakeSession> | undefined, blocked: { on: boolean }) {
-  const mouse = { downs: 0, ups: 0 };
+function fakePage(session: ReturnType<typeof fakeSession> | undefined, blocked: { on: boolean; fallback?: boolean }) {
+  const mouse = { downs: 0, ups: 0, reloads: 0 };
+  // HUMAN's "check your internet connection" page (its script did not load): shown while blocked.fallback
+  const fb = {
+    count: async () => (blocked.fallback ? 1 : 0),
+    first: () => fb,
+    isVisible: async () => !!blocked.fallback,
+    boundingBox: async () => null,
+    waitFor: async () => {},
+  };
   const box = {
     count: async () => (blocked.on ? 1 : 0),
     first: () => box,
@@ -57,11 +65,11 @@ function fakePage(session: ReturnType<typeof fakeSession> | undefined, blocked: 
       down: async () => { mouse.downs++; blocked.on = false; }, // OSA's own hold clears it
       up: async () => { mouse.ups++; },
     },
-    locator: () => box,
+    locator: (sel: string) => (sel.startsWith("text=") ? fb : box),
     url: () => "https://www.target.com/",
     waitForTimeout: async () => {},
     waitForLoadState: async () => {},
-    reload: async () => null,
+    reload: async () => { mouse.reloads++; if (blocked.fallback) { blocked.fallback = false; blocked.on = true; } return null; },
     context: () => ({ newCDPSession: async () => { if (!session) throw new Error("no CDP"); return session; } }),
   };
   return { page: page as unknown as Page, mouse };
@@ -239,4 +247,25 @@ test("engine: a failed Browsa solve becomes needs_user (captcha_handoff) with th
   assert.ok(nu && nu.type === "needs_user" && nu.needs.reason === "captcha_handoff" && nu.needs.liveUrl === "https://browsa.io/live#once");
   const f = events.find((e) => e.type === "store_failed");
   assert.ok(f && f.type === "store_failed" && !f.hint, "no 'use Browsa' hint on Browsa");
+});
+
+test("captcha: HUMAN's 'check your internet connection' page after a solve is not a pass (hand-off, not 'solved')", async () => {
+  // Target 2026-11-24: Browsa answered solved while the page showed HUMAN's fallback (its script did not load)
+  const blocked: { on: boolean; fallback?: boolean } = { on: true };
+  const session = fakeSession(async () => { blocked.on = false; blocked.fallback = true; return { solved: true, kind: "press_hold", rounds: 1, seconds: 28 }; });
+  const ctx = ctxOn(fakePage(session, blocked).page);
+  const err = await passPressAndHold(ctx, { name: "Target", timeoutMs: 1000 }).catch((e) => e);
+  assert.ok(err instanceof CaptchaHandoffError, String(err));
+  assert.ok(!ctx.logs.some((l) => /Browsa solved it/.test(l)), ctx.logs.join(" | "));
+  assert.ok(ctx.logs.some((l) => /reported it solved in 28 s, but the page still shows it/.test(l)), ctx.logs.join(" | "));
+});
+
+test("captcha: HUMAN's fallback page counts as a check, and OSA's own hold loads the page again first", async () => {
+  const blocked: { on: boolean; fallback?: boolean } = { on: false, fallback: true };
+  const { page, mouse } = fakePage(undefined, blocked);          // no Browsa session: OSA holds it itself
+  const ctx = ctxOn(page);
+  assert.equal(await passPressAndHold(ctx, { name: "Target" }), true);
+  assert.equal(mouse.reloads, 1, "loaded again before the hold");
+  assert.equal(mouse.downs, 1, "then held the check that came back");
+  assert.ok(ctx.logs.some((l) => /did not load \("check your internet connection"\); loading the page again/.test(l)), ctx.logs.join(" | "));
 });

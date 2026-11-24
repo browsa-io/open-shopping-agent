@@ -7,6 +7,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 No order has gone through Open Shopping Agent end to end yet. Placing orders, Buy without asking and
 order tracking are tested against fakes and saved store pages, not a live checkout.
 
+## [0.2.5] - 2026-11-24
+
+### Fixed
+
+- **HUMAN's "check your internet connection" page is not a passed check.** When the script of Target's or Walmart's press-and-hold check (HUMAN, formerly PerimeterX) does not load, for example a request dropped on a residential exit, HUMAN draws "Before we continue... Please check your internet connection or disable your ad-blocker." instead of the check. That page has no `#px-captcha`, so OSA read it as a cleared check and logged "Browsa solved it" while the store's page still blocked (seen in a live Target run). OSA now counts that page as the check: after a solve it is "still shown" (hand-off with a Phantom Live link), and OSA's own press and hold (your own Chrome) loads the page again first. Browsa's in-session solver was fixed the same day to load the page again and hold the check that comes back.
+
 ## [0.2.4] - 2026-11-24
 
 ### Fixed
